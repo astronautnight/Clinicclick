@@ -314,7 +314,7 @@ export default function DashboardPage() {
           <ActionButton href="/patients" icon={<UserPlus />} label="New Patient" />
           <ActionButton href="/patients" icon={<Stethoscope />} label="Open Dental Chart" />
           <ActionButton href="/financials" icon={<FileText />} label="Generate Invoice" primary />
-          <ActionButton href="/patients" icon={<ImageIcon />} label="Upload X-ray" />
+          <ActionButton href="/patients" icon={<ImageIcon />} label="Create Appointment" />
           <ActionButton href="/pharmacy" icon={<FileText />} label="Write Prescription" danger />
         </div>
       </div>
