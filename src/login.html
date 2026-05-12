@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Doctor Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      width: 320px;
+      text-align: center;
+    }
+    h2 {
+      margin-bottom: 1rem;
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #4facfe;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #00c6ff;
+    }
+    .toggle-link {
+      margin-top: 10px;
+      display: block;
+      color: #4facfe;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #logoutBtn {
+      margin-top: 20px;
+      background: #f44336;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="formTitle">Doctor Login</h2>
+
+    <!-- Signup Form -->
+    <form id="signupForm" style="display:none;">
+      <input id="signupEmail" type="email" placeholder="Enter email" required>
+      <input id="signupPassword" type="password" placeholder="Enter password" required>
+      <button type="submit">Sign Up</button>
+      <span class="toggle-link" onclick="toggleForms('login')">Already have an account? Login</span>
+    </form>
+
+    <!-- Login Form -->
+    <form id="loginForm">
+      <input id="loginEmail" type="email" placeholder="Enter email" required>
+      <input id="loginPassword" type="password" placeholder="Enter password" required>
+      <button type="submit">Login</button>
+      <span class="toggle-link" onclick="toggleForms('signup')">Don’t have an account? Sign Up</span>
+    </form>
+
+    <!-- Logout Button -->
+    <button id="logoutBtn" style="display:none;">Logout</button>
+  </div>
+
+  <script type="module" src="./login.js"></script>
+
+  <script>
+    // simple toggle between forms
+    function toggleForms(mode) {
+      if (mode === "signup") {
+        document.getElementById("signupForm").style.display = "block";
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("formTitle").innerText = "Doctor Sign Up";
+      } else {
+        document.getElementById("signupForm").style.display = "none";
+        document.getElementById("loginForm").style.display = "block";
+        document.getElementById("formTitle").innerText = "Doctor Login";
+      }
+    }
+  </script>
+</body>
+</html>

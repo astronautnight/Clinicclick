@@ -1,0 +1,230 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  @media (max-aspect-ratio: 3/4) {
+    .ar-mobile\:flex {
+      display: flex;
+    }
+    .ar-mobile\:flex-col {
+      flex-direction: column;
+    }
+    .ar-mobile\:items-center {
+      align-items: center;
+    }
+  }
+}
+
+
+@layer base {
+  :root {
+    --background: 220 20% 98%; /* Off-white */
+    --foreground: 240 10% 3.9%; /* Default Dark Gray Text */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 220 90% 55%; /* Bright, Saturated Blue */
+    --primary-foreground: 220 90% 98%; 
+
+    --secondary: 220 15% 90%; 
+    --secondary-foreground: 240 10% 9%;
+
+    --muted: 220 15% 94%;
+    --muted-foreground: 240 5% 45%;
+
+    --accent: 330 90% 60%; /* Vibrant Pink/Magenta */
+    --accent-foreground: 330 90% 98%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 20% 88%;
+    --input: 220 20% 88%;
+    --ring: 220 90% 65%;
+
+    --radius: 0.75rem; /* Slightly larger radius for a softer, modern look */
+
+    /* New theme colors for more variety */
+    --info: 200 95% 55%; 
+    --info-foreground: 200 95% 98%;
+    --success: 140 75% 45%;
+    --success-foreground: 140 75% 98%;
+    --warning: 45 95% 55%;
+    --warning-foreground: 45 95% 10%;
+    --special1: 270 90% 65%; /* Vivid Purple */
+    --special1-foreground: 270 90% 98%;
+    --special2: 25 95% 60%; /* Bright Orange */
+    --special2-foreground: 25 95% 98%;
+    --special3: 350 95% 65%; /* Strong Pink/Red */
+    --special3-foreground: 350 95% 98%;
+    --special4: 240 80% 65%; /* Deep Blue */
+    --special4-foreground: 240 80% 98%;
+    --special5: 180 90% 45%; /* Radiant Teal */
+    --special5-foreground: 180 90% 98%;
+    --neutral: 220 10% 55%; 
+    --neutral-foreground: 220 10% 96%;
+
+
+    /* Chart colors */
+    --chart-1: hsl(var(--primary)); 
+    --chart-2: hsl(var(--accent)); 
+    --chart-3: hsl(var(--info)); 
+    --chart-4: hsl(var(--warning)); 
+    --chart-5: hsl(var(--special1));
+
+    /* Sidebar specific colors */
+    --sidebar-background: 220 15% 97%;
+    --sidebar-foreground: 220 30% 25%;
+    --sidebar-primary: hsl(var(--primary)); 
+    --sidebar-primary-foreground: hsl(var(--primary-foreground));
+    --sidebar-accent: 220 20% 92%;
+    --sidebar-accent-foreground: 220 30% 15%;
+    --sidebar-border: 220 20% 88%;
+    --sidebar-ring: hsl(var(--ring));
+  }
+
+  
+
+  .dark {
+    --background: 0, 0%, 12%; /* Near-black */
+    --foreground: 215 20% 95%; 
+
+    --card: 0 0% 7% / 0.65; /* Semi-transparent glassy background */
+    --card-foreground: 215 20% 80%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 215 20% 95%;
+
+    --primary: 200 95% 65%; /* Electric Cyan/Blue */
+    --primary-foreground: 200 95% 10%; 
+
+    --secondary: 0 0% 7%;
+    --secondary-foreground: 215 20% 80%;
+
+    --muted: 225 15% 20%;
+    --muted-foreground: 215 15% 65%;
+
+    --accent: 320 90% 70%; /* Vibrant Magenta */
+    --accent-foreground: 320 90% 10%; 
+
+    --destructive: 0 85% 45%;
+    --destructive-foreground: 0 0% 78%;
+
+    --border: 225 15% 25%;
+    --input: 225 15% 25%;
+    --ring: 200 95% 70%;
+    
+    /* New theme colors for dark mode */
+    --info: 200 95% 70%;
+    --info-foreground: 200 95% 15%;
+    --success: 140 70% 60%;
+    --success-foreground: 140 70% 15%;
+    --warning: 45 100% 65%;
+    --warning-foreground: 45 100% 10%;
+    --special1: 270 90% 75%; 
+    --special1-foreground: 270 90% 18%;
+    --special2: 25 100% 70%; 
+    --special2-foreground: 25 100% 18%;
+    --special3: 350 90% 75%; 
+    --special3-foreground: 350 90% 18%;
+    --special4: 240 80% 70%; 
+    --special4-foreground: 240 80% 18%;
+    --special5: 180 90% 60%; 
+    --special5-foreground: 180 90% 18%;
+    --neutral: 220 15% 70%;
+    --neutral-foreground: 220 15% 12%;
+
+    /* Chart colors for dark mode */
+    --chart-1: hsl(var(--primary));
+    --chart-2: hsl(var(--accent));
+    --chart-3: hsl(var(--info));
+    --chart-4: hsl(var(--warning));
+    --chart-5: hsl(var(--special1));
+
+    /* Sidebar specific colors for dark mode */
+    --sidebar-background: 225 0% 6%/ 0.5;
+    --sidebar-foreground: 215 25% 75%; 
+    --sidebar-primary: hsl(var(--primary));
+    --sidebar-primary-foreground: hsl(var(--primary-foreground));
+    --sidebar-accent: 225 15% 16%; 
+    --sidebar-accent-foreground: 215 25% 90%; 
+    --sidebar-border: 225 15% 20%;
+    --sidebar-ring: hsl(var(--ring));
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply h-full;
+  }
+  
+  body {
+    @apply bg-background text-foreground h-full;
+    background-image: radial-gradient(circle at top left, hsl(var(--primary) / 0.1), transparent 30%),
+                      radial-gradient(circle at bottom right, hsl(var(--accent) / 0.1), transparent 40%);
+    background-attachment: fixed;
+    font-feature-settings: "rlig" 1,"calt" 1; /* Enable OpenType features */
+  }
+
+  .dark body {
+    background-image: radial-gradient(circle at top left, hsl(var(--primary) / 0.2), transparent 35%),
+                      radial-gradient(circle at bottom right, hsl(var(--accent) / 0.2), transparent 40%);
+  }
+
+  .dark .dark\:bg-background\/60 {
+    background-color: hsl(var(--background) / 0.6) !important;
+    backdrop-filter: blur(8px);
+  }
+
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background) / 0.5);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.5);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .printable-area {
+    display: block !important;
+  }
+  
+  /* Accordion content visibility for printing */
+  [data-state="closed"] {
+      display: block !important;
+  }
+}

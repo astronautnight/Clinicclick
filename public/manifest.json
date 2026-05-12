@@ -1,0 +1,10 @@
+{
+  "name": "Clinic@Click - Dental Patient Management",
+  "short_name": "Clinic@Click",
+  "description": "Comprehensive dental patient management software to streamline your dental practice operations.",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/"
+}
+

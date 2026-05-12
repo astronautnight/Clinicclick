@@ -1,0 +1,551 @@
+'use client';
+
+import { useState, useEffect, type FormEvent, useMemo } from 'react';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, onSnapshot, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import type { Department, StudentCaseHistory, AttendanceStatus, MarkedTooth, StudentFinancialEntry } from '@/types';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { format, addMonths, subMonths, getDaysInMonth, isBefore } from 'date-fns';
+import { setStudentAttendance } from '@/services/student-service';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { DentalChart } from '@/components/dental-chart';
+import { Badge } from '@/components/ui/badge';
+import { updateCaseHistory, deleteCaseHistory } from '@/services/case-history-service';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+
+
+const initialCaseHistoryData: {
+    patientName: string;
+    patientAge: string;
+    patientGender: 'Male' | 'Female' | 'Other';
+    departmentId: string;
+    departmentName: string;
+    chiefComplaint: string;
+    medicalHistory: string;
+    dentalHistory: string;
+    examinationFindings: string;
+    diagnosis: string;
+    treatmentPlan: string;
+    markedTeeth: MarkedTooth[];
+    stagedObservations: string[];
+} = {
+    patientName: '',
+    patientAge: '',
+    patientGender: 'Other',
+    departmentId: '',
+    departmentName: '',
+    chiefComplaint: '',
+    medicalHistory: '',
+    dentalHistory: '',
+    examinationFindings: '',
+    diagnosis: '',
+    treatmentPlan: '',
+    markedTeeth: [],
+    stagedObservations: [],
+};
+
+const initialFinanceData = {
+    type: 'Receivable' as 'Receivable' | 'Payable',
+    description: '',
+    amount: '',
+    patientName: '',
+};
+
+export default function AcademicsPage() {
+    const { user, clinicId } = useUser();
+    const db = useFirestore();
+    const { toast } = useToast();
+
+    // Data states
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [caseHistories, setCaseHistories] = useState<StudentCaseHistory[]>([]);
+    const [attendance, setAttendance] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
+    const [finances, setFinances] = useState<StudentFinancialEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // UI states
+    const [isCaseFormOpen, setIsCaseFormOpen] = useState(false);
+    const [caseFormData, setCaseFormData] = useState(initialCaseHistoryData);
+    const [editingCaseHistoryId, setEditingCaseHistoryId] = useState<string | null>(null);
+    const [caseHistoryToDelete, setCaseHistoryToDelete] = useState<StudentCaseHistory | null>(null);
+
+
+    const [isAttendanceFormOpen, setIsAttendanceFormOpen] = useState(false);
+    const [attendanceDate, setAttendanceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [attendanceDepartmentId, setAttendanceDepartmentId] = useState('');
+    const [summaryMonth, setSummaryMonth] = useState(new Date());
+
+    const [isFinanceFormOpen, setIsFinanceFormOpen] = useState(false);
+    const [financeFormData, setFinanceFormData] = useState(initialFinanceData);
+    
+    // Data fetching effect
+    useEffect(() => {
+        if (!user?.uid || !db || !clinicId) { setLoading(false); return; };
+        setLoading(true);
+
+        const unsubDepts = onSnapshot(collection(db, 'clinics', clinicId, 'departments'), (snap) => {
+            setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a,b) => a.name.localeCompare(b.name)));
+        });
+        
+        const q = query(collection(db, 'clinics', clinicId, 'studentCaseHistories'), where('studentId', '==', user.uid));
+        const unsubCases = onSnapshot(q, (snap) => {
+            setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        });
+
+        const attendanceColRef = collection(db, 'clinics', clinicId, 'students', user.uid, 'attendance');
+        const unsubAttendance = onSnapshot(attendanceColRef, snap => {
+            const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
+            snap.forEach(doc => {
+                const docData = doc.data();
+                data[doc.id] = {
+                    status: docData.status,
+                    departmentName: docData.departmentName || 'N/A'
+                };
+            });
+            setAttendance(data);
+        });
+        
+        const financeColRef = collection(db, 'clinics', clinicId, 'students', user.uid, 'finances');
+        const unsubFinances = onSnapshot(query(financeColRef, orderBy('date', 'desc')), snap => {
+            setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+        });
+
+        setLoading(false);
+        return () => { unsubDepts(); unsubCases(); unsubAttendance(); unsubFinances(); }
+    }, [user?.uid, db, clinicId]);
+    
+    const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
+        if (caseHistory) {
+            setEditingCaseHistoryId(caseHistory.id);
+            setCaseFormData({
+                patientName: caseHistory.patientName,
+                patientAge: String(caseHistory.patientAge),
+                patientGender: caseHistory.patientGender,
+                departmentId: caseHistory.departmentId || '',
+                departmentName: caseHistory.departmentName || '',
+                chiefComplaint: caseHistory.chiefComplaint,
+                medicalHistory: caseHistory.medicalHistory,
+                dentalHistory: caseHistory.dentalHistory,
+                examinationFindings: caseHistory.examinationFindings,
+                diagnosis: caseHistory.diagnosis,
+                treatmentPlan: caseHistory.treatmentPlan,
+                markedTeeth: caseHistory.markedTeeth || [],
+                stagedObservations: caseHistory.stagedObservations || [],
+            });
+        } else {
+            setEditingCaseHistoryId(null);
+            setCaseFormData(initialCaseHistoryData);
+        }
+        setIsCaseFormOpen(true);
+    };
+
+    const handleCaseHistorySubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!user || !clinicId) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
+        if (!caseFormData.patientName || !caseFormData.departmentId || !caseFormData.diagnosis) {
+            toast({ title: "Missing Fields", description: "Patient name, department, and diagnosis are required.", variant: 'destructive'});
+            return;
+        }
+
+        const dept = departments.find(d => d.id === caseFormData.departmentId);
+        
+        const payload = {
+            ...caseFormData,
+            studentId: user.uid,
+            studentName: user.displayName || 'Student',
+            departmentName: dept?.name || '',
+            patientAge: Number(caseFormData.patientAge) || 0,
+        };
+        
+        try {
+            if (editingCaseHistoryId) {
+                await updateCaseHistory(clinicId, editingCaseHistoryId, payload);
+                toast({ title: "Case History Updated" });
+            } else {
+                await addDoc(collection(db, 'clinics', clinicId, 'studentCaseHistories'), {...payload, createdAt: serverTimestamp()});
+                toast({ title: "Case History Saved" });
+            }
+            setIsCaseFormOpen(false);
+            setEditingCaseHistoryId(null);
+        } catch (error) {
+            console.error("Error saving case history", error);
+            toast({ title: "Error", description: "Could not save case history.", variant: 'destructive'});
+        }
+    }
+
+     const handleDeleteCaseHistory = async () => {
+        if (!caseHistoryToDelete || !clinicId) return;
+        try {
+            await deleteCaseHistory(clinicId, caseHistoryToDelete.id);
+            toast({ title: "Case History Deleted" });
+            setCaseHistoryToDelete(null);
+        } catch (error) {
+            console.error("Error deleting case history", error);
+            toast({ title: "Error", description: "Could not delete case history.", variant: 'destructive' });
+        }
+    };
+
+
+    const handleAttendanceSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!user || !clinicId || !attendanceDepartmentId || !attendanceDate) {
+             toast({ title: "Missing Fields", description: "Please select a department and date.", variant: 'destructive'});
+             return;
+        }
+        
+        const dept = departments.find(d => d.id === attendanceDepartmentId);
+        if (!dept) {
+            toast({ title: "Invalid Department", description: "The selected department could not be found.", variant: 'destructive'});
+            return;
+        }
+        
+        try {
+            await setStudentAttendance(clinicId, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
+            toast({ title: "Attendance Marked", description: `Marked present for ${format(new Date(attendanceDate), 'dd/MM/yyyy')}.`});
+            setIsAttendanceFormOpen(false);
+        } catch(error) {
+             console.error("Error marking attendance", error);
+             toast({ title: "Error", description: "Could not mark attendance.", variant: 'destructive'});
+        }
+    }
+
+    const handleFinanceSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!user || !clinicId) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
+        if (!financeFormData.description || !financeFormData.amount) {
+            toast({ title: "Missing Fields", description: "Description and amount are required.", variant: 'destructive'});
+            return;
+        }
+        
+        const payload = {
+            studentId: user.uid,
+            type: financeFormData.type,
+            description: financeFormData.description,
+            amount: Number(financeFormData.amount),
+            patientName: financeFormData.type === 'Receivable' ? financeFormData.patientName : '',
+            date: format(new Date(), 'yyyy-MM-dd'),
+            createdAt: serverTimestamp(),
+        };
+        
+        try {
+            await addDoc(collection(db, 'clinics', clinicId, 'students', user.uid, 'finances'), payload);
+            toast({ title: "Financial Entry Added" });
+            setIsFinanceFormOpen(false);
+            setFinanceFormData(initialFinanceData);
+        } catch (error) {
+            console.error("Error saving finance entry", error);
+            toast({ title: "Error", description: "Could not save entry.", variant: 'destructive'});
+        }
+    };
+    
+    const DayWithAttendance = ({ date }: { date: Date }) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const dayAttendance = attendance[dateStr];
+    
+        const dayContent = (
+          <div className="relative w-full h-full flex items-center justify-center">
+            {format(date, 'd')}
+          </div>
+        );
+    
+        if (!dayAttendance) return dayContent;
+    
+        return (
+            <Popover>
+                <PopoverTrigger asChild>
+                    <button type="button" className="w-full h-full p-0 m-0 bg-transparent border-none rounded-md">
+                        {dayContent}
+                    </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2 text-sm">
+                    <p>Status: <strong>{dayAttendance.status}</strong></p>
+                    <p>Department: <strong>{dayAttendance.departmentName}</strong></p>
+                </PopoverContent>
+            </Popover>
+        )
+    };
+
+    const attendanceStats = useMemo(() => {
+        const daysInMonth = getDaysInMonth(summaryMonth);
+        let present = 0;
+        let absent = 0;
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(summaryMonth.getFullYear(), summaryMonth.getMonth(), day);
+            const dateStr = format(date, 'yyyy-MM-dd');
+            if (attendance[dateStr]?.status === 'Present') {
+                present++;
+            } else if (attendance[dateStr]?.status === 'Absent') {
+                absent++;
+            }
+        }
+        return { present, absent };
+    }, [attendance, summaryMonth]);
+
+    const financeSummary = useMemo(() => {
+        const totalReceivable = finances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
+        const totalPayable = finances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
+        const netBalance = totalReceivable - totalPayable;
+        return { totalReceivable, totalPayable, netBalance };
+    }, [finances]);
+
+
+    if (loading) {
+        return <div>Loading academic data...</div>;
+    }
+
+    return (
+        <div className="space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-3xl font-bold tracking-tight flex items-center"><BookUser className="mr-3 h-8 w-8 text-special1" />My Academics</h1>
+                <div className="flex gap-2">
+                     <Dialog open={isCaseFormOpen} onOpenChange={setIsCaseFormOpen}>
+                        <DialogTrigger asChild><Button onClick={() => handleOpenCaseForm(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
+                        <DialogContent className="sm:max-w-5xl">
+                            <DialogHeader><DialogTitle>{editingCaseHistoryId ? 'Edit Case History' : 'Add New Case History'}</DialogTitle></DialogHeader>
+                            <form onSubmit={handleCaseHistorySubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
+                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-2"><Label>Patient Name *</Label><Input value={caseFormData.patientName} onChange={e => setCaseFormData({...caseFormData, patientName: e.target.value})} required/></div>
+                                    <div className="space-y-2"><Label>Patient Age</Label><Input type="number" value={caseFormData.patientAge} onChange={e => setCaseFormData({...caseFormData, patientAge: e.target.value})}/></div>
+                                    <div className="space-y-2"><Label>Patient Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                               </div>
+                               <div className="space-y-2">
+                                   <Label>Department *</Label>
+                                   <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})} required><SelectTrigger><SelectValue placeholder="Select department..."/></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
+                               </div>
+                               <div className="space-y-2"><Label>Chief Complaint</Label><Textarea value={caseFormData.chiefComplaint} onChange={e => setCaseFormData({...caseFormData, chiefComplaint: e.target.value})}/></div>
+                               <div className="space-y-2"><Label>Medical History</Label><Textarea value={caseFormData.medicalHistory} onChange={e => setCaseFormData(prev => ({...prev, medicalHistory: e.target.value}))} /></div>
+                               <div className="space-y-2"><Label>Dental History</Label><Textarea value={caseFormData.dentalHistory} onChange={e => setCaseFormData(prev => ({...prev, dentalHistory: e.target.value}))} /></div>
+                               <div className="space-y-2"><Label>Examination Findings</Label><Textarea value={caseFormData.examinationFindings} onChange={e => setCaseFormData({...caseFormData, examinationFindings: e.target.value})}/></div>
+                               
+                               <div className="space-y-2">
+                                   <Label>Dental Chart &amp; Observations</Label>
+                                   <div className="p-2 border rounded-md">
+                                       <DentalChart 
+                                            markedTeeth={caseFormData.markedTeeth}
+                                            onTeethChange={(teeth) => setCaseFormData(prev => ({ ...prev, markedTeeth: teeth }))}
+                                            stagedObservations={caseFormData.stagedObservations}
+                                            onObservationsChange={(observations) => setCaseFormData(prev => ({...prev, stagedObservations: observations}))}
+                                       />
+                                   </div>
+                               </div>
+                               
+                               <div className="space-y-2"><Label>Diagnosis *</Label><Textarea value={caseFormData.diagnosis} onChange={e => setCaseFormData({...caseFormData, diagnosis: e.target.value})} required/></div>
+                               <div className="space-y-2"><Label>Treatment Plan</Label><Textarea value={caseFormData.treatmentPlan} onChange={e => setCaseFormData({...caseFormData, treatmentPlan: e.target.value})}/></div>
+
+                                <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background">
+                                    <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                                    <Button type="submit">{editingCaseHistoryId ? 'Save Changes' : 'Save Case'}</Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+            </div>
+
+            <Tabs defaultValue="cases" className="w-full">
+                <div className="overflow-x-auto pb-2">
+                    <TabsList>
+                        <TabsTrigger value="cases"><ClipboardList className="mr-2 h-4 w-4"/>My Case Histories</TabsTrigger>
+                        <TabsTrigger value="attendance"><CalendarDays className="mr-2 h-4 w-4"/>Manage Postings & Attendance</TabsTrigger>
+                        <TabsTrigger value="finance"><DollarSign className="mr-2 h-4 w-4"/>My Finances</TabsTrigger>
+                    </TabsList>
+                </div>
+                <TabsContent value="cases" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>My Submitted Case Histories</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Patient</TableHead><TableHead>Department</TableHead><TableHead>Diagnosis</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {caseHistories.map(ch => (
+                                            <TableRow key={ch.id}>
+                                                <TableCell>{ch.createdAt ? format(ch.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
+                                                <TableCell className="font-medium">{ch.patientName}</TableCell>
+                                                <TableCell>{ch.departmentName}</TableCell>
+                                                <TableCell className="text-muted-foreground max-w-xs truncate">{ch.diagnosis}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenCaseForm(ch)}><Edit className="h-4 w-4" /></Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="ghost" size="icon" onClick={() => setCaseHistoryToDelete(ch)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                                <AlertDialogDescription>This will permanently delete the case history for "{caseHistoryToDelete?.patientName}".</AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={handleDeleteCaseHistory}>Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            {caseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="attendance" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Manage Postings & Attendance</CardTitle>
+                            <CardDescription>Log your daily department posting and view your monthly attendance.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                             <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
+                                     <form onSubmit={handleAttendanceSubmit} className="space-y-4">
+                                        <div className="space-y-2"><Label>Date</Label><Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} required/></div>
+                                        <div className="space-y-2"><Label>Department Posting</Label><Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required><SelectTrigger><SelectValue placeholder="Select department..."/></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select></div>
+                                        <DialogFooter>
+                                            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                                            <Button type="submit">Mark as Present</Button>
+                                        </DialogFooter>
+                                     </form>
+                                </DialogContent>
+                             </Dialog>
+                             
+                            <div className="overflow-x-auto">
+                                 <Card>
+                                     <CardHeader>
+                                         <div className="flex items-center justify-center">
+                                            <Button variant="outline" size="icon" onClick={() => setSummaryMonth(prev => subMonths(prev, 1))}>
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </Button>
+                                            <span className="w-48 text-center font-semibold">{format(summaryMonth, 'MMMM yyyy')}</span>
+                                            <Button variant="outline" size="icon" onClick={() => setSummaryMonth(prev => addMonths(prev, 1))}>
+                                                <ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                     </CardHeader>
+                                     <CardContent className="flex justify-center">
+                                          <Calendar
+                                            mode="single"
+                                            month={summaryMonth}
+                                            onMonthChange={setSummaryMonth}
+                                            components={{ DayContent: DayWithAttendance }}
+                                            modifiers={{
+                                                present: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
+                                                absent: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
+                                            }}
+                                            modifiersClassNames={{
+                                                present: cn('bg-green-100 dark:bg-green-800/50 text-green-800 dark:text-green-200 rounded-md'),
+                                                absent: cn('bg-red-100 dark:bg-red-800/50 text-red-800 dark:text-red-200 rounded-md'),
+                                            }}
+                                            className="p-0"
+                                        />
+                                     </CardContent>
+                                     <CardFooter className="flex justify-around text-sm">
+                                        <div className="text-center">
+                                            <p className="font-bold text-green-600">{attendanceStats.present}</p>
+                                            <p>Present</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="font-bold text-red-600">{attendanceStats.absent}</p>
+                                            <p>Absent</p>
+                                        </div>
+                                     </CardFooter>
+                                 </Card>
+                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                 <TabsContent value="finance" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>My Student Finances</CardTitle>
+                            <CardDescription>Track amounts you need to pay or are due to you for academic activities.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <Card>
+                                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Total Receivable</CardTitle></CardHeader>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalReceivable.toLocaleString()}</p></CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Total Payable</CardTitle></CardHeader>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalPayable.toLocaleString()}</p></CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Net Balance</CardTitle></CardHeader>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.netBalance.toLocaleString()}</p></CardContent>
+                                </Card>
+                            </div>
+
+                            <Dialog open={isFinanceFormOpen} onOpenChange={setIsFinanceFormOpen}>
+                                <DialogTrigger asChild><Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/> Add New Entry</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Add Financial Entry</DialogTitle></DialogHeader>
+                                    <form onSubmit={handleFinanceSubmit} className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>Entry Type</Label>
+                                            <Select value={financeFormData.type} onValueChange={(val) => setFinanceFormData(prev => ({...prev, type: val as any}))}>
+                                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Receivable">Receivable (e.g., Amount due from patient)</SelectItem>
+                                                    <SelectItem value="Payable">Payable (e.g., Lab bill, consumables)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {financeFormData.type === 'Receivable' && (
+                                            <div className="space-y-2"><Label>Patient Name (Optional)</Label><Input value={financeFormData.patientName} onChange={e => setFinanceFormData(prev => ({...prev, patientName: e.target.value}))}/></div>
+                                        )}
+                                        <div className="space-y-2"><Label>Description *</Label><Input value={financeFormData.description} onChange={e => setFinanceFormData(prev => ({...prev, description: e.target.value}))} required/></div>
+                                        <div className="space-y-2"><Label>Amount (₹) *</Label><Input type="number" value={financeFormData.amount} onChange={e => setFinanceFormData(prev => ({...prev, amount: e.target.value}))} required/></div>
+                                        <DialogFooter>
+                                            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                                            <Button type="submit">Add Entry</Button>
+                                        </DialogFooter>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
+                            
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead>Patient</TableHead><TableHead className="text-right">Amount (₹)</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {finances.map(f => (
+                                            <TableRow key={f.id}>
+                                                <TableCell>{format(new Date(f.date), 'dd/MM/yyyy')}</TableCell>
+                                                <TableCell><Badge variant={f.type === 'Receivable' ? 'secondary' : 'destructive'}>{f.type}</Badge></TableCell>
+                                                <TableCell>{f.description}</TableCell>
+                                                <TableCell>{f.patientName || 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-medium">₹{f.amount.toLocaleString()}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                            {finances.length === 0 && <p className="text-center p-4 text-muted-foreground">No financial entries yet.</p>}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
