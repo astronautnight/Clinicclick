@@ -9,7 +9,7 @@ import {
   ReactNode,
 } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../provider';
 import { useFirestore } from '../provider';
 import { useRouter, usePathname } from 'next/navigation';
@@ -73,9 +73,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   /* Auth state listener */
   /* -------------------------------------------------------------- */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeUserDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setLoading(false);
+
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+        unsubscribeUserDoc = null;
+      }
 
       const isAuthPage =
         pathname.startsWith('/login') ||
@@ -105,29 +112,38 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setClinicLoading(true);
 
         const userRef = doc(db, 'users', currentUser.uid);
-        const snap = await getDoc(userRef);
-
-        if (snap.exists()) {
-          const data = snap.data();
-
-          setClinicId(data.clinicId ?? null);
-          setClinicRole(
-            (data.role as ClinicRole) ?? null
-          );
-        } else {
+        
+        unsubscribeUserDoc = onSnapshot(userRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            setClinicId(data.clinicId ?? null);
+            setClinicRole((data.role as ClinicRole) ?? null);
+          } else {
+            setClinicId(null);
+            setClinicRole(null);
+          }
+          setClinicLoading(false);
+        }, (error) => {
+          console.error('Failed to load clinic context', error);
           setClinicId(null);
           setClinicRole(null);
-        }
+          setClinicLoading(false);
+        });
+
       } catch (error) {
-        console.error('Failed to load clinic context', error);
+        console.error('Failed to initialize clinic context listener', error);
         setClinicId(null);
         setClinicRole(null);
-      } finally {
         setClinicLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+      }
+    };
   }, [auth, db, router, pathname]);
 
   /* ------------------------------------------------------------------ */
