@@ -81,7 +81,7 @@ export default function LoginPage() {
     // Web: existing popup flow — untouched
     try {
       await signInWithGoogle();
-      toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+      toast({ title: 'Sign- Successful', description: 'Welcome back!' });
       router.push('/');
     } catch (error) {
       const err = error as AuthError;
