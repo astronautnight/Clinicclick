@@ -22,8 +22,7 @@ import type { AuthError } from 'firebase/auth';
 
 import {
   signInWithGoogle,
-  signInWithGoogleRedirect,
-  handleGoogleRedirectResult,
+  signInWithGoogleNative,
   signInWithEmail,
   signUpWithEmail,
   updateUserProfile,
@@ -50,31 +49,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const native = navigator.userAgent.includes('ClinicClickApp');
     setIsNative(native);
-
-    // PWA only: check if we're returning from a Google redirect
-    if (native) {
-      setIsGoogleSubmitting(true);
-      handleGoogleRedirectResult()
-        .then((user) => {
-          if (user) {
-            toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-            router.push('/');
-          }
-        })
-        .catch((error: AuthError) => {
-          if (error.code) {
-            toast({
-              title: 'Google Sign-In Failed',
-              description: error.message || 'An unexpected error occurred.',
-              variant: 'destructive',
-            });
-          }
-        })
-        .finally(() => setIsGoogleSubmitting(false));
-    }
   }, []);
 
   /* -------------------------------------------------
@@ -83,11 +59,12 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setIsGoogleSubmitting(true);
 
-    // PWA: redirect flow (Chrome Custom Tab — Google allows this)
+    // PWA/Android: native account picker via AndroidBridge
     if (isNative) {
       try {
-        await signInWithGoogleRedirect();
-        // Page navigates away here — nothing below runs
+        await signInWithGoogleNative();
+        toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+        router.push('/');
       } catch (error) {
         const err = error as AuthError;
         toast({
@@ -95,6 +72,7 @@ export default function LoginPage() {
           description: err.message || 'An unexpected error occurred.',
           variant: 'destructive',
         });
+      } finally {
         setIsGoogleSubmitting(false);
       }
       return;
@@ -115,7 +93,11 @@ export default function LoginPage() {
       } else if (err.code === 'auth/unauthorized-domain') {
         errorMessage = 'This domain is not authorized. Please contact support.';
       }
-      toast({ title: 'Google Sign-In Failed', description: errorMessage, variant: 'destructive' });
+      toast({
+        title: 'Google Sign-In Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setIsGoogleSubmitting(false);
     }
