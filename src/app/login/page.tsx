@@ -61,22 +61,22 @@ export default function LoginPage() {
 
     // PWA/Android: native account picker via AndroidBridge
     if (isNative) {
-      try {
-        await signInWithGoogleNative();
-        toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-        router.push('/');
-      } catch (error) {
-        const err = error as AuthError;
-        toast({
-          title: 'Google Sign-In Failed',
-          description: err.message || 'An unexpected error occurred.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsGoogleSubmitting(false);
-      }
-      return;
-    }
+  try {
+    await signInWithGoogleNative();
+    toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+    router.push('/');
+  } catch (error) {
+    const err = error as AuthError;
+    toast({
+      title: 'Google Sign-In Failed',
+      description: err.message,
+      variant: 'destructive',
+    });
+  } finally {
+    setIsGoogleSubmitting(false);
+  }
+  return;
+}
 
     // Web: existing popup flow — untouched
     try {

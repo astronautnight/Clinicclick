@@ -74,11 +74,7 @@ export async function signUpWithEmail(
   email: string,
   password: string
 ): Promise<User> {
-  const result: UserCredential = await createUserWithEmailAndPassword(
-    auth,
-    email,
-    password
-  );
+  const result: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
   await ensureUserProfile(result.user);
   await sendEmailVerification(result.user);
   return result.user;
@@ -88,11 +84,7 @@ export async function signInWithEmail(
   email: string,
   password: string
 ): Promise<User> {
-  const result: UserCredential = await signInWithEmailAndPassword(
-    auth,
-    email,
-    password
-  );
+  const result: UserCredential = await signInWithEmailAndPassword(auth, email, password);
   await ensureUserProfile(result.user);
   return result.user;
 }
@@ -105,52 +97,51 @@ export async function signInWithGoogle(): Promise<User> {
 }
 
 // PWA/Android: native Google Sign-In via AndroidBridge
-// MainActivity.java opens the native account picker, gets idToken,
-// fires a CustomEvent back to JS, and we sign in with the credential here
 export async function signInWithGoogleNative(): Promise<User> {
   return new Promise((resolve, reject) => {
-    // Trigger native Google Sign-In from Android
-    (window as any).AndroidBridge.startGoogleSignIn();
+    if (!(window as any).AndroidBridge) {
+      reject(new Error('AndroidBridge not found'));
+      return;
+    }
 
     const successHandler = async (event: CustomEvent) => {
-      window.removeEventListener(
-        'nativeGoogleSignIn',
-        successHandler as EventListener
-      );
-      window.removeEventListener(
-        'nativeGoogleSignInError',
-        errorHandler as EventListener
-      );
+      window.removeEventListener('nativeGoogleSignIn', successHandler as EventListener);
+      window.removeEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+
+      console.log('nativeGoogleSignIn event received:', event.detail);
+
+      const idToken = event.detail?.idToken;
+      if (!idToken) {
+        reject(new Error('No idToken received from Android'));
+        return;
+      }
+
       try {
-        const credential = GoogleAuthProvider.credential(event.detail.idToken);
+        const credential = GoogleAuthProvider.credential(idToken);
         const result = await signInWithCredential(auth, credential);
         await ensureUserProfile(result.user);
         resolve(result.user);
       } catch (err) {
+        console.error('Firebase signInWithCredential failed:', err);
         reject(err);
       }
     };
 
     const errorHandler = (event: CustomEvent) => {
-      window.removeEventListener(
-        'nativeGoogleSignIn',
-        successHandler as EventListener
-      );
-      window.removeEventListener(
-        'nativeGoogleSignInError',
-        errorHandler as EventListener
-      );
-      reject(new Error(event.detail.error));
+      window.removeEventListener('nativeGoogleSignIn', successHandler as EventListener);
+      window.removeEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+      console.error('nativeGoogleSignInError event received:', event.detail);
+      reject(new Error(event.detail?.error || 'Native Google Sign-In failed'));
     };
 
-    window.addEventListener(
-      'nativeGoogleSignIn',
-      successHandler as EventListener
-    );
-    window.addEventListener(
-      'nativeGoogleSignInError',
-      errorHandler as EventListener
-    );
+    window.addEventListener('nativeGoogleSignIn', successHandler as EventListener);
+    window.addEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+
+    try {
+      (window as any).AndroidBridge.startGoogleSignIn();
+    } catch (err) {
+      reject(new Error('Failed to call AndroidBridge.startGoogleSignIn'));
+    }
   });
 }
 
@@ -176,9 +167,7 @@ export async function signOutUser(): Promise<void> {
 /* ------------------------------------------------------------------ */
 /* Profile helpers */
 /* ------------------------------------------------------------------ */
-export async function getUserProfile(
-  userId: string
-): Promise<UserProfile | null> {
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const ref = doc(db, 'users', userId);
   const snap = await getDoc(ref);
   return snap.exists() ? (snap.data() as UserProfile) : null;
@@ -206,25 +195,20 @@ export async function signUpCreateClinic(
 ): Promise<User> {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const user = cred.user;
-
   await ensureUserProfile(user);
-
   const clinicRef = doc(collection(db, 'clinics'));
   const inviteCode = nanoid(8);
-
   await setDoc(clinicRef, {
     name: clinicName,
     inviteCode,
     createdBy: user.uid,
     createdAt: serverTimestamp(),
   });
-
   await updateDoc(doc(db, 'users', user.uid), {
     clinicId: clinicRef.id,
     role: 'admin',
     updatedAt: serverTimestamp(),
   });
-
   return user;
 }
 
@@ -235,24 +219,15 @@ export async function signUpJoinClinic(
 ): Promise<User> {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const user = cred.user;
-
   await ensureUserProfile(user);
-
-  const q = query(
-    collection(db, 'clinics'),
-    where('inviteCode', '==', inviteCode)
-  );
+  const q = query(collection(db, 'clinics'), where('inviteCode', '==', inviteCode));
   const snap = await getDocs(q);
-
   if (snap.empty) throw new Error('Invalid invite code');
-
   const clinicDoc = snap.docs[0];
-
   await updateDoc(doc(db, 'users', user.uid), {
     clinicId: clinicDoc.id,
     role: 'member',
     updatedAt: serverTimestamp(),
   });
-
   return user;
 }
