@@ -84,12 +84,13 @@ export default function ClinicPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [newOperatoryName, setNewOperatoryName] = useState('');
   const [isAddingOperatory, setIsAddingOperatory] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   /* ============================================================
      LOAD CLINIC DATA
   ============================================================ */
   useEffect(() => {
-    if (!clinicId || !db) return;
+    if (!clinicId || !db || isLeaving) return;
 
     const clinicDocRef = doc(db, 'clinics', clinicId);
 
@@ -183,7 +184,7 @@ export default function ClinicPage() {
       unsubOperatories();
       unsubPatients();
     };
-  }, [clinicId, db]);
+  }, [clinicId, db, isLeaving]);
 
   /* ============================================================
      ACTIONS
@@ -309,6 +310,19 @@ export default function ClinicPage() {
     toast({ title: 'Patient Assigned' });
   };
 
+  const handleLeaveClinic = async () => {
+    if (!clinicId || !user) return;
+    try {
+      setIsLeaving(true);
+      // Wait for React to run effect cleanup
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await removeClinicMember({ clinicId, userId: user.uid });
+      toast({ title: 'You have left the clinic.' });
+    } catch (e: any) {
+      setIsLeaving(false);
+      toast({ title: e.message || 'Failed to leave clinic', variant: 'destructive' });
+    }
+  };
 
   /* ============================================================
      NO CLINIC STATE
@@ -379,14 +393,33 @@ export default function ClinicPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Clinic Details</CardTitle>
-            {clinicRole === 'admin' && !isEditingName && (
-              <Button variant="ghost" size="icon" onClick={() => {
-                setEditingClinicName(clinicName);
-                setIsEditingName(true);
-              }}>
-                <Edit className="h-4 w-4" />
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {clinicRole === 'admin' && !isEditingName && (
+                <Button variant="ghost" size="icon" onClick={() => {
+                  setEditingClinicName(clinicName);
+                  setIsEditingName(true);
+                }}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">Leave Clinic</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                   <AlertDialogHeader>
+                      <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                         Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
+                      </AlertDialogDescription>
+                   </AlertDialogHeader>
+                   <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
+                   </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
           <CardDescription>Manage your clinic's details and invite code.</CardDescription>
         </CardHeader>
