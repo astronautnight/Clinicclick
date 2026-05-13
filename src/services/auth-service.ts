@@ -16,8 +16,6 @@ import {
 import {
   getAuth,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   createUserWithEmailAndPassword,
@@ -40,6 +38,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ✅ Configure provider to work better on mobile
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
   prompt: 'select_account',
@@ -53,16 +52,20 @@ async function ensureUserProfile(user: User): Promise<void> {
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    const payload: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any; updatedAt: any } = {
+    const payload: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'> & { createdAt: any, updatedAt: any } = {
       uid: user.uid,
       email: user.email ?? null,
       displayName: user.displayName ?? null,
       photoURL: user.photoURL ?? null,
+
+      // 🔑 clinic system (IMPORTANT)
       clinicId: null,
-      role: null,
+      role: null, // 'owner' | 'admin' | 'member'
+
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
+
     await setDoc(ref, payload);
   }
 }
@@ -70,39 +73,38 @@ async function ensureUserProfile(user: User): Promise<void> {
 /* ------------------------------------------------------------------ */
 /* Auth methods */
 /* ------------------------------------------------------------------ */
-export async function signUpWithEmail(email: string, password: string): Promise<User> {
-  const result: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
+export async function signUpWithEmail(
+  email: string,
+  password: string
+): Promise<User> {
+  const result: UserCredential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    password
+  );
   await ensureUserProfile(result.user);
   await sendEmailVerification(result.user);
   return result.user;
 }
 
-export async function signInWithEmail(email: string, password: string): Promise<User> {
-  const result: UserCredential = await signInWithEmailAndPassword(auth, email, password);
+export async function signInWithEmail(
+  email: string,
+  password: string
+): Promise<User> {
+  const result: UserCredential = await signInWithEmailAndPassword(
+    auth,
+    email,
+    password
+  );
   await ensureUserProfile(result.user);
   return result.user;
 }
 
-// Web: popup flow
+// ✅ ALWAYS use popup - works on all platforms when configured correctly
 export async function signInWithGoogle(): Promise<User> {
   const result: UserCredential = await signInWithPopup(auth, provider);
   await ensureUserProfile(result.user);
   return result.user;
-}
-
-// PWA/Android: initiates redirect — page navigates away, nothing returns
-export async function signInWithGoogleRedirect(): Promise<void> {
-  await signInWithRedirect(auth, provider);
-}
-
-// PWA/Android: called on mount after redirect returns to /login
-export async function handleGoogleRedirectResult(): Promise<User | null> {
-  const result = await getRedirectResult(auth);
-  if (result?.user) {
-    await ensureUserProfile(result.user);
-    return result.user;
-  }
-  return null;
 }
 
 export async function resetPassword(email: string): Promise<void> {
@@ -110,11 +112,11 @@ export async function resetPassword(email: string): Promise<void> {
 }
 
 export async function verifyResetCode(code: string): Promise<string> {
-  return await verifyPasswordResetCode(auth, code);
+    return await verifyPasswordResetCode(auth, code);
 }
 
 export async function confirmNewPassword(code: string, newPassword: string): Promise<void> {
-  await confirmPasswordReset(auth, code, newPassword);
+    await confirmPasswordReset(auth, code, newPassword);
 }
 
 export async function signOutUser(): Promise<void> {
@@ -122,15 +124,20 @@ export async function signOutUser(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Profile helpers */
+/* Profile helpers (used later by clinic system) */
 /* ------------------------------------------------------------------ */
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+export async function getUserProfile(
+  userId: string
+): Promise<UserProfile | null> {
   const ref = doc(db, 'users', userId);
   const snap = await getDoc(ref);
   return snap.exists() ? (snap.data() as UserProfile) : null;
 }
 
-export async function updateUserProfile(userId: string, data: Partial<UserProfile>): Promise<void> {
+export async function updateUserProfile(
+  userId: string,
+  data: Partial<UserProfile>
+): Promise<void> {
   if (!userId) throw new Error('User ID required');
   const ref = doc(db, 'users', userId);
   await updateDoc(ref, {
@@ -142,6 +149,7 @@ export async function updateUserProfile(userId: string, data: Partial<UserProfil
 /* ------------------------------------------------------------------ */
 /* Clinic onboarding helpers */
 /* ------------------------------------------------------------------ */
+
 export async function signUpCreateClinic(
   email: string,
   password: string,
@@ -181,10 +189,15 @@ export async function signUpJoinClinic(
 
   await ensureUserProfile(user);
 
-  const q = query(collection(db, 'clinics'), where('inviteCode', '==', inviteCode));
+  const q = query(
+    collection(db, 'clinics'),
+    where('inviteCode', '==', inviteCode)
+  );
   const snap = await getDocs(q);
 
-  if (snap.empty) throw new Error('Invalid invite code');
+  if (snap.empty) {
+    throw new Error('Invalid invite code');
+  }
 
   const clinicDoc = snap.docs[0];
 

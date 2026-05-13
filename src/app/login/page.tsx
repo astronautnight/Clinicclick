@@ -3,6 +3,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { signInWithGoogle } from '@/services/auth-service';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -17,17 +18,17 @@ import { Label } from '@/components/ui/label';
 import { LogoCC } from '@/components/icons';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useUser } from '@/firebase';
-import type { AuthError } from 'firebase/auth';
 
 import {
-  signInWithGoogle,
-  signInWithGoogleRedirect,
-  handleGoogleRedirectResult,
   signInWithEmail,
   signUpWithEmail,
   updateUserProfile,
 } from '@/services/auth-service';
+
+import { useUser } from '@/firebase';
+import type { AuthError } from 'firebase/auth';
+
+
 
 /* -------------------------------------------------
    PASSWORD VALIDATION
@@ -47,34 +48,14 @@ export default function LoginPage() {
   const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isNative, setIsNative] = useState(false);
-
+  
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const native = navigator.userAgent.includes('ClinicClickApp');
-    setIsNative(native);
-
-    // PWA only: check if we're returning from a Google redirect
-    if (native) {
-      setIsGoogleSubmitting(true);
-      handleGoogleRedirectResult()
-        .then((user) => {
-          if (user) {
-            toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-            router.push('/');
-          }
-        })
-        .catch((error: AuthError) => {
-          if (error.code) {
-            toast({
-              title: 'Google Sign-In Failed',
-              description: error.message || 'An unexpected error occurred.',
-              variant: 'destructive',
-            });
-          }
-        })
-        .finally(() => setIsGoogleSubmitting(false));
-    }
+    // Check if running in Capacitor/native app
+    const checkNative = () => {
+      if (typeof window === 'undefined') return false;
+      return navigator.userAgent.includes('ClinicClickApp');
+    };
+    setIsNative(checkNative());
   }, []);
 
   /* -------------------------------------------------
@@ -82,32 +63,19 @@ export default function LoginPage() {
   ------------------------------------------------- */
   const handleGoogleSignIn = async () => {
     setIsGoogleSubmitting(true);
-
-    // PWA: redirect flow (Chrome Custom Tab — Google allows this)
-    if (isNative) {
-      try {
-        await signInWithGoogleRedirect();
-        // Page navigates away here — nothing below runs
-      } catch (error) {
-        const err = error as AuthError;
-        toast({
-          title: 'Google Sign-In Failed',
-          description: err.message || 'An unexpected error occurred.',
-          variant: 'destructive',
-        });
-        setIsGoogleSubmitting(false);
-      }
-      return;
-    }
-
-    // Web: existing popup flow — untouched
     try {
       await signInWithGoogle();
-      toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+      toast({
+        title: 'Sign-In Successful',
+        description: 'Welcome back!',
+      });
       router.push('/');
     } catch (error) {
       const err = error as AuthError;
+      
+      // Provide helpful error messages
       let errorMessage = err.message || 'An unexpected error occurred.';
+      
       if (err.code === 'auth/popup-closed-by-user') {
         errorMessage = 'Sign-in cancelled. Please try again.';
       } else if (err.code === 'auth/popup-blocked') {
@@ -115,7 +83,12 @@ export default function LoginPage() {
       } else if (err.code === 'auth/unauthorized-domain') {
         errorMessage = 'This domain is not authorized. Please contact support.';
       }
-      toast({ title: 'Google Sign-In Failed', description: errorMessage, variant: 'destructive' });
+      
+      toast({
+        title: 'Google Sign-In Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setIsGoogleSubmitting(false);
     }
@@ -137,14 +110,18 @@ export default function LoginPage() {
       router.push('/');
     } catch (error) {
       const err = error as AuthError;
-      toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
+      toast({
+        title: 'Login Failed',
+        description: err.message,
+        variant: 'destructive',
+      });
     } finally {
       setIsEmailSubmitting(false);
     }
   };
 
   /* -------------------------------------------------
-     SIGN UP
+     SIGN UP (ACCOUNT ONLY)
   ------------------------------------------------- */
   const handleSignup = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -161,15 +138,18 @@ export default function LoginPage() {
       setIsEmailSubmitting(false);
       return;
     }
+
     if (password !== confirm) {
       toast({ title: 'Passwords do not match', variant: 'destructive' });
       setIsEmailSubmitting(false);
       return;
     }
+
     if (!isStrongPassword(password)) {
       toast({
         title: 'Weak password',
-        description: 'Password must be at least 6 characters, 2 numbers, and a special character (@$!%*#?&).',
+        description:
+          'Password must be at least 6 characters, 2 numbers, and a special character (@$!%*#?&).',
         variant: 'destructive',
       });
       setIsEmailSubmitting(false);
@@ -178,7 +158,11 @@ export default function LoginPage() {
 
     try {
       const newUser = await signUpWithEmail(email, password);
-      await updateUserProfile(newUser.uid, { displayName: fullName });
+
+      await updateUserProfile(newUser.uid, {
+        displayName: fullName,
+      });
+
       toast({ title: 'Account created successfully' });
       router.push('/');
     } catch (error: any) {
@@ -217,36 +201,42 @@ export default function LoginPage() {
           <CardTitle className="text-3xl">Clinic@Click</CardTitle>
           <CardDescription>Dental Practice Management</CardDescription>
         </CardHeader>
-
+        
         <CardContent>
-          {/* Google button — shown on both web and PWA */}
-          <Button
-            variant="outline"
-            className="w-full mb-4 flex items-center justify-center gap-2"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmitting}
-          >
-            {isGoogleSubmitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M21.35 11.1H12v2.8h5.35c-.45 2.35-2.45 3.8-5.35 3.8a6 6 0 1 1 0-12c1.35 0 2.6.45 3.55 1.3l2.15-2.15A8.9 8.9 0 1 0 21 12c0-.3-.05-.6-.1-.9z"
-                />
-              </svg>
-            )}
-            Continue with Google
-          </Button>
 
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or with email</span>
-            </div>
-          </div>
+  {!isNative && (
+    <>
+      <Button
+                variant="outline"
+                className="w-full mb-4 flex items-center justify-center gap-2"
+                onClick={handleGoogleSignIn}
+                disabled={isSubmitting}
+              >
+                {isGoogleSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path
+                      fill="currentColor"
+                      d="M21.35 11.1H12v2.8h5.35c-.45 2.35-2.45 3.8-5.35 3.8a6 6 0 1 1 0-12c1.35 0 2.6.45 3.55 1.3l2.15-2.15A8.9 8.9 0 1 0 21 12c0-.3-.05-.6-.1-.9z"
+                    />
+                  </svg>
+                )}
+                Continue with Google
+              </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or with email
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
 
           <Tabs defaultValue="login">
             <TabsList className="grid grid-cols-2">
@@ -259,19 +249,28 @@ export default function LoginPage() {
               <form onSubmit={handleLogin} className="space-y-4 pt-4">
                 <div>
                   <Label>Email</Label>
-                  <Input name="email" type="email" required disabled={isSubmitting} />
+                  <Input name="email" type="email" required disabled={isSubmitting}/>
                 </div>
+
                 <div>
                   <div className="flex items-center justify-between">
                     <Label>Password</Label>
-                    <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                     <Link
+                      href="/forgot-password"
+                      className="text-sm text-primary hover:underline"
+                    >
                       Forgot Password?
                     </Link>
                   </div>
-                  <Input name="password" type="password" required disabled={isSubmitting} />
+                  <Input name="password" type="password" required disabled={isSubmitting}/>
                 </div>
+
                 <Button className="w-full" disabled={isSubmitting}>
-                  {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Login'}
+                  {isEmailSubmitting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    'Login'
+                  )}
                 </Button>
               </form>
             </TabsContent>
@@ -281,25 +280,33 @@ export default function LoginPage() {
               <form onSubmit={handleSignup} className="space-y-4 pt-4">
                 <div>
                   <Label>Full Name</Label>
-                  <Input name="fullName" required disabled={isSubmitting} />
+                  <Input name="fullName" required disabled={isSubmitting}/>
                 </div>
+
                 <div>
                   <Label>Email</Label>
-                  <Input name="email" type="email" required disabled={isSubmitting} />
+                  <Input name="email" type="email" required disabled={isSubmitting}/>
                 </div>
+
                 <div>
                   <Label>Password</Label>
-                  <Input name="password" type="password" required disabled={isSubmitting} />
+                  <Input name="password" type="password" required disabled={isSubmitting}/>
                   <p className="text-xs text-muted-foreground mt-1">
                     At least 6 characters, 2 numbers, and a special character (@$!%*#?&).
                   </p>
                 </div>
+
                 <div>
                   <Label>Confirm Password</Label>
-                  <Input name="confirmPassword" type="password" required disabled={isSubmitting} />
+                  <Input name="confirmPassword" type="password" required disabled={isSubmitting}/>
                 </div>
+
                 <Button className="w-full" disabled={isSubmitting}>
-                  {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Create Account'}
+                  {isEmailSubmitting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    'Create Account'
+                  )}
                 </Button>
               </form>
             </TabsContent>
