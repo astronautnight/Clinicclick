@@ -338,9 +338,6 @@ export default function ClinicPage() {
             <Card>
             <CardHeader>
                 <CardTitle>Create Clinic</CardTitle>
-                <CardDescription>
-                You can only be part of one clinic
-                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
                 <Input
