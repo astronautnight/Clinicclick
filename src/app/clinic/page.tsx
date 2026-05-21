@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { collection, doc, getDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 import { useUser, useFirestore } from '@/firebase';
@@ -39,7 +40,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { MoreVertical, Edit, Hospital, Copy, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -435,19 +436,18 @@ export default function ClinicPage() {
             </div>
 
             <div>
-              <Label className="text-sm font-medium text-muted-foreground">Invite Code (for Admins)</Label>
+              <Label className="text-sm font-medium bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-blue-500 to-yellow-500">Share this 8-digit code with other doctors that you want to invite</Label>
               <div className="flex items-center gap-2 mt-1">
-                <Badge variant="secondary" className="text-base px-3 py-1 font-mono">{inviteCode}</Badge>
+                <Badge variant="secondary" className="text-base px-3 py-1 font-mono text-indigo-700 bg-indigo-50 border-indigo-200">{inviteCode}</Badge>
+                <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCopyInviteCode}
+                    aria-label="Copy invite code"
+                >
+                    <Copy className="h-4 w-4"/>
+                </Button>
                 {clinicRole === 'admin' && (
-                    <>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCopyInviteCode}
-                        aria-label="Copy invite code"
-                    >
-                        <Copy className="h-4 w-4"/>
-                    </Button>
                     <Button
                         size="sm"
                         variant="outline"
@@ -460,9 +460,23 @@ export default function ClinicPage() {
                     >
                         Regenerate
                     </Button>
-                    </>
                 )}
               </div>
+            </div>
+            
+            <div className="pt-4 flex gap-4 border-t">
+                <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Link href="/patients">
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Add First Patient
+                    </Link>
+                </Button>
+                <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    <Link href="/staff">
+                        <User className="mr-2 h-4 w-4" />
+                        Add Doctor Details
+                    </Link>
+                </Button>
             </div>
         </CardContent>
       </Card>
