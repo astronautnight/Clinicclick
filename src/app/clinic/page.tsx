@@ -472,7 +472,7 @@ export default function ClinicPage() {
                     </Link>
                 </Button>
                 <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Link href="/staff">
+                    <Link href="/doctors">
                         <User className="mr-2 h-4 w-4" />
                         Add Doctor Details
                     </Link>
