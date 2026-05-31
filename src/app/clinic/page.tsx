@@ -400,23 +400,25 @@ export default function ClinicPage() {
                   <Edit className="h-4 w-4" />
                 </Button>
               )}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm">Leave Clinic</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                   <AlertDialogHeader>
-                      <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                         Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
-                      </AlertDialogDescription>
-                   </AlertDialogHeader>
-                   <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
-                   </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              { (clinicRole === 'admin' || clinicRole === 'member') && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm">Leave Clinic</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                       <AlertDialogHeader>
+                          <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                             Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
+                          </AlertDialogDescription>
+                       </AlertDialogHeader>
+                       <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
+                       </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+              )}
             </div>
           </div>
           <CardDescription>Manage your clinic's details and invite code.</CardDescription>
