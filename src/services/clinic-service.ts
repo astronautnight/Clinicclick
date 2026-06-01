@@ -273,18 +273,6 @@ export async function removeClinicMember({
       updatedAt: serverTimestamp(),
     }
   );
-
-  // If only one member left, promote to admin
-  const membersRef = collection(db, 'clinics', clinicId, 'members');
-  const membersSnap = await getDocs(membersRef);
-  
-  if (membersSnap.size === 1) {
-     const remainingMemberDoc = membersSnap.docs[0];
-     const remainingUserId = remainingMemberDoc.id;
-     
-     await updateDoc(doc(db, 'clinics', clinicId, 'members', remainingUserId), { role: 'admin' });
-     await updateDoc(doc(db, 'users', remainingUserId), { role: 'admin', updatedAt: serverTimestamp() });
-  }
 }
 
 /* ============================================================

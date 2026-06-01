@@ -30,9 +30,6 @@ import {
   Image as ImageIcon,
   Wallet,
   Beaker,
-  ShieldCheck,
-  Cloud,
-  Lock,
   Loader2,
 } from 'lucide-react';
 import { useEffect, useState, useMemo, type FormEvent } from 'react';
@@ -47,14 +44,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
-// Reusable components
-function FeatureCard({ title, icon }: { title: string, icon: React.ReactNode }) {
-    return (
-        <Card className="p-6 flex flex-col items-center text-center shadow-none border">
-            <div className="p-3 bg-primary/10 rounded-full mb-4">{icon}</div>
-            <CardTitle className="text-lg">{title}</CardTitle>
-        </Card>
-    );
+// Reusable components from user's example, adapted to TSX and project styles
+
+function StatCard({ title, value, icon, highlight, success, danger }: { title: string, value: string, icon: React.ReactNode, highlight?: boolean, success?: boolean, danger?: boolean }) {
+  return (
+    <Card className={cn(
+      "shadow-sm",
+      success && "bg-green-50 dark:bg-green-500/10",
+      danger && "bg-red-50 dark:bg-red-500/10",
+      highlight && "ring-2 ring-primary"
+    )}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-semibold">{value}</div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function QueueItem({ time, name, procedure, status, statusColor }: { time: string, name: string, procedure?: string, status?: string, statusColor?: string }) {
@@ -240,34 +248,19 @@ export default function DashboardPage() {
 
     if (!clinicId) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
-                <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-                    Welcome to Clinic@Click!
-                </h1>
-                <p className="mt-6 text-lg text-muted-foreground max-w-lg">
-                    Manage your clinic efficiently.
-                </p>
-                <div className="flex gap-4 mt-10">
-                    <Button asChild size="lg" className="px-8 font-semibold">
-                        <Link href="/clinic">Add Your Clinic</Link>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Welcome to Clinic@Click!</CardTitle>
+                    <CardDescription>
+                        You are not a part of any clinic yet. Create or join a clinic to get started.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Button asChild>
+                        <Link href="/clinic">Go to My Clinic</Link>
                     </Button>
-                    <Button asChild variant="outline" size="lg" className="px-8 font-semibold">
-                        <Link href="/clinic">Join Existing Clinic</Link>
-                    </Button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-20 w-full max-w-5xl">
-                    <FeatureCard title="Manage Patients" icon={<Users className="w-6 h-6 text-primary" />} />
-                    <FeatureCard title="X-Ray Management" icon={<ImageIcon className="w-6 h-6 text-primary" />} />
-                    <FeatureCard title="Billing & Payments" icon={<DollarSign className="w-6 h-6 text-primary" />} />
-                    <FeatureCard title="Team Collaboration" icon={<Stethoscope className="w-6 h-6 text-primary" />} />
-                </div>
-                <div className="mt-20 border-t pt-10 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center text-muted-foreground text-sm w-full max-w-5xl">
-                    <div><AlertTriangle className="w-6 h-6 mx-auto mb-2 text-primary" />Secure</div>
-                    <div><ShieldCheck className="w-6 h-6 mx-auto mb-2 text-primary" />Encrypted</div>
-                    <div><Cloud className="w-6 h-6 mx-auto mb-2 text-primary" />Backed Up</div>
-                    <div><Lock className="w-6 h-6 mx-auto mb-2 text-primary" />Private</div>
-                </div>
-            </div>
+                </CardFooter>
+            </Card>
         );
     }
 

@@ -400,25 +400,23 @@ export default function ClinicPage() {
                   <Edit className="h-4 w-4" />
                 </Button>
               )}
-              { (clinicRole === 'admin' || clinicRole === 'member') && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">Leave Clinic</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                       <AlertDialogHeader>
-                          <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                             Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
-                          </AlertDialogDescription>
-                       </AlertDialogHeader>
-                       <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
-                       </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">Leave Clinic</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                   <AlertDialogHeader>
+                      <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                         Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
+                      </AlertDialogDescription>
+                   </AlertDialogHeader>
+                   <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
+                   </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
           <CardDescription>Manage your clinic's details and invite code.</CardDescription>
@@ -476,7 +474,7 @@ export default function ClinicPage() {
                 <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Link href="/doctors">
                         <User className="mr-2 h-4 w-4" />
-                        Add Doctors
+                        Add Doctor Details
                     </Link>
                 </Button>
             </div>
