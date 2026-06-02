@@ -11,12 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Transaction, TransactionType, TransactionCategory, Patient, Procedure, LinkedProcedure, PaymentMethod, UserProfile, Invoice, Doctor } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, TrendingUp, TrendingDown, PlusCircle, Trash2, MapPin, Users, Edit, Save, CreditCard, Landmark, CircleDollarSign, History, Printer, Copy, FileText, View, Search } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, PlusCircle, Trash2, MapPin, Users, Edit, Save, CreditCard, Landmark, CircleDollarSign, History, Printer, Copy, FileText, View, Search, MoreVertical } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter as AlertDialogFooterCustom, AlertDialogHeader as AlertDialogHeaderCustom, AlertDialogTitle as AlertDialogTitleCustom, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestore, useUser } from '@/firebase';
 import { collection, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { updatePatient } from '@/services/patient-service';
@@ -51,6 +52,8 @@ interface PatientFinancials extends Patient {
     totalBillable: number;
     totalPaid: number;
     balanceDue: number;
+    baseBillable?: number;
+    discountAmount?: number;
 }
 
 interface EditingProcedureState {
@@ -99,6 +102,38 @@ export default function FinancialsPage() {
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [invoiceToPreview, setInvoiceToPreview] = useState<GeneratedInvoice | null>(null);
   const [savedInvoiceSearch, setSavedInvoiceSearch] = useState('');
+
+  const [discountPatient, setDiscountPatient] = useState<PatientFinancials | null>(null);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
+  const [discountValueState, setDiscountValueState] = useState<string>('');
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+
+  const handleOpenDiscountDialog = (patient: PatientFinancials) => {
+    setDiscountPatient(patient);
+    setDiscountType(patient.discountType || 'fixed');
+    setDiscountValueState(patient.discountValue ? patient.discountValue.toString() : '');
+    setIsDiscountDialogOpen(true);
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!user || !clinicId || !discountPatient) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
+
+    const value = parseFloat(discountValueState) || 0;
+    const success = await updatePatient(clinicId, discountPatient.id, {
+      discountType: discountType,
+      discountValue: value
+    });
+
+    if (success) {
+      toast({ title: "Discount Applied", description: `Discount applied to ${discountPatient.firstName}.` });
+      setIsDiscountDialogOpen(false);
+    } else {
+      toast({ title: "Error", description: "Could not apply discount to patient.", variant: "destructive" });
+    }
+  };
 
 
    useEffect(() => {
@@ -166,7 +201,14 @@ export default function FinancialsPage() {
 
   useEffect(() => {
     const financials = patients.map(patient => {
-        const totalBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+        const baseBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+        let discount = 0;
+        if (patient.discountType === 'percentage' && patient.discountValue) {
+            discount = (baseBillable * patient.discountValue) / 100;
+        } else if (patient.discountType === 'fixed' && patient.discountValue) {
+            discount = patient.discountValue;
+        }
+        const totalBillable = Math.max(0, baseBillable - discount);
         
         const totalPaid = transactions
           .filter(t => t.patientId === patient.id && t.type === 'Earning')
@@ -179,6 +221,8 @@ export default function FinancialsPage() {
           totalBillable,
           totalPaid,
           balanceDue,
+          baseBillable,
+          discountAmount: discount
         };
     }).sort((a,b) => b.balanceDue - a.balanceDue);
     setPatientFinancials(financials);
@@ -610,10 +654,11 @@ export default function FinancialsPage() {
               <div className="overflow-x-auto">
                 <div className="min-w-[700px]">
                     <div className="hidden md:grid grid-cols-12 items-center w-full text-sm font-semibold text-muted-foreground px-4 py-2 border-b">
-                        <div className="col-span-5 md:col-span-6">Patient</div>
+                        <div className="col-span-5 md:col-span-5">Patient</div>
                         <div className="text-right col-span-2">Billable</div>
                         <div className="text-right col-span-2">Paid</div>
                         <div className="text-right col-span-3 md:col-span-2">Due</div>
+                        <div className="text-right col-span-1 pr-2">Actions</div>
                     </div>
                     <Accordion type="multiple" className="space-y-2 md:space-y-0">
                         {patientFinancials.map(p => {
@@ -623,9 +668,18 @@ export default function FinancialsPage() {
                                 <Card className="border-0 md:border shadow-none md:shadow-sm">
                                     <AccordionTrigger className="p-4 hover:no-underline font-normal data-[state=open]:bg-muted/50">
                                         <div className="grid grid-cols-12 items-center w-full text-sm text-left">
-                                            <div className="col-span-12 md:col-span-6 font-semibold">{p.firstName} {p.lastName}</div>
-                                            <div className="text-right font-bold col-span-4 md:col-span-2 mt-2 md:mt-0"><span className='md:hidden font-normal text-muted-foreground'>Billable: </span>₹{p.totalBillable.toLocaleString()}</div>
-                                            <div className="text-right text-green-600 flex items-center justify-end col-span-4 md:col-span-2"><span className='md:hidden font-normal text-muted-foreground'>Paid: </span>
+                                            <div className="col-span-12 md:col-span-5 font-semibold">{p.firstName} {p.lastName}</div>
+                                            <div className="text-right font-bold col-span-3 md:col-span-2 mt-2 md:mt-0">
+                                                <span className='md:hidden font-normal text-muted-foreground'>Billable: </span>
+                                                ₹{p.totalBillable.toLocaleString()}
+                                                {p.discountAmount && p.discountAmount > 0 ? (
+                                                    <div className="text-[10px] text-muted-foreground font-normal line-through">
+                                                        ₹{(p.baseBillable || 0).toLocaleString()}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            <div className="text-right text-green-600 flex items-center justify-end col-span-3 md:col-span-2">
+                                                <span className='md:hidden font-normal text-muted-foreground'>Paid: </span>
                                                 <span className="mr-1">₹</span>
                                                 <Input
                                                     key={p.totalPaid}
@@ -636,8 +690,23 @@ export default function FinancialsPage() {
                                                     onBlur={(e) => handleSavePatientTotalPaid(p.id, parseFloat(e.target.value) || 0)}
                                                 />
                                             </div>
-                                            <div className={`text-right font-bold col-span-4 md:col-span-2 ${p.balanceDue > 0 ? 'text-red-600' : 'text-gray-500'}`}><span className='md:hidden font-normal text-muted-foreground'>Due: </span>
+                                            <div className={`text-right font-bold col-span-3 md:col-span-2 ${p.balanceDue > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                                <span className='md:hidden font-normal text-muted-foreground'>Due: </span>
                                                 ₹{p.balanceDue.toLocaleString()}
+                                            </div>
+                                            <div className="text-right col-span-3 md:col-span-1 pr-2 flex justify-end" onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleOpenDiscountDialog(p)}>
+                                                            Add discount
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </div>
                                         </div>
                                     </AccordionTrigger>
@@ -893,6 +962,86 @@ export default function FinancialsPage() {
             {generatedInvoice && (
               <Button onClick={handleSaveInvoice}><Save className="mr-2 h-4 w-4"/>Save Invoice</Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDiscountDialogOpen} onOpenChange={setIsDiscountDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Apply Discount</DialogTitle>
+            <DialogDescription>
+              Apply an overall discount to {discountPatient?.firstName} {discountPatient?.lastName}&apos;s total billable amount.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Discount Type</Label>
+              <Select
+                value={discountType}
+                onValueChange={(val: 'fixed' | 'percentage') => setDiscountType(val)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                {discountType === 'fixed' ? 'Discount Amount (₹)' : 'Discount Percentage (%)'}
+              </Label>
+              <Input
+                type="number"
+                value={discountValueState}
+                onChange={(e) => setDiscountValueState(e.target.value)}
+                min="0"
+                max={discountType === 'percentage' ? '100' : undefined}
+                placeholder={discountType === 'fixed' ? 'e.g. 500' : 'e.g. 10'}
+              />
+            </div>
+            {discountPatient && (
+              <div className="bg-muted p-3 rounded-lg text-xs space-y-1 border">
+                <div className="flex justify-between">
+                  <span>Base Billable:</span>
+                  <span className="font-semibold">₹{(discountPatient.baseBillable || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Applied Discount:</span>
+                  <span className="font-semibold text-red-600">
+                    - ₹{(() => {
+                      const val = parseFloat(discountValueState) || 0;
+                      if (discountType === 'percentage') {
+                        return ((discountPatient.baseBillable || 0) * val / 100).toLocaleString();
+                      }
+                      return val.toLocaleString();
+                    })()}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-muted-foreground/20 pt-1 font-semibold text-sm">
+                  <span>New Total Billable:</span>
+                  <span>
+                    ₹{(() => {
+                      const base = discountPatient.baseBillable || 0;
+                      const val = parseFloat(discountValueState) || 0;
+                      const disc = discountType === 'percentage' ? (base * val / 100) : val;
+                      return Math.max(0, base - disc).toLocaleString();
+                    })()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDiscountDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleApplyDiscount}>
+              Apply Discount
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

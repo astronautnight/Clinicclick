@@ -80,6 +80,8 @@ export interface Patient {
   isConsult?: boolean; // Flag for consultation patient
   consultLocation?: string; // Location/clinic of the consult
   stagedObservations?: string[];
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
 }
 
 export interface Appointment {
