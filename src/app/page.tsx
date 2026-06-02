@@ -185,7 +185,14 @@ export default function DashboardPage() {
         .reduce((acc, t) => acc + t.amount, 0);
 
         const patientFinancials = patients.map(patient => {
-            const totalBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+            const baseBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+            let discount = 0;
+            if (patient.discountType === 'percentage' && patient.discountValue) {
+                discount = (baseBillable * patient.discountValue) / 100;
+            } else if (patient.discountType === 'fixed' && patient.discountValue) {
+                discount = patient.discountValue;
+            }
+            const totalBillable = Math.max(0, baseBillable - discount);
             const totalPaid = transactions
             .filter(t => t.patientId === patient.id && t.type === 'Earning')
             .reduce((acc, t) => acc + t.amount, 0);

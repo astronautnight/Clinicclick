@@ -32,7 +32,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer } from "lucide-react";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -102,6 +102,38 @@ export default function PatientsPage() {
   const [editingProcedure, setEditingProcedure] = useState<EditingProcedureState | null>(null);
   const [age, setAge] = useState<number | string>('');
 
+  const [discountPatient, setDiscountPatient] = useState<Patient | null>(null);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
+  const [discountValueState, setDiscountValueState] = useState<string>('');
+  const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+
+  const handleOpenDiscountDialog = (patient: Patient) => {
+    setDiscountPatient(patient);
+    setDiscountType(patient.discountType || 'fixed');
+    setDiscountValueState(patient.discountValue ? patient.discountValue.toString() : '');
+    setIsDiscountDialogOpen(true);
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!user || !clinicId || !discountPatient) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
+
+    const value = parseFloat(discountValueState) || 0;
+    const success = await updatePatient(clinicId, discountPatient.id, {
+      discountType: discountType,
+      discountValue: value
+    });
+
+    if (success) {
+      toast({ title: "Discount Applied", description: `Discount applied to ${discountPatient.firstName}.` });
+      setIsDiscountDialogOpen(false);
+    } else {
+      toast({ title: "Error", description: "Could not apply discount to patient.", variant: "destructive" });
+    }
+  };
+
 
   useEffect(() => {
     if (!user || !db || !clinicId) {
@@ -133,8 +165,8 @@ export default function PatientsPage() {
             fetched.push({
               id: d.id,
               ...data,
-              createdAt: data.createdAt?.toDate(),
-              updatedAt: data.updatedAt?.toDate(),
+              createdAt: (data as any).createdAt?.toDate?.() || data.createdAt,
+              updatedAt: (data as any).updatedAt?.toDate?.() || data.updatedAt,
             } as Patient);
           }
         });
@@ -470,10 +502,17 @@ export default function PatientsPage() {
     const patientPrescriptions = useMemo(() => prescriptions.filter(p => p.patientId === patient.id), [prescriptions, patient.id]);
     
     const financials = useMemo(() => {
-        const totalBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+        const baseBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+        let discount = 0;
+        if (patient.discountType === 'percentage' && patient.discountValue) {
+            discount = (baseBillable * patient.discountValue) / 100;
+        } else if (patient.discountType === 'fixed' && patient.discountValue) {
+            discount = patient.discountValue;
+        }
+        const totalBillable = Math.max(0, baseBillable - discount);
         const totalPaid = patientTransactions.reduce((acc, t) => acc + t.amount, 0);
         const balanceDue = totalBillable - totalPaid;
-        return { totalBillable, totalPaid, balanceDue };
+        return { baseBillable, discountAmount: discount, totalBillable, totalPaid, balanceDue };
     }, [patient, patientTransactions]);
     
     const handlePrint = () => {
@@ -594,14 +633,27 @@ export default function PatientsPage() {
                      <Card>
                         <CardHeader>
                             <CardTitle>Billing Summary</CardTitle>
-                            <div className="flex justify-around pt-2 text-center">
+                             <div className="flex flex-wrap justify-around pt-2 text-center gap-4">
+                                {financials.discountAmount > 0 && (
+                                    <div>
+                                        <p className="text-2xl font-bold text-muted-foreground line-through">₹{financials.baseBillable.toLocaleString()}</p>
+                                        <p className="text-sm text-muted-foreground">Base Billable</p>
+                                    </div>
+                                )}
+                                {financials.discountAmount > 0 && (
+                                    <div>
+                                        <p className="text-2xl font-bold text-red-600">-₹{financials.discountAmount.toLocaleString()}</p>
+                                        <p className="text-sm text-muted-foreground">Discount ({patient.discountType === 'percentage' ? `${patient.discountValue}%` : 'Fixed'})</p>
+                                    </div>
+                                )}
                                 <div><p className="text-2xl font-bold">₹{financials.totalBillable.toLocaleString()}</p><p className="text-sm text-muted-foreground">Total Billable</p></div>
                                 <div><p className="text-2xl font-bold text-green-600">₹{financials.totalPaid.toLocaleString()}</p><p className="text-sm text-muted-foreground">Total Paid</p></div>
                                 <div><p className="text-2xl font-bold text-red-600">₹{financials.balanceDue.toLocaleString()}</p><p className="text-sm text-muted-foreground">Balance Due</p></div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                             <div className="flex justify-end mb-2">
+                             <div className="flex justify-end gap-2 mb-2">
+                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenDiscountDialog(patient); }}><Percent className="mr-1 h-4 w-4" />Add Discount</Button>
                                 <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenLinkDialog(patient); }}><Link2 className="mr-1 h-4 w-4" />Link New Procedure</Button>
                             </div>
                             <Table>
@@ -872,6 +924,88 @@ export default function PatientsPage() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={isDiscountDialogOpen} onOpenChange={setIsDiscountDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Apply Discount</DialogTitle>
+            <DialogDescription>
+              Apply an overall discount to {discountPatient?.firstName} {discountPatient?.lastName}&apos;s total billable amount.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Discount Type</Label>
+              <Select
+                value={discountType}
+                onValueChange={(val: 'fixed' | 'percentage') => setDiscountType(val)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                {discountType === 'fixed' ? 'Discount Amount (₹)' : 'Discount Percentage (%)'}
+              </Label>
+              <Input
+                type="number"
+                value={discountValueState}
+                onChange={(e) => setDiscountValueState(e.target.value)}
+                min="0"
+                max={discountType === 'percentage' ? '100' : undefined}
+                placeholder={discountType === 'fixed' ? 'e.g. 500' : 'e.g. 10'}
+              />
+            </div>
+            {discountPatient && (() => {
+              const baseBillable = discountPatient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
+              return (
+                <div className="bg-muted p-3 rounded-lg text-xs space-y-1 border">
+                  <div className="flex justify-between">
+                    <span>Base Billable:</span>
+                    <span className="font-semibold">₹{baseBillable.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Applied Discount:</span>
+                    <span className="font-semibold text-red-600">
+                      - ₹{(() => {
+                        const val = parseFloat(discountValueState) || 0;
+                        if (discountType === 'percentage') {
+                          return (baseBillable * val / 100).toLocaleString();
+                        }
+                        return val.toLocaleString();
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-muted-foreground/20 pt-1 font-semibold text-sm">
+                    <span>New Total Billable:</span>
+                    <span>
+                      ₹{(() => {
+                        const val = parseFloat(discountValueState) || 0;
+                        const disc = discountType === 'percentage' ? (baseBillable * val / 100) : val;
+                        return Math.max(0, baseBillable - disc).toLocaleString();
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDiscountDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleApplyDiscount}>
+              Apply Discount
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

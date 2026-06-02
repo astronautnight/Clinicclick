@@ -139,8 +139,9 @@ export default function FinancialsPage() {
    useEffect(() => {
     if (!user || !db || !clinicId) return;
 
+    const uid = user.uid;
     async function loadProfile() {
-        const profile = await getUserProfile(user.uid);
+        const profile = await getUserProfile(uid);
         setClinicProfile(profile);
     }
     loadProfile();

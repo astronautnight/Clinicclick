@@ -637,7 +637,13 @@ export default function AppointmentsPage() {
                   <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
                     {procedures.length === 0 ? <p className="text-sm text-muted-foreground">No procedures found.</p> : procedures.map(proc => (
                       <div key={proc.id} className="flex items-center space-x-2">
-                        <Checkbox checked={currentAppointment.procedureIds.includes(proc.id)} onCheckedChange={() => setCurrentAppointment(prev => ({ ...prev, procedureIds: prev.procedureIds.includes(proc.id) ? prev.procedureIds.filter(id => id !== proc.id) : [...prev.procedureIds, proc.id] }))} />
+                        <Checkbox checked={(currentAppointment.procedureIds || []).includes(proc.id)} onCheckedChange={() => setCurrentAppointment(prev => {
+                          const prevIds = prev.procedureIds || [];
+                          return {
+                            ...prev,
+                            procedureIds: prevIds.includes(proc.id) ? prevIds.filter(id => id !== proc.id) : [...prevIds, proc.id]
+                          };
+                        })} />
                         <span className="text-sm">{proc.name}</span>
                       </div>
                     ))}
