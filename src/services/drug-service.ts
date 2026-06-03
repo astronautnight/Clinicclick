@@ -102,6 +102,16 @@ const commonDentalDrugs: Omit<Drug, 'id' | 'createdAt' | 'updatedAt'>[] = [
 
 type UpdatableDrugData = Partial<Omit<Drug, 'id' | 'createdAt'>>;
 
+function sanitizePayload<T extends object>(data: T): Partial<T> {
+  const clean: any = {};
+  for (const key in data) {
+    if (data[key] !== undefined) {
+      clean[key] = data[key];
+    }
+  }
+  return clean;
+}
+
 export async function addDrug(clinicId: string, drugData: Omit<Drug, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
   if (!clinicId) {
     throw new Error('Clinic ID is required to add a drug.');
@@ -109,13 +119,15 @@ export async function addDrug(clinicId: string, drugData: Omit<Drug, 'id' | 'cre
   
   const drugsColRef = collection(db, "clinics", clinicId, "drugs");
   
-  const payload = {
+  const payload = sanitizePayload({
     ...drugData,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
+  });
 
-  addDoc(drugsColRef, payload).catch(error => {
+  try {
+    await addDoc(drugsColRef, payload as any);
+  } catch (error: any) {
     if (error.code === 'permission-denied') {
       const permissionError = new FirestorePermissionError({
         path: drugsColRef.path,
@@ -123,10 +135,9 @@ export async function addDrug(clinicId: string, drugData: Omit<Drug, 'id' | 'cre
         requestResourceData: payload,
       });
       errorEmitter.emit('permission-error', permissionError);
-    } else {
-        throw error;
     }
-  });
+    throw error;
+  }
 }
 
 export async function updateDrug(clinicId: string, drugId: string, drugData: UpdatableDrugData): Promise<void> {
@@ -136,12 +147,14 @@ export async function updateDrug(clinicId: string, drugId: string, drugData: Upd
 
     const drugDocRef = doc(db, "clinics", clinicId, "drugs", drugId);
 
-    const payload = {
+    const payload = sanitizePayload({
         ...drugData,
         updatedAt: serverTimestamp(),
-    };
+    });
 
-    updateDoc(drugDocRef, payload).catch(error => {
+    try {
+        await updateDoc(drugDocRef, payload);
+    } catch (error: any) {
         if (error.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: drugDocRef.path,
@@ -149,10 +162,9 @@ export async function updateDrug(clinicId: string, drugId: string, drugData: Upd
                 requestResourceData: payload,
             });
             errorEmitter.emit('permission-error', permissionError);
-        } else {
-            throw error;
         }
-    });
+        throw error;
+    }
 }
 
 
@@ -163,17 +175,18 @@ export async function deleteDrug(clinicId: string, drugId: string): Promise<void
 
   const drugDocRef = doc(db, "clinics", clinicId, "drugs", drugId);
 
-  deleteDoc(drugDocRef).catch(error => {
+  try {
+    await deleteDoc(drugDocRef);
+  } catch (error: any) {
       if (error.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: drugDocRef.path,
             operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
-      } else {
-        throw error;
       }
-  });
+      throw error;
+  }
 }
 
 export async function seedMissingDrugs(clinicId: string): Promise<void> {
