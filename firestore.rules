@@ -63,9 +63,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid;
 
-      // Admin controls members AFTER creation
-      allow update, delete: if signedIn()
+      // Admin controls members AFTER creation, OR member can remove themselves (leave)
+      allow update: if signedIn()
         && isClinicAdmin(clinicId);
+      allow delete: if signedIn()
+        && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }
 
 

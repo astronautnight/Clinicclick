@@ -13,6 +13,7 @@ import {
   getDocs,
   setDoc,
   deleteDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { initializeFirebase } from '@/firebase';
@@ -44,6 +45,19 @@ type ClinicRole = 'admin' | 'member';
 
 function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+/**
+ * Helper: delete all documents in a subcollection
+ */
+async function deleteSubcollection(clinicId: string, subcollectionName: string) {
+  const colRef = collection(db, 'clinics', clinicId, subcollectionName);
+  const snap = await getDocs(colRef);
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  if (snap.docs.length > 0) {
+    await batch.commit();
+  }
 }
 
 /* ============================================================
@@ -171,12 +185,16 @@ export async function approveClinicRequest({
   }
 
   try {
+    // Check member count — if only 1 member exists, the new member becomes admin
+    const membersSnap = await getDocs(collection(db, 'clinics', clinicId, 'members'));
+    const effectiveRole = membersSnap.size <= 1 ? 'admin' : role;
+
     const userProfile = await getUserProfile(userId);
     // 1️⃣ Add to members
     await setDoc(
       doc(db, 'clinics', clinicId, 'members', userId),
       {
-        role,
+        role: effectiveRole,
         joinedAt: serverTimestamp(),
         displayName: userProfile?.displayName || 'User'
       }
@@ -185,7 +203,7 @@ export async function approveClinicRequest({
     // 2️⃣ Update user profile (🔥 THIS IS THE KEY 🔥)
     await updateDoc(doc(db, 'users', userId), {
       clinicId,
-      role,
+      role: effectiveRole,
       updatedAt: serverTimestamp(),
     });
 
@@ -251,7 +269,7 @@ export async function updateMemberRole({
 }
 
 /* ============================================================
-   REMOVE MEMBER (ADMIN)
+   REMOVE MEMBER (ADMIN / SELF)
 ============================================================ */
 
 export async function removeClinicMember({
@@ -273,6 +291,22 @@ export async function removeClinicMember({
       updatedAt: serverTimestamp(),
     }
   );
+
+  // Auto-promote: if only one member remains, make them admin
+  const remainingSnap = await getDocs(collection(db, 'clinics', clinicId, 'members'));
+  if (remainingSnap.size === 1) {
+    const lastMember = remainingSnap.docs[0];
+    if (lastMember.data().role !== 'admin') {
+      await updateDoc(
+        doc(db, 'clinics', clinicId, 'members', lastMember.id),
+        { role: 'admin' }
+      );
+      await updateDoc(
+        doc(db, 'users', lastMember.id),
+        { role: 'admin', updatedAt: serverTimestamp() }
+      );
+    }
+  }
 }
 
 /* ============================================================
@@ -359,4 +393,64 @@ export async function updateClinic(
   }
 }
 
-    
+/* ============================================================
+   DELETE CLINIC (LAST MEMBER ONLY)
+============================================================ */
+
+export async function deleteClinic({
+  clinicId,
+  userId,
+}: {
+  clinicId: string;
+  userId: string;
+}) {
+  if (!clinicId || !userId) {
+    throw new Error('clinicId and userId are required');
+  }
+
+  // Safety: ensure only the last member can delete
+  const membersSnap = await getDocs(collection(db, 'clinics', clinicId, 'members'));
+  if (membersSnap.size > 1) {
+    throw new Error('Cannot delete clinic with more than one member. Other members must leave first.');
+  }
+
+  try {
+    // 1️⃣ Delete the clinic document FIRST (while admin member doc still exists for permission check)
+    await deleteDoc(doc(db, 'clinics', clinicId));
+
+    // 2️⃣ Clear user's clinic reference
+    await updateDoc(doc(db, 'users', userId), {
+      clinicId: null,
+      role: null,
+      updatedAt: serverTimestamp(),
+    });
+
+    // 3️⃣ Delete all known subcollections (cleanup — clinic doc already gone)
+    // NOTE: 'members' MUST be last — other subcollection deletes need the admin member doc for permission checks
+    const subcollections = [
+      'pendingRequests',
+      'operatories',
+      'patients',
+      'appointments',
+      'transactions',
+      'procedures',
+      'invoices',
+      'members',
+    ];
+
+    for (const sub of subcollections) {
+      await deleteSubcollection(clinicId, sub);
+    }
+  } catch (error: any) {
+    if (error.code === 'permission-denied') {
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: `clinics/${clinicId}`,
+          operation: 'delete',
+        })
+      );
+    }
+    throw error;
+  }
+}

@@ -15,6 +15,7 @@ import {
   removeClinicMember,
   createClinic,
   updateClinic,
+  deleteClinic,
 } from '@/services/clinic-service';
 import { addOperatory, deleteOperatory, assignPatientToOperatory, clearOperatory } from '@/services/operatory-service';
 import type { Patient, Operatory } from '@/types';
@@ -86,6 +87,9 @@ export default function ClinicPage() {
   const [newOperatoryName, setNewOperatoryName] = useState('');
   const [isAddingOperatory, setIsAddingOperatory] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isLastMember = members.length === 1;
 
   /* ============================================================
      LOAD CLINIC DATA
@@ -325,6 +329,21 @@ export default function ClinicPage() {
     }
   };
 
+  const handleDeleteClinic = async () => {
+    if (!clinicId || !user) return;
+    try {
+      setIsDeleting(true);
+      // Wait for React to run effect cleanup
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await deleteClinic({ clinicId, userId: user.uid });
+      toast({ title: 'Clinic deleted successfully.' });
+      window.location.reload();
+    } catch (e: any) {
+      setIsDeleting(false);
+      toast({ title: e.message || 'Failed to delete clinic', variant: 'destructive' });
+    }
+  };
+
   /* ============================================================
      NO CLINIC STATE
   ============================================================ */
@@ -402,18 +421,29 @@ export default function ClinicPage() {
               )}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm">Leave Clinic</Button>
+                  <Button variant="destructive" size="sm">
+                    {isLastMember ? 'Delete Clinic' : 'Leave Clinic'}
+                  </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                    <AlertDialogHeader>
-                      <AlertDialogTitle>Leave Clinic?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        {isLastMember ? 'Delete Clinic?' : 'Leave Clinic?'}
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                         Are you sure you want to leave this clinic? You will need an invite code to rejoin later.
+                         {isLastMember
+                           ? 'You are the last member. Deleting will permanently remove the clinic and all its data (patients, appointments, transactions, etc.). This action cannot be undone.'
+                           : 'Are you sure you want to leave this clinic? You will need an invite code to rejoin later.'}
                       </AlertDialogDescription>
                    </AlertDialogHeader>
                    <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleLeaveClinic}>Leave</AlertDialogAction>
+                      <AlertDialogAction
+                        onClick={isLastMember ? handleDeleteClinic : handleLeaveClinic}
+                        className={isLastMember ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+                      >
+                        {isLastMember ? 'Delete Permanently' : 'Leave'}
+                      </AlertDialogAction>
                    </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

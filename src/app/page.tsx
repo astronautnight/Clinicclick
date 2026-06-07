@@ -255,19 +255,146 @@ export default function DashboardPage() {
 
     if (!clinicId) {
         return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Welcome to Clinic@Click!</CardTitle>
-                    <CardDescription>
-                        You are not a part of any clinic yet. Create or join a clinic to get started.
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter>
-                    <Button asChild>
-                        <Link href="/clinic">Go to My Clinic</Link>
-                    </Button>
-                </CardFooter>
-            </Card>
+            <div className="min-h-[80vh]">
+                {/* Hero Section */}
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-white dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-background mb-8">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-100/40 via-transparent to-transparent dark:from-blue-900/20" />
+                    <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-8 p-8 lg:p-12">
+                        {/* Left Content */}
+                        <div className="flex flex-col justify-center space-y-6 z-10">
+                            <div>
+                                <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 dark:text-white leading-tight">
+                                    Welcome to<br />
+                                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                                        Clinic@Click!
+                                    </span>{' '}
+                                    <span className="inline-block animate-bounce">👋</span>
+                                </h1>
+                                <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-md leading-relaxed">
+                                    Let&apos;s set up your clinic so you can start managing patients, appointments, and more – all in one place.
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <Button asChild size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
+                                    <Link href="/clinic" className="flex items-center gap-3">
+                                        <ClipboardList className="h-5 w-5" />
+                                        Add Your Clinic
+                                        <ArrowRight className="h-5 w-5" />
+                                    </Link>
+                                </Button>
+                                <Button asChild size="lg" variant="outline" className="border-2 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5">
+                                    <Link href="/clinic" className="flex items-center gap-3">
+                                        <UserPlus className="h-5 w-5" />
+                                        Join Your Clinic
+                                        <ArrowRight className="h-5 w-5" />
+                                    </Link>
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg>
+                                You can always update details later
+                            </div>
+                        </div>
+
+                        {/* Right Illustration */}
+                        <div className="hidden lg:flex items-center justify-center">
+                            <img
+                                src="/clinic-welcome.png"
+                                alt="Dental clinic illustration"
+                                className="w-full max-w-md object-contain drop-shadow-2xl"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* What you can do - Feature Cards */}
+                <div className="mb-8">
+                    <div className="flex items-center justify-center gap-4 mb-6">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700" />
+                        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">What you can do</h2>
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                        {/* Manage Patients */}
+                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                            <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                                <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Manage Patients</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Keep all patient records organized and secure</p>
+                        </div>
+
+                        {/* Billing & Payments */}
+                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                            <div className="w-16 h-16 rounded-2xl bg-green-50 dark:bg-green-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                                <CreditCard className="h-8 w-8 text-green-600 dark:text-green-400" />
+                            </div>
+                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Billing & Payments</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Create invoices and track payments easily</p>
+                        </div>
+
+                        {/* Team Collaboration */}
+                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+                            <div className="w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                                <UserPlus className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Team Collaboration</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Add your team and work together seamlessly</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Trust Badges */}
+                <div className="rounded-2xl bg-gray-50/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center flex-shrink-0">
+                                <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                            </div>
+                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Your data is safe with us</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-950/50 flex items-center justify-center flex-shrink-0">
+                                <svg className="h-5 w-5 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            </div>
+                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Secure & Encrypted</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center flex-shrink-0">
+                                <svg className="h-5 w-5 text-purple-600 dark:text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </div>
+                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Always Backed Up</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-950/50 flex items-center justify-center flex-shrink-0">
+                                <svg className="h-5 w-5 text-teal-600 dark:text-teal-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                            </div>
+                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Privacy First</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         );
     }
 
