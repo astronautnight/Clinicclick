@@ -380,19 +380,20 @@ export default function AcademicsPage() {
                                     <div className="space-y-2"><Label>Patient Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
                                </div>
                                <div className="space-y-2">
-                                   <Label>Department</Label>
-                                   <div className="flex gap-2">
-                                       <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
-                                           <SelectTrigger className="flex-1"><SelectValue placeholder="Select department..."/></SelectTrigger>
-                                           <SelectContent>
-                                               {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                               {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                           </SelectContent>
-                                       </Select>
-                                       <Button type="button" variant="outline" size="icon" onClick={() => openAddDeptDialog('case')} title="Add Department">
-                                           <PlusCircle className="h-4 w-4" />
+                                   <div className="flex justify-between items-center">
+                                       <Label>Department</Label>
+                                       <Button type="button" variant="outline" size="sm" onClick={() => openAddDeptDialog('case')} title="Add Department">
+                                           <PlusCircle className="mr-2 h-4 w-4" />
+                                           Add
                                        </Button>
                                    </div>
+                                   <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
+                                       <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                       <SelectContent>
+                                           {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                           {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                       </SelectContent>
+                                   </Select>
                                </div>
                                <div className="space-y-2"><Label>Chief Complaint</Label><Textarea value={caseFormData.chiefComplaint} onChange={e => setCaseFormData({...caseFormData, chiefComplaint: e.target.value})}/></div>
                                <div className="space-y-2"><Label>Medical History</Label><Textarea value={caseFormData.medicalHistory} onChange={e => setCaseFormData(prev => ({...prev, medicalHistory: e.target.value}))} /></div>
@@ -491,19 +492,20 @@ export default function AcademicsPage() {
                                      <form onSubmit={handleAttendanceSubmit} className="space-y-4">
                                         <div className="space-y-2"><Label>Date</Label><Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} required/></div>
                                         <div className="space-y-2">
-                                            <Label>Department Posting</Label>
-                                            <div className="flex gap-2">
-                                                <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
-                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select department..."/></SelectTrigger>
-                                                    <SelectContent>
-                                                        {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Button type="button" variant="outline" size="icon" onClick={() => openAddDeptDialog('attendance')} title="Add Department">
-                                                    <PlusCircle className="h-4 w-4" />
+                                            <div className="flex justify-between items-center">
+                                                <Label>Department Posting</Label>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => openAddDeptDialog('attendance')} title="Add Department">
+                                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                                    Add
                                                 </Button>
                                             </div>
+                                            <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
+                                                <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                                <SelectContent>
+                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         <DialogFooter>
                                             <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
