@@ -95,7 +95,7 @@ export default function ClinicPage() {
      LOAD CLINIC DATA
   ============================================================ */
   useEffect(() => {
-    if (!clinicId || !db || isLeaving) return;
+    if (!clinicId || !db || isLeaving || isDeleting) return;
 
     const clinicDocRef = doc(db, 'clinics', clinicId);
 
@@ -189,7 +189,7 @@ export default function ClinicPage() {
       unsubOperatories();
       unsubPatients();
     };
-  }, [clinicId, db, isLeaving]);
+  }, [clinicId, db, isLeaving, isDeleting]);
 
   /* ============================================================
      ACTIONS
@@ -337,7 +337,6 @@ export default function ClinicPage() {
       await new Promise(resolve => setTimeout(resolve, 0));
       await deleteClinic({ clinicId, userId: user.uid });
       toast({ title: 'Clinic deleted successfully.' });
-      window.location.reload();
     } catch (e: any) {
       setIsDeleting(false);
       toast({ title: e.message || 'Failed to delete clinic', variant: 'destructive' });

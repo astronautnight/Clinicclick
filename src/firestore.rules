@@ -152,6 +152,24 @@ service cloud.firestore {
         if signedIn() && isClinicMember(clinicId);
     }
 
+    /* ================= STUDENT FINANCES ================= */
+    match /clinics/{clinicId}/students/{studentId}/finances/{financeId} {
+      allow read, create, update, delete:
+        if signedIn() && isClinicMember(clinicId);
+    }
+
+    /* ================= DEPARTMENTS ================= */
+    match /clinics/{clinicId}/departments/{departmentId} {
+      allow read, create, update, delete:
+        if signedIn() && isClinicMember(clinicId);
+    }
+
+    /* ================= STUDENT CASE HISTORIES ================= */
+    match /clinics/{clinicId}/studentCaseHistories/{caseId} {
+      allow read, create, update, delete:
+        if signedIn() && isClinicMember(clinicId);
+    }
+
     /* ================= CLINIC DATA ================= */
     match /clinics/{clinicId}/{collection}/{docId} {
       allow read, create: if signedIn() && isClinicMember(clinicId);

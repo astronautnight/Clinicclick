@@ -90,6 +90,10 @@ export default function AcademicsPage() {
     const [isFinanceFormOpen, setIsFinanceFormOpen] = useState(false);
     const [financeFormData, setFinanceFormData] = useState(initialFinanceData);
     
+    const [isAddDeptDialogOpen, setIsAddDeptDialogOpen] = useState(false);
+    const [newDeptName, setNewDeptName] = useState('');
+    const [addDeptContext, setAddDeptContext] = useState<'case' | 'attendance' | null>(null);
+
     // Data fetching effect
     useEffect(() => {
         if (!user?.uid || !db || !clinicId) { setLoading(false); return; };
@@ -154,8 +158,8 @@ export default function AcademicsPage() {
     const handleCaseHistorySubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (!user || !clinicId) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
-        if (!caseFormData.patientName || !caseFormData.departmentId || !caseFormData.diagnosis) {
-            toast({ title: "Missing Fields", description: "Patient name, department, and diagnosis are required.", variant: 'destructive'});
+        if (!caseFormData.patientName || !caseFormData.diagnosis) {
+            toast({ title: "Missing Fields", description: "Patient name and diagnosis are required.", variant: 'destructive'});
             return;
         }
 
@@ -184,6 +188,60 @@ export default function AcademicsPage() {
             toast({ title: "Error", description: "Could not save case history.", variant: 'destructive'});
         }
     }
+
+    const openAddDeptDialog = (context: 'case' | 'attendance') => {
+        setAddDeptContext(context);
+        // Close the parent dialog to avoid nested dialog issues
+        if (context === 'case') setIsCaseFormOpen(false);
+        if (context === 'attendance') setIsAttendanceFormOpen(false);
+        setNewDeptName('');
+        setIsAddDeptDialogOpen(true);
+    };
+
+    const handleAddDepartment = async () => {
+        const trimmedName = newDeptName.trim();
+        if (!trimmedName) {
+            toast({ title: "Missing Name", description: "Please enter a department name.", variant: 'destructive' });
+            return;
+        }
+        if (!clinicId) {
+            toast({ title: "No Clinic", description: "You must be part of a clinic to add departments.", variant: 'destructive' });
+            return;
+        }
+        if (!db) {
+            toast({ title: "Error", description: "Database connection not available. Please refresh.", variant: 'destructive' });
+            return;
+        }
+        try {
+            const docRef = await addDoc(collection(db, 'clinics', clinicId, 'departments'), {
+                name: trimmedName,
+            });
+            toast({ title: "Department Added", description: `"${trimmedName}" has been created.` });
+            setIsAddDeptDialogOpen(false);
+            setNewDeptName('');
+            // Re-open the parent dialog and set the new department
+            if (addDeptContext === 'case') {
+                setCaseFormData(prev => ({...prev, departmentId: docRef.id}));
+                setIsCaseFormOpen(true);
+            } else if (addDeptContext === 'attendance') {
+                setAttendanceDepartmentId(docRef.id);
+                setIsAttendanceFormOpen(true);
+            }
+            setAddDeptContext(null);
+        } catch (error: any) {
+            console.error("Error adding department", error);
+            toast({ title: "Error Adding Department", description: error?.message || "Could not add department. Check your permissions.", variant: 'destructive'});
+        }
+    };
+
+    const handleCancelAddDept = () => {
+        setIsAddDeptDialogOpen(false);
+        setNewDeptName('');
+        // Re-open the parent dialog
+        if (addDeptContext === 'case') setIsCaseFormOpen(true);
+        if (addDeptContext === 'attendance') setIsAttendanceFormOpen(true);
+        setAddDeptContext(null);
+    };
 
      const handleDeleteCaseHistory = async () => {
         if (!caseHistoryToDelete || !clinicId) return;
@@ -322,8 +380,19 @@ export default function AcademicsPage() {
                                     <div className="space-y-2"><Label>Patient Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
                                </div>
                                <div className="space-y-2">
-                                   <Label>Department *</Label>
-                                   <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})} required><SelectTrigger><SelectValue placeholder="Select department..."/></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select>
+                                   <Label>Department</Label>
+                                   <div className="flex gap-2">
+                                       <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
+                                           <SelectTrigger className="flex-1"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                           <SelectContent>
+                                               {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                               {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                           </SelectContent>
+                                       </Select>
+                                       <Button type="button" variant="outline" size="icon" onClick={() => openAddDeptDialog('case')} title="Add Department">
+                                           <PlusCircle className="h-4 w-4" />
+                                       </Button>
+                                   </div>
                                </div>
                                <div className="space-y-2"><Label>Chief Complaint</Label><Textarea value={caseFormData.chiefComplaint} onChange={e => setCaseFormData({...caseFormData, chiefComplaint: e.target.value})}/></div>
                                <div className="space-y-2"><Label>Medical History</Label><Textarea value={caseFormData.medicalHistory} onChange={e => setCaseFormData(prev => ({...prev, medicalHistory: e.target.value}))} /></div>
@@ -421,7 +490,21 @@ export default function AcademicsPage() {
                                     <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
                                      <form onSubmit={handleAttendanceSubmit} className="space-y-4">
                                         <div className="space-y-2"><Label>Date</Label><Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} required/></div>
-                                        <div className="space-y-2"><Label>Department Posting</Label><Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required><SelectTrigger><SelectValue placeholder="Select department..."/></SelectTrigger><SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent></Select></div>
+                                        <div className="space-y-2">
+                                            <Label>Department Posting</Label>
+                                            <div className="flex gap-2">
+                                                <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
+                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                                    <SelectContent>
+                                                        {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button type="button" variant="outline" size="icon" onClick={() => openAddDeptDialog('attendance')} title="Add Department">
+                                                    <PlusCircle className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
                                         <DialogFooter>
                                             <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
                                             <Button type="submit">Mark as Present</Button>
@@ -546,6 +629,25 @@ export default function AcademicsPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            <Dialog open={isAddDeptDialogOpen} onOpenChange={setIsAddDeptDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New Department</DialogTitle>
+                        <DialogDescription>Create a new department for your clinic.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Department Name</Label>
+                            <Input value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} placeholder="e.g. Periodontics" autoFocus />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={handleCancelAddDept}>Cancel</Button>
+                        <Button onClick={handleAddDepartment} disabled={!newDeptName.trim()}>Add Department</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -415,18 +415,18 @@ export async function deleteClinic({
   }
 
   try {
-    // 1️⃣ Delete the clinic document FIRST (while admin member doc still exists for permission check)
-    await deleteDoc(doc(db, 'clinics', clinicId));
-
-    // 2️⃣ Clear user's clinic reference
+    // 1️⃣ Clear user's clinic reference FIRST — this "removes" the last member from the clinic
+    // and triggers the onSnapshot in use-user.tsx so the UI updates immediately
     await updateDoc(doc(db, 'users', userId), {
       clinicId: null,
       role: null,
       updatedAt: serverTimestamp(),
     });
 
-    // 3️⃣ Delete all known subcollections (cleanup — clinic doc already gone)
-    // NOTE: 'members' MUST be last — other subcollection deletes need the admin member doc for permission checks
+    // 2️⃣ Delete the clinic document (member doc still exists for permission checks on subcollections)
+    await deleteDoc(doc(db, 'clinics', clinicId));
+
+    // 3️⃣ Delete all subcollections (member doc still exists for permission checks)
     const subcollections = [
       'pendingRequests',
       'operatories',
@@ -435,12 +435,14 @@ export async function deleteClinic({
       'transactions',
       'procedures',
       'invoices',
-      'members',
     ];
 
     for (const sub of subcollections) {
       await deleteSubcollection(clinicId, sub);
     }
+
+    // 4️⃣ Delete the member doc LAST — after all permission-gated operations are done
+    await deleteDoc(doc(db, 'clinics', clinicId, 'members', userId));
   } catch (error: any) {
     if (error.code === 'permission-denied') {
       errorEmitter.emit(
