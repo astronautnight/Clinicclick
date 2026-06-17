@@ -175,5 +175,26 @@ service cloud.firestore {
       allow read, create: if signedIn() && isClinicMember(clinicId);
       allow update, delete: if signedIn() && isClinicAdmin(clinicId);
     }
+
+    /* ===============================================================
+       PERSONAL DATA (no clinic required)
+       Users own their personal consultation and academic data.
+       No other user — not even clinic members — can access it.
+    =============================================================== */
+
+    /* Personal Consultation: patients, appointments, transactions */
+    match /users/{userId}/personalConsultation/{col}/{docId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    /* Personal Academics: departments, studentCaseHistories */
+    match /users/{userId}/personalAcademics/{col}/{docId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    /* Personal Academics sub-collections: attendance, finances */
+    match /users/{userId}/personalAcademics/students/{studentId}/{subcol}/{docId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
   }
 }

@@ -31,6 +31,8 @@ import {
   Wallet,
   Beaker,
   Loader2,
+  GraduationCap,
+  UsersRound,
 } from 'lucide-react';
 import { useEffect, useState, useMemo, type FormEvent } from 'react';
 import { useUser, useFirestore } from '@/firebase';
@@ -309,6 +311,73 @@ export default function DashboardPage() {
                                 className="w-full max-w-md object-contain drop-shadow-2xl"
                             />
                         </div>
+                    </div>
+                </div>
+
+                {/* ── Continue As Section ── */}
+                <div className="mb-8">
+                    <div className="flex items-center justify-center gap-4 mb-6">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700" />
+                        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Or continue without a clinic</h2>
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
+
+                        {/* Consultant Doctor → pink */}
+                        <Link
+                            href="/consultation-dashboard"
+                            className="group relative flex flex-col p-6 rounded-2xl bg-white dark:bg-card border-2 border-pink-200 dark:border-pink-800/60 shadow-sm hover:shadow-lg hover:shadow-pink-100 dark:hover:shadow-pink-950/30 hover:border-pink-400 dark:hover:border-pink-600 transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-offset-2"
+                        >
+                            {/* glow blob */}
+                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-pink-50/60 to-transparent dark:from-pink-950/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                            <div className="relative flex items-start gap-4">
+                                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-pink-50 dark:bg-pink-950/50 border border-pink-100 dark:border-pink-800/40 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <Stethoscope className="h-7 w-7 text-pink-500 dark:text-pink-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-pink-500 dark:text-pink-400 uppercase tracking-wider mb-0.5">Continue as</p>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">Consultant Doctor</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                                        Track consult patients, appointments &amp; earnings — privately in your own account.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="relative mt-5 flex items-center gap-1.5 text-sm font-semibold text-pink-500 dark:text-pink-400 group-hover:gap-3 transition-all duration-200">
+                                Go to Consultation Dashboard
+                                <ArrowRight className="h-4 w-4" />
+                            </div>
+                        </Link>
+
+                        {/* Student → purple */}
+                        <Link
+                            href="/academics"
+                            className="group relative flex flex-col p-6 rounded-2xl bg-white dark:bg-card border-2 border-purple-200 dark:border-purple-800/60 shadow-sm hover:shadow-lg hover:shadow-purple-100 dark:hover:shadow-purple-950/30 hover:border-purple-400 dark:hover:border-purple-600 transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
+                        >
+                            {/* glow blob */}
+                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-50/60 to-transparent dark:from-purple-950/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                            <div className="relative flex items-start gap-4">
+                                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-100 dark:border-purple-800/40 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                                    <GraduationCap className="h-7 w-7 text-purple-500 dark:text-purple-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-purple-500 dark:text-purple-400 uppercase tracking-wider mb-0.5">Continue as</p>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">Student</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                                        Log case histories, track attendance &amp; manage your academic finances.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="relative mt-5 flex items-center gap-1.5 text-sm font-semibold text-purple-500 dark:text-purple-400 group-hover:gap-3 transition-all duration-200">
+                                Go to Academics
+                                <ArrowRight className="h-4 w-4" />
+                            </div>
+                        </Link>
+
                     </div>
                 </div>
 

@@ -24,6 +24,16 @@ import { DentalChart } from '@/components/dental-chart';
 import { Badge } from '@/components/ui/badge';
 import { updateCaseHistory, deleteCaseHistory } from '@/services/case-history-service';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+import {
+    addPersonalCaseHistory,
+    updatePersonalCaseHistory,
+    deletePersonalCaseHistory,
+    addPersonalDepartment,
+    setPersonalAttendance,
+    addPersonalFinance,
+    getPersonalAcademicsCol,
+} from '@/services/personal-academics-service';
+import { Info } from 'lucide-react';
 
 
 const initialCaseHistoryData: {
@@ -68,6 +78,9 @@ export default function AcademicsPage() {
     const db = useFirestore();
     const { toast } = useToast();
 
+    // True when the user has no clinic — data goes to personal store
+    const isPersonalMode = !clinicId;
+
     // Data states
     const [departments, setDepartments] = useState<Department[]>([]);
     const [caseHistories, setCaseHistories] = useState<StudentCaseHistory[]>([]);
@@ -96,39 +109,75 @@ export default function AcademicsPage() {
 
     // Data fetching effect
     useEffect(() => {
-        if (!user?.uid || !db || !clinicId) { setLoading(false); return; };
+        if (!user?.uid || !db) { setLoading(false); return; }
         setLoading(true);
 
-        const unsubDepts = onSnapshot(collection(db, 'clinics', clinicId, 'departments'), (snap) => {
-            setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a,b) => a.name.localeCompare(b.name)));
-        });
-        
-        const q = query(collection(db, 'clinics', clinicId, 'studentCaseHistories'), where('studentId', '==', user.uid));
-        const unsubCases = onSnapshot(q, (snap) => {
-            setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-        });
+        const unsubs: (() => void)[] = [];
 
-        const attendanceColRef = collection(db, 'clinics', clinicId, 'students', user.uid, 'attendance');
-        const unsubAttendance = onSnapshot(attendanceColRef, snap => {
-            const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
-            snap.forEach(doc => {
-                const docData = doc.data();
-                data[doc.id] = {
-                    status: docData.status,
-                    departmentName: docData.departmentName || 'N/A'
-                };
+        if (isPersonalMode) {
+            // ── PERSONAL MODE: users/{uid}/personalAcademics/... ──
+            const uid = user.uid;
+
+            const unsubDepts = onSnapshot(getPersonalAcademicsCol(uid, 'departments'), (snap) => {
+                setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
             });
-            setAttendance(data);
-        });
-        
-        const financeColRef = collection(db, 'clinics', clinicId, 'students', user.uid, 'finances');
-        const unsubFinances = onSnapshot(query(financeColRef, orderBy('date', 'desc')), snap => {
-            setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
-        });
+
+            const unsubCases = onSnapshot(getPersonalAcademicsCol(uid, 'studentCaseHistories'), (snap) => {
+                setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+            });
+
+            const unsubAttendance = onSnapshot(getPersonalAcademicsCol(uid, 'attendance'), snap => {
+                const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
+                snap.forEach(doc => {
+                    const docData = doc.data();
+                    data[doc.id] = {
+                        status: docData.status,
+                        departmentName: docData.departmentName || 'N/A'
+                    };
+                });
+                setAttendance(data);
+            });
+
+            const unsubFinances = onSnapshot(query(getPersonalAcademicsCol(uid, 'finances'), orderBy('date', 'desc')), snap => {
+                setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+            });
+
+            unsubs.push(unsubDepts, unsubCases, unsubAttendance, unsubFinances);
+        } else {
+            // ── CLINIC MODE: clinics/{clinicId}/... ──
+            const unsubDepts = onSnapshot(collection(db, 'clinics', clinicId!, 'departments'), (snap) => {
+                setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
+            });
+
+            const q = query(collection(db, 'clinics', clinicId!, 'studentCaseHistories'), where('studentId', '==', user.uid));
+            const unsubCases = onSnapshot(q, (snap) => {
+                setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+            });
+
+            const attendanceColRef = collection(db, 'clinics', clinicId!, 'students', user.uid, 'attendance');
+            const unsubAttendance = onSnapshot(attendanceColRef, snap => {
+                const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
+                snap.forEach(doc => {
+                    const docData = doc.data();
+                    data[doc.id] = {
+                        status: docData.status,
+                        departmentName: docData.departmentName || 'N/A'
+                    };
+                });
+                setAttendance(data);
+            });
+
+            const financeColRef = collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances');
+            const unsubFinances = onSnapshot(query(financeColRef, orderBy('date', 'desc')), snap => {
+                setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+            });
+
+            unsubs.push(unsubDepts, unsubCases, unsubAttendance, unsubFinances);
+        }
 
         setLoading(false);
-        return () => { unsubDepts(); unsubCases(); unsubAttendance(); unsubFinances(); }
-    }, [user?.uid, db, clinicId]);
+        return () => unsubs.forEach(u => u());
+    }, [user?.uid, db, clinicId, isPersonalMode]);
     
     const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
         if (caseHistory) {
@@ -157,7 +206,7 @@ export default function AcademicsPage() {
 
     const handleCaseHistorySubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!user || !clinicId) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
+        if (!user) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
         if (!caseFormData.patientName || !caseFormData.diagnosis) {
             toast({ title: "Missing Fields", description: "Patient name and diagnosis are required.", variant: 'destructive'});
             return;
@@ -174,12 +223,22 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (editingCaseHistoryId) {
-                await updateCaseHistory(clinicId, editingCaseHistoryId, payload);
-                toast({ title: "Case History Updated" });
+            if (isPersonalMode) {
+                if (editingCaseHistoryId) {
+                    await updatePersonalCaseHistory(user.uid, editingCaseHistoryId, payload);
+                    toast({ title: "Case History Updated" });
+                } else {
+                    await addPersonalCaseHistory(user.uid, payload);
+                    toast({ title: "Case History Saved" });
+                }
             } else {
-                await addDoc(collection(db, 'clinics', clinicId, 'studentCaseHistories'), {...payload, createdAt: serverTimestamp()});
-                toast({ title: "Case History Saved" });
+                if (editingCaseHistoryId) {
+                    await updateCaseHistory(clinicId!, editingCaseHistoryId, payload);
+                    toast({ title: "Case History Updated" });
+                } else {
+                    await addDoc(collection(db, 'clinics', clinicId!, 'studentCaseHistories'), {...payload, createdAt: serverTimestamp()});
+                    toast({ title: "Case History Saved" });
+                }
             }
             setIsCaseFormOpen(false);
             setEditingCaseHistoryId(null);
@@ -204,28 +263,36 @@ export default function AcademicsPage() {
             toast({ title: "Missing Name", description: "Please enter a department name.", variant: 'destructive' });
             return;
         }
-        if (!clinicId) {
-            toast({ title: "No Clinic", description: "You must be part of a clinic to add departments.", variant: 'destructive' });
-            return;
-        }
-        if (!db) {
-            toast({ title: "Error", description: "Database connection not available. Please refresh.", variant: 'destructive' });
+        if (!user) {
+            toast({ title: "Not logged in", variant: 'destructive' });
             return;
         }
         try {
-            const docRef = await addDoc(collection(db, 'clinics', clinicId, 'departments'), {
-                name: trimmedName,
-            });
+            let newId: string | undefined;
+
+            if (isPersonalMode) {
+                newId = await addPersonalDepartment(user.uid, trimmedName);
+            } else {
+                if (!db) {
+                    toast({ title: "Error", description: "Database connection not available. Please refresh.", variant: 'destructive' });
+                    return;
+                }
+                const docRef = await addDoc(collection(db, 'clinics', clinicId!, 'departments'), { name: trimmedName });
+                newId = docRef.id;
+            }
+
             toast({ title: "Department Added", description: `"${trimmedName}" has been created.` });
             setIsAddDeptDialogOpen(false);
             setNewDeptName('');
             // Re-open the parent dialog and set the new department
-            if (addDeptContext === 'case') {
-                setCaseFormData(prev => ({...prev, departmentId: docRef.id}));
-                setIsCaseFormOpen(true);
-            } else if (addDeptContext === 'attendance') {
-                setAttendanceDepartmentId(docRef.id);
-                setIsAttendanceFormOpen(true);
+            if (newId) {
+                if (addDeptContext === 'case') {
+                    setCaseFormData(prev => ({...prev, departmentId: newId!}));
+                    setIsCaseFormOpen(true);
+                } else if (addDeptContext === 'attendance') {
+                    setAttendanceDepartmentId(newId);
+                    setIsAttendanceFormOpen(true);
+                }
             }
             setAddDeptContext(null);
         } catch (error: any) {
@@ -244,9 +311,13 @@ export default function AcademicsPage() {
     };
 
      const handleDeleteCaseHistory = async () => {
-        if (!caseHistoryToDelete || !clinicId) return;
+        if (!caseHistoryToDelete || !user) return;
         try {
-            await deleteCaseHistory(clinicId, caseHistoryToDelete.id);
+            if (isPersonalMode) {
+                await deletePersonalCaseHistory(user.uid, caseHistoryToDelete.id);
+            } else {
+                await deleteCaseHistory(clinicId!, caseHistoryToDelete.id);
+            }
             toast({ title: "Case History Deleted" });
             setCaseHistoryToDelete(null);
         } catch (error) {
@@ -258,7 +329,7 @@ export default function AcademicsPage() {
 
     const handleAttendanceSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!user || !clinicId || !attendanceDepartmentId || !attendanceDate) {
+        if (!user || !attendanceDepartmentId || !attendanceDate) {
              toast({ title: "Missing Fields", description: "Please select a department and date.", variant: 'destructive'});
              return;
         }
@@ -270,7 +341,11 @@ export default function AcademicsPage() {
         }
         
         try {
-            await setStudentAttendance(clinicId, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
+            if (isPersonalMode) {
+                await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
+            } else {
+                await setStudentAttendance(clinicId!, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
+            }
             toast({ title: "Attendance Marked", description: `Marked present for ${format(new Date(attendanceDate), 'dd/MM/yyyy')}.`});
             setIsAttendanceFormOpen(false);
         } catch(error) {
@@ -281,7 +356,7 @@ export default function AcademicsPage() {
 
     const handleFinanceSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!user || !clinicId) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
+        if (!user) { toast({ title: "Not logged in", variant: 'destructive'}); return; }
         if (!financeFormData.description || !financeFormData.amount) {
             toast({ title: "Missing Fields", description: "Description and amount are required.", variant: 'destructive'});
             return;
@@ -294,11 +369,14 @@ export default function AcademicsPage() {
             amount: Number(financeFormData.amount),
             patientName: financeFormData.type === 'Receivable' ? financeFormData.patientName : '',
             date: format(new Date(), 'yyyy-MM-dd'),
-            createdAt: serverTimestamp(),
         };
         
         try {
-            await addDoc(collection(db, 'clinics', clinicId, 'students', user.uid, 'finances'), payload);
+            if (isPersonalMode) {
+                await addPersonalFinance(user.uid, payload);
+            } else {
+                await addDoc(collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances'), { ...payload, createdAt: serverTimestamp() });
+            }
             toast({ title: "Financial Entry Added" });
             setIsFinanceFormOpen(false);
             setFinanceFormData(initialFinanceData);
@@ -368,6 +446,12 @@ export default function AcademicsPage() {
         <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight flex items-center"><BookUser className="mr-3 h-8 w-8 text-special1" />My Academics</h1>
+                {isPersonalMode && (
+                    <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 px-4 py-3 text-sm text-blue-700 dark:text-blue-300 max-w-sm">
+                        <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        <span><strong>Personal mode:</strong> This data is stored privately in your account and is not shared with any clinic.</span>
+                    </div>
+                )}
                 <div className="flex gap-2">
                      <Dialog open={isCaseFormOpen} onOpenChange={setIsCaseFormOpen}>
                         <DialogTrigger asChild><Button onClick={() => handleOpenCaseForm(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
