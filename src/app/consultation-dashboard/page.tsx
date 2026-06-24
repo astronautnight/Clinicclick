@@ -293,8 +293,8 @@ export default function ConsultationDashboardPage() {
       </div>
 
       <Tabs defaultValue={isPersonalMode ? "personal-patients" : "clinic-patients"} className="w-full">
-        <div className="overflow-x-auto pb-2">
-          <TabsList className="flex-wrap h-auto gap-1">
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <TabsList className="w-max flex-nowrap gap-1">
             {/* ── Clinic tabs (only shown when user has a clinic) ── */}
             {!isPersonalMode && <>
               <TabsTrigger value="clinic-patients">Clinic Patients ({consultClinicPatients.length})</TabsTrigger>
