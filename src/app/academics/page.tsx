@@ -81,12 +81,22 @@ export default function AcademicsPage() {
     // True when the user has no clinic — data goes to personal store
     const isPersonalMode = !clinicId;
 
-    // Data states
+    // ── Clinic data (only populated when user belongs to a clinic) ──
     const [departments, setDepartments] = useState<Department[]>([]);
     const [caseHistories, setCaseHistories] = useState<StudentCaseHistory[]>([]);
     const [attendance, setAttendance] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
     const [finances, setFinances] = useState<StudentFinancialEntry[]>([]);
+
+    // ── Personal data (ALWAYS populated, regardless of clinic membership) ──
+    const [personalDepts, setPersonalDepts] = useState<Department[]>([]);
+    const [personalCaseHistories, setPersonalCaseHistories] = useState<StudentCaseHistory[]>([]);
+    const [personalAttendance, setPersonalAttendance] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
+    const [personalFinances, setPersonalFinances] = useState<StudentFinancialEntry[]>([]);
+
     const [loading, setLoading] = useState(true);
+
+    // formTarget: which store new entries go to ('clinic' | 'personal')
+    const [formTarget, setFormTarget] = useState<'clinic' | 'personal'>(isPersonalMode ? 'personal' : 'clinic');
 
     // UI states
     const [isCaseFormOpen, setIsCaseFormOpen] = useState(false);
@@ -107,77 +117,55 @@ export default function AcademicsPage() {
     const [newDeptName, setNewDeptName] = useState('');
     const [addDeptContext, setAddDeptContext] = useState<'case' | 'attendance' | null>(null);
 
-    // Data fetching effect
+    // Data fetching effect — ALWAYS subscribe to personal + clinic (if available)
     useEffect(() => {
         if (!user?.uid || !db) { setLoading(false); return; }
         setLoading(true);
 
+        const uid = user.uid;
         const unsubs: (() => void)[] = [];
 
-        if (isPersonalMode) {
-            // ── PERSONAL MODE: users/{uid}/personalAcademics/... ──
-            const uid = user.uid;
-
-            const unsubDepts = onSnapshot(getPersonalAcademicsCol(uid, 'departments'), (snap) => {
-                setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
-            });
-
-            const unsubCases = onSnapshot(getPersonalAcademicsCol(uid, 'studentCaseHistories'), (snap) => {
-                setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-            });
-
-            const unsubAttendance = onSnapshot(getPersonalAcademicsCol(uid, 'attendance'), snap => {
+        // ── 1. Always subscribe to PERSONAL academic data ──
+        unsubs.push(
+            onSnapshot(getPersonalAcademicsCol(uid, 'departments'), snap => {
+                setPersonalDepts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
+            }),
+            onSnapshot(getPersonalAcademicsCol(uid, 'studentCaseHistories'), snap => {
+                setPersonalCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+            }),
+            onSnapshot(getPersonalAcademicsCol(uid, 'attendance'), snap => {
                 const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
-                snap.forEach(doc => {
-                    const docData = doc.data();
-                    data[doc.id] = {
-                        status: docData.status,
-                        departmentName: docData.departmentName || 'N/A'
-                    };
-                });
-                setAttendance(data);
-            });
+                snap.forEach(doc => { const d = doc.data(); data[doc.id] = { status: d.status, departmentName: d.departmentName || 'N/A' }; });
+                setPersonalAttendance(data);
+            }),
+            onSnapshot(query(getPersonalAcademicsCol(uid, 'finances'), orderBy('date', 'desc')), snap => {
+                setPersonalFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+            }),
+        );
 
-            const unsubFinances = onSnapshot(query(getPersonalAcademicsCol(uid, 'finances'), orderBy('date', 'desc')), snap => {
-                setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
-            });
-
-            unsubs.push(unsubDepts, unsubCases, unsubAttendance, unsubFinances);
-        } else {
-            // ── CLINIC MODE: clinics/{clinicId}/... ──
-            const unsubDepts = onSnapshot(collection(db, 'clinics', clinicId!, 'departments'), (snap) => {
-                setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
-            });
-
-            const q = query(collection(db, 'clinics', clinicId!, 'studentCaseHistories'), where('studentId', '==', user.uid));
-            const unsubCases = onSnapshot(q, (snap) => {
-                setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-            });
-
-            const attendanceColRef = collection(db, 'clinics', clinicId!, 'students', user.uid, 'attendance');
-            const unsubAttendance = onSnapshot(attendanceColRef, snap => {
-                const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
-                snap.forEach(doc => {
-                    const docData = doc.data();
-                    data[doc.id] = {
-                        status: docData.status,
-                        departmentName: docData.departmentName || 'N/A'
-                    };
-                });
-                setAttendance(data);
-            });
-
-            const financeColRef = collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances');
-            const unsubFinances = onSnapshot(query(financeColRef, orderBy('date', 'desc')), snap => {
-                setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
-            });
-
-            unsubs.push(unsubDepts, unsubCases, unsubAttendance, unsubFinances);
+        // ── 2. Also subscribe to CLINIC academic data (only when in a clinic) ──
+        if (clinicId) {
+            unsubs.push(
+                onSnapshot(collection(db, 'clinics', clinicId, 'departments'), snap => {
+                    setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
+                }),
+                onSnapshot(query(collection(db, 'clinics', clinicId, 'studentCaseHistories'), where('studentId', '==', uid)), snap => {
+                    setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+                }),
+                onSnapshot(collection(db, 'clinics', clinicId, 'students', uid, 'attendance'), snap => {
+                    const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
+                    snap.forEach(doc => { const d = doc.data(); data[doc.id] = { status: d.status, departmentName: d.departmentName || 'N/A' }; });
+                    setAttendance(data);
+                }),
+                onSnapshot(query(collection(db, 'clinics', clinicId, 'students', uid, 'finances'), orderBy('date', 'desc')), snap => {
+                    setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+                }),
+            );
         }
 
         setLoading(false);
         return () => unsubs.forEach(u => u());
-    }, [user?.uid, db, clinicId, isPersonalMode]);
+    }, [user?.uid, db, clinicId]);
     
     const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
         if (caseHistory) {
@@ -212,7 +200,9 @@ export default function AcademicsPage() {
             return;
         }
 
-        const dept = departments.find(d => d.id === caseFormData.departmentId);
+        // Look up dept from whichever list is active
+        const deptList = formTarget === 'personal' ? personalDepts : departments;
+        const dept = deptList.find(d => d.id === caseFormData.departmentId);
         
         const payload = {
             ...caseFormData,
@@ -223,13 +213,13 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (isPersonalMode) {
+            if (formTarget === 'personal') {
                 if (editingCaseHistoryId) {
                     await updatePersonalCaseHistory(user.uid, editingCaseHistoryId, payload);
-                    toast({ title: "Case History Updated" });
+                    toast({ title: "Personal Case History Updated" });
                 } else {
                     await addPersonalCaseHistory(user.uid, payload);
-                    toast({ title: "Case History Saved" });
+                    toast({ title: "Personal Case History Saved" });
                 }
             } else {
                 if (editingCaseHistoryId) {
@@ -270,7 +260,8 @@ export default function AcademicsPage() {
         try {
             let newId: string | undefined;
 
-            if (isPersonalMode) {
+            // Add to the appropriate department store based on formTarget
+            if (formTarget === 'personal') {
                 newId = await addPersonalDepartment(user.uid, trimmedName);
             } else {
                 if (!db) {
@@ -284,7 +275,6 @@ export default function AcademicsPage() {
             toast({ title: "Department Added", description: `"${trimmedName}" has been created.` });
             setIsAddDeptDialogOpen(false);
             setNewDeptName('');
-            // Re-open the parent dialog and set the new department
             if (newId) {
                 if (addDeptContext === 'case') {
                     setCaseFormData(prev => ({...prev, departmentId: newId!}));
@@ -313,7 +303,9 @@ export default function AcademicsPage() {
      const handleDeleteCaseHistory = async () => {
         if (!caseHistoryToDelete || !user) return;
         try {
-            if (isPersonalMode) {
+            // Delete from the correct store based on whether it's a personal case
+            const isPersonalCase = personalCaseHistories.some(c => c.id === caseHistoryToDelete.id);
+            if (isPersonalCase) {
                 await deletePersonalCaseHistory(user.uid, caseHistoryToDelete.id);
             } else {
                 await deleteCaseHistory(clinicId!, caseHistoryToDelete.id);
@@ -334,14 +326,15 @@ export default function AcademicsPage() {
              return;
         }
         
-        const dept = departments.find(d => d.id === attendanceDepartmentId);
+        const deptList = formTarget === 'personal' ? personalDepts : departments;
+        const dept = deptList.find(d => d.id === attendanceDepartmentId);
         if (!dept) {
             toast({ title: "Invalid Department", description: "The selected department could not be found.", variant: 'destructive'});
             return;
         }
         
         try {
-            if (isPersonalMode) {
+            if (formTarget === 'personal') {
                 await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
             } else {
                 await setStudentAttendance(clinicId!, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
@@ -372,7 +365,7 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (isPersonalMode) {
+            if (formTarget === 'personal') {
                 await addPersonalFinance(user.uid, payload);
             } else {
                 await addDoc(collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances'), { ...payload, createdAt: serverTimestamp() });
@@ -446,15 +439,14 @@ export default function AcademicsPage() {
         <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight flex items-center"><BookUser className="mr-3 h-8 w-8 text-special1" />My Academics</h1>
-                {isPersonalMode && (
-                    <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 px-4 py-3 text-sm text-blue-700 dark:text-blue-300 max-w-sm">
-                        <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <span><strong>Personal mode:</strong> This data is stored privately in your account and is not shared with any clinic.</span>
-                    </div>
-                )}
+                {/* Always show lock badge — personal data is never affected by clinic membership */}
+                <div className="flex items-start gap-2 rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800/60 dark:bg-purple-950/30 px-4 py-3 text-sm text-purple-700 dark:text-purple-300 max-w-sm">
+                    <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span><strong>Your personal records are always private</strong> — they are never shared with or overridden by any clinic.</span>
+                </div>
                 <div className="flex gap-2">
                      <Dialog open={isCaseFormOpen} onOpenChange={setIsCaseFormOpen}>
-                        <DialogTrigger asChild><Button onClick={() => handleOpenCaseForm(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
+                        <DialogTrigger asChild><Button onClick={() => { setFormTarget(isPersonalMode ? 'personal' : 'clinic'); handleOpenCaseForm(null); }}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
                         <DialogContent className="sm:max-w-5xl">
                             <DialogHeader><DialogTitle>{editingCaseHistoryId ? 'Edit Case History' : 'Add New Case History'}</DialogTitle></DialogHeader>
                             <form onSubmit={handleCaseHistorySubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
