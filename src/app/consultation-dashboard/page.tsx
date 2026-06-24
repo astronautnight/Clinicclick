@@ -22,6 +22,7 @@ import {
   updatePersonalConsultPatient,
   addPersonalConsultAppointment,
   updatePersonalConsultAppointment,
+  addPersonalConsultTransaction,
   getPersonalConsultCol,
 } from '@/services/personal-consultation-service';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -104,18 +105,21 @@ export default function ConsultationDashboardPage() {
   /* ── Personal data (ALWAYS populated, regardless of clinic membership) ── */
   const [personalPatients, setPersonalPatients] = useState<Patient[]>([]);
   const [personalAppointments, setPersonalAppointments] = useState<Appointment[]>([]);
+  const [personalTransactions, setPersonalTransactions] = useState<Transaction[]>([]);
 
   const [loading, setLoading] = useState(true);
 
   /* ── Form / dialog state ── */
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [isAppointmentFormOpen, setIsAppointmentFormOpen] = useState(false);
+  const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(false);
   // 'clinic' | 'personal' — which store the form targets
   const [formTarget, setFormTarget] = useState<'clinic' | 'personal'>('personal');
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [patientFormData, setPatientFormData] = useState(initialPatientData);
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [appointmentFormData, setAppointmentFormData] = useState(initialAppointmentData);
+  const [transactionFormData, setTransactionFormData] = useState({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning' as 'Earning' | 'Expense', category: 'Consultation', isConsult: true });
 
   /* ─────────────────────────────────────────────────────────────────── */
   /* Data subscriptions                                                   */
@@ -134,6 +138,9 @@ export default function ConsultationDashboardPage() {
       }),
       onSnapshot(getPersonalConsultCol(uid, 'appointments'), snap => {
         setPersonalAppointments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Appointment)));
+      }),
+      onSnapshot(getPersonalConsultCol(uid, 'transactions'), snap => {
+        setPersonalTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
       }),
     );
 
@@ -168,6 +175,9 @@ export default function ConsultationDashboardPage() {
   const totalConsultRevenue = useMemo(() =>
     clinicTransactions.filter(t => t.type === 'Earning').reduce((acc, t) => acc + t.amount, 0),
     [clinicTransactions]);
+  const totalPersonalRevenue = useMemo(() =>
+    personalTransactions.filter(t => t.type === 'Earning').reduce((acc, t) => acc + t.amount, 0),
+    [personalTransactions]);
 
   /* ─────────────────────────────────────────────────────────────────── */
   /* Form handlers                                                        */
@@ -269,6 +279,31 @@ export default function ConsultationDashboardPage() {
     }
   };
 
+  const handleTransactionSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!user) return;
+    const amount = parseFloat(transactionFormData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "Invalid amount", description: "Please enter a valid amount.", variant: "destructive" });
+      return;
+    }
+    const patient = personalPatients.find(p => p.id === transactionFormData.patientId);
+    try {
+      await addPersonalConsultTransaction(user.uid, {
+        ...transactionFormData,
+        amount,
+        patientName: patient ? `${patient.firstName} ${patient.lastName}` : '',
+        isConsult: true,
+        category: 'Consultation',
+      });
+      toast({ title: "Transaction Added" });
+      setIsTransactionFormOpen(false);
+      setTransactionFormData({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning', category: 'Consultation', isConsult: true });
+    } catch {
+      toast({ title: "Error", description: "Could not save transaction.", variant: "destructive" });
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground">Loading consultation data…</div>;
   }
@@ -308,6 +343,9 @@ export default function ConsultationDashboardPage() {
             </TabsTrigger>
             <TabsTrigger value="personal-appointments" className="data-[state=active]:border-pink-400 data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400">
               🔒 My Appointments ({personalAppointments.length})
+            </TabsTrigger>
+            <TabsTrigger value="personal-financials" className="data-[state=active]:border-pink-400 data-[state=active]:text-pink-600 dark:data-[state=active]:text-pink-400">
+              🔒 My Financials ({personalTransactions.filter(t => t.type === 'Earning').length})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -413,7 +451,120 @@ export default function ConsultationDashboardPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ── PERSONAL FINANCIALS TAB (always rendered) ── */}
+        <TabsContent value="personal-financials" className="mt-4">
+          <Card className="border-pink-100 dark:border-pink-900/40">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-pink-500" /> My Personal Financials
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Total earnings: <span className="font-bold text-pink-600 dark:text-pink-400">₹{totalPersonalRevenue.toLocaleString()}</span> — stored privately, never shared with any clinic.
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => setIsTransactionFormOpen(true)}
+                  className="border-pink-300 text-pink-700 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-950/40"
+                  variant="outline"
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Transaction
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {personalTransactions.length === 0 ? (
+                <p className="text-center p-6 text-muted-foreground">No personal transactions yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Patient</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Amount (₹)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...personalTransactions]
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map(t => (
+                        <TableRow key={t.id}>
+                          <TableCell>{format(new Date(t.date), 'dd/MM/yyyy')}</TableCell>
+                          <TableCell>{t.patientName || 'N/A'}</TableCell>
+                          <TableCell>{t.description || t.category || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge variant={t.type === 'Earning' ? 'default' : 'outline'}
+                              className={t.type === 'Earning' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : ''}>
+                              {t.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={`text-right font-medium ${t.type === 'Earning' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                            {t.type === 'Expense' ? '-' : ''}₹{t.amount.toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* ── Transaction Form Dialog ── */}
+      <Dialog open={isTransactionFormOpen} onOpenChange={setIsTransactionFormOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Personal Transaction</DialogTitle>
+            <DialogDescription className="flex items-center gap-1.5 text-pink-600 dark:text-pink-400">
+              <Lock className="h-3.5 w-3.5" /> Saved to your personal account — never shared with any clinic.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={transactionFormData.type} onValueChange={val => setTransactionFormData(t => ({ ...t, type: val as 'Earning' | 'Expense' }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Earning">Earning</SelectItem>
+                    <SelectItem value="Expense">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Date *</Label>
+                <Input type="date" value={transactionFormData.date} onChange={e => setTransactionFormData(t => ({ ...t, date: e.target.value }))} required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (₹) *</Label>
+              <Input type="number" min="0" step="0.01" placeholder="e.g. 500" value={transactionFormData.amount} onChange={e => setTransactionFormData(t => ({ ...t, amount: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Patient (optional)</Label>
+              <Select value={transactionFormData.patientId} onValueChange={val => setTransactionFormData(t => ({ ...t, patientId: val }))}>
+                <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+                <SelectContent>
+                  {personalPatients.map(p => <SelectItem key={p.id} value={p.id}>{p.firstName} {p.lastName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input placeholder="e.g. Consultation fee" value={transactionFormData.description} onChange={e => setTransactionFormData(t => ({ ...t, description: e.target.value }))} />
+            </div>
+            <DialogFooter className="pt-2 border-t">
+              <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Patient Form Dialog ── */}
       <Dialog open={isPatientFormOpen} onOpenChange={setIsPatientFormOpen}>
