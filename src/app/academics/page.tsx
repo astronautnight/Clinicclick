@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, type FormEvent, useMemo } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, onSnapshot, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { onSnapshot, query, orderBy } from 'firebase/firestore';
 import type { Department, StudentCaseHistory, AttendanceStatus, MarkedTooth, StudentFinancialEntry } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,14 +15,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { format, addMonths, subMonths, getDaysInMonth, isBefore } from 'date-fns';
-import { setStudentAttendance } from '@/services/student-service';
+import { format, getDaysInMonth } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { DentalChart } from '@/components/dental-chart';
 import { Badge } from '@/components/ui/badge';
-import { updateCaseHistory, deleteCaseHistory } from '@/services/case-history-service';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
 import {
     addPersonalCaseHistory,
@@ -74,29 +71,17 @@ const initialFinanceData = {
 };
 
 export default function AcademicsPage() {
-    const { user, clinicId } = useUser();
+    const { user } = useUser();
     const db = useFirestore();
     const { toast } = useToast();
 
-    // True when the user has no clinic — data goes to personal store
-    const isPersonalMode = !clinicId;
-
-    // ── Clinic data (only populated when user belongs to a clinic) ──
+    // ── Academic data is ALWAYS personal, never shared with any clinic ──
     const [departments, setDepartments] = useState<Department[]>([]);
     const [caseHistories, setCaseHistories] = useState<StudentCaseHistory[]>([]);
     const [attendance, setAttendance] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
     const [finances, setFinances] = useState<StudentFinancialEntry[]>([]);
 
-    // ── Personal data (ALWAYS populated, regardless of clinic membership) ──
-    const [personalDepts, setPersonalDepts] = useState<Department[]>([]);
-    const [personalCaseHistories, setPersonalCaseHistories] = useState<StudentCaseHistory[]>([]);
-    const [personalAttendance, setPersonalAttendanceData] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
-    const [personalFinances, setPersonalFinances] = useState<StudentFinancialEntry[]>([]);
-
     const [loading, setLoading] = useState(true);
-
-    // formTarget: which store new entries go to ('clinic' | 'personal')
-    const [formTarget, setFormTarget] = useState<'clinic' | 'personal'>(isPersonalMode ? 'personal' : 'clinic');
 
     // UI states
     const [isCaseFormOpen, setIsCaseFormOpen] = useState(false);
@@ -118,7 +103,7 @@ export default function AcademicsPage() {
     const [newDeptName, setNewDeptName] = useState('');
     const [addDeptContext, setAddDeptContext] = useState<'case' | 'attendance' | null>(null);
 
-    // Data fetching effect — ALWAYS subscribe to personal + clinic (if available)
+    // Data fetching — subscribe to PERSONAL academic data only
     useEffect(() => {
         if (!user?.uid || !db) { setLoading(false); return; }
         setLoading(true);
@@ -126,47 +111,26 @@ export default function AcademicsPage() {
         const uid = user.uid;
         const unsubs: (() => void)[] = [];
 
-        // ── 1. Always subscribe to PERSONAL academic data ──
         unsubs.push(
             onSnapshot(getPersonalAcademicsCol(uid, 'departments'), snap => {
-                setPersonalDepts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
+                setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
             }),
             onSnapshot(getPersonalAcademicsCol(uid, 'studentCaseHistories'), snap => {
-                setPersonalCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+                setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
             }),
             onSnapshot(getPersonalAcademicsCol(uid, 'attendance'), snap => {
                 const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
                 snap.forEach(doc => { const d = doc.data(); data[doc.id] = { status: d.status, departmentName: d.departmentName || 'N/A' }; });
-                setPersonalAttendanceData(data);
+                setAttendance(data);
             }),
             onSnapshot(query(getPersonalAcademicsCol(uid, 'finances'), orderBy('date', 'desc')), snap => {
-                setPersonalFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
+                setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
             }),
         );
 
-        // ── 2. Also subscribe to CLINIC academic data (only when in a clinic) ──
-        if (clinicId) {
-            unsubs.push(
-                onSnapshot(collection(db, 'clinics', clinicId, 'departments'), snap => {
-                    setDepartments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Department)).sort((a, b) => a.name.localeCompare(b.name)));
-                }),
-                onSnapshot(query(collection(db, 'clinics', clinicId, 'studentCaseHistories'), where('studentId', '==', uid)), snap => {
-                    setCaseHistories(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCaseHistory)).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-                }),
-                onSnapshot(collection(db, 'clinics', clinicId, 'students', uid, 'attendance'), snap => {
-                    const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
-                    snap.forEach(doc => { const d = doc.data(); data[doc.id] = { status: d.status, departmentName: d.departmentName || 'N/A' }; });
-                    setAttendance(data);
-                }),
-                onSnapshot(query(collection(db, 'clinics', clinicId, 'students', uid, 'finances'), orderBy('date', 'desc')), snap => {
-                    setFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
-                }),
-            );
-        }
-
         setLoading(false);
         return () => unsubs.forEach(u => u());
-    }, [user?.uid, db, clinicId]);
+    }, [user?.uid, db]);
     
     const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
         if (caseHistory) {
@@ -201,9 +165,7 @@ export default function AcademicsPage() {
             return;
         }
 
-        // Look up dept from whichever list is active
-        const deptList = isPersonalMode ? personalDepts : departments;
-        const dept = deptList.find(d => d.id === caseFormData.departmentId);
+        const dept = departments.find(d => d.id === caseFormData.departmentId);
         
         const payload = {
             ...caseFormData,
@@ -214,22 +176,12 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (isPersonalMode) {
-                if (editingCaseHistoryId) {
-                    await updatePersonalCaseHistory(user.uid, editingCaseHistoryId, payload);
-                    toast({ title: "Personal Case History Updated" });
-                } else {
-                    await addPersonalCaseHistory(user.uid, payload);
-                    toast({ title: "Personal Case History Saved" });
-                }
+            if (editingCaseHistoryId) {
+                await updatePersonalCaseHistory(user.uid, editingCaseHistoryId, payload);
+                toast({ title: "Case History Updated" });
             } else {
-                if (editingCaseHistoryId) {
-                    await updateCaseHistory(clinicId!, editingCaseHistoryId, payload);
-                    toast({ title: "Case History Updated" });
-                } else {
-                    await addDoc(collection(db, 'clinics', clinicId!, 'studentCaseHistories'), {...payload, createdAt: serverTimestamp()});
-                    toast({ title: "Case History Saved" });
-                }
+                await addPersonalCaseHistory(user.uid, payload);
+                toast({ title: "Case History Saved" });
             }
             setIsCaseFormOpen(false);
             setEditingCaseHistoryId(null);
@@ -259,19 +211,7 @@ export default function AcademicsPage() {
             return;
         }
         try {
-            let newId: string | undefined;
-
-            // Add to the appropriate department store based on formTarget
-            if (formTarget === 'personal') {
-                newId = await addPersonalDepartment(user.uid, trimmedName);
-            } else {
-                if (!db) {
-                    toast({ title: "Error", description: "Database connection not available. Please refresh.", variant: 'destructive' });
-                    return;
-                }
-                const docRef = await addDoc(collection(db, 'clinics', clinicId!, 'departments'), { name: trimmedName });
-                newId = docRef.id;
-            }
+            const newId = await addPersonalDepartment(user.uid, trimmedName);
 
             toast({ title: "Department Added", description: `"${trimmedName}" has been created.` });
             setIsAddDeptDialogOpen(false);
@@ -304,13 +244,7 @@ export default function AcademicsPage() {
      const handleDeleteCaseHistory = async () => {
         if (!caseHistoryToDelete || !user) return;
         try {
-            // Delete from the correct store based on whether it's a personal case
-            const isPersonalCase = personalCaseHistories.some(c => c.id === caseHistoryToDelete.id);
-            if (isPersonalCase) {
-                await deletePersonalCaseHistory(user.uid, caseHistoryToDelete.id);
-            } else {
-                await deleteCaseHistory(clinicId!, caseHistoryToDelete.id);
-            }
+            await deletePersonalCaseHistory(user.uid, caseHistoryToDelete.id);
             toast({ title: "Case History Deleted" });
             setCaseHistoryToDelete(null);
         } catch (error) {
@@ -327,19 +261,14 @@ export default function AcademicsPage() {
              return;
         }
         
-        const deptList = isPersonalMode ? personalDepts : departments;
-        const dept = deptList.find(d => d.id === attendanceDepartmentId);
+        const dept = departments.find(d => d.id === attendanceDepartmentId);
         if (!dept) {
             toast({ title: "Invalid Department", description: "The selected department could not be found.", variant: 'destructive'});
             return;
         }
         
         try {
-            if (isPersonalMode) {
-                await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
-            } else {
-                await setStudentAttendance(clinicId!, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
-            }
+            await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
             toast({ title: "Attendance Marked", description: `Marked present for ${format(new Date(attendanceDate), 'dd/MM/yyyy')}.`});
             setIsAttendanceFormOpen(false);
         } catch(error) {
@@ -366,11 +295,7 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (isPersonalMode) {
-                await addPersonalFinance(user.uid, payload);
-            } else {
-                await addDoc(collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances'), { ...payload, createdAt: serverTimestamp() });
-            }
+            await addPersonalFinance(user.uid, payload);
             toast({ title: "Financial Entry Added" });
             setIsFinanceFormOpen(false);
             setFinanceFormData(initialFinanceData);
@@ -382,7 +307,7 @@ export default function AcademicsPage() {
     
     const DayWithAttendance = ({ date }: { date: Date }) => {
         const dateStr = format(date, 'yyyy-MM-dd');
-        const dayAttendance = activeAttendance[dateStr];
+        const dayAttendance = attendance[dateStr];
         const isSelected = selectedCalendarDate === dateStr;
     
         return (
@@ -404,54 +329,27 @@ export default function AcademicsPage() {
         );
     };
 
-    const attendanceStats = useMemo(() => {
-        const daysInMonth = getDaysInMonth(summaryMonth);
-        let present = 0;
-        let absent = 0;
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(summaryMonth.getFullYear(), summaryMonth.getMonth(), day);
-            const dateStr = format(date, 'yyyy-MM-dd');
-            if (attendance[dateStr]?.status === 'Present') {
-                present++;
-            } else if (attendance[dateStr]?.status === 'Absent') {
-                absent++;
-            }
-        }
-        return { present, absent };
-    }, [attendance, summaryMonth]);
-    const financeSummary = useMemo(() => {
-        const totalReceivable = finances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
-        const totalPayable = finances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
-        const netBalance = totalReceivable - totalPayable;
-        return { totalReceivable, totalPayable, netBalance };
-    }, [finances]);
 
     if (loading) {
         return <div>Loading academic data...</div>;
     }
 
-    const activeDepts = isPersonalMode ? personalDepts : departments;
-    const activeCaseHistories = isPersonalMode ? personalCaseHistories : caseHistories;
-    const activeAttendance = isPersonalMode ? personalAttendance : attendance;
-    const activeFinances = isPersonalMode ? personalFinances : finances;
-
-    const activeAttendanceStats = (() => {
+    const attendanceStats = (() => {
         const daysInMonth = getDaysInMonth(summaryMonth);
         let present = 0;
         let absent = 0;
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(summaryMonth.getFullYear(), summaryMonth.getMonth(), day);
             const dateStr = format(date, 'yyyy-MM-dd');
-            if (activeAttendance[dateStr]?.status === 'Present') present++;
-            else if (activeAttendance[dateStr]?.status === 'Absent') absent++;
+            if (attendance[dateStr]?.status === 'Present') present++;
+            else if (attendance[dateStr]?.status === 'Absent') absent++;
         }
         return { present, absent };
     })();
 
-    const activeFinanceSummary = (() => {
-        const totalReceivable = activeFinances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
-        const totalPayable = activeFinances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
+    const financeSummary = (() => {
+        const totalReceivable = finances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
+        const totalPayable = finances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
         const netBalance = totalReceivable - totalPayable;
         return { totalReceivable, totalPayable, netBalance };
     })();
@@ -467,7 +365,7 @@ export default function AcademicsPage() {
                 </div>
                 <div className="flex gap-2">
                      <Dialog open={isCaseFormOpen} onOpenChange={setIsCaseFormOpen}>
-                        <DialogTrigger asChild><Button onClick={() => { setFormTarget(isPersonalMode ? 'personal' : 'clinic'); handleOpenCaseForm(null); }}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
+                        <DialogTrigger asChild><Button onClick={() => handleOpenCaseForm(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
                         <DialogContent className="sm:max-w-5xl">
                             <DialogHeader><DialogTitle>{editingCaseHistoryId ? 'Edit Case History' : 'Add New Case History'}</DialogTitle></DialogHeader>
                             <form onSubmit={handleCaseHistorySubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
@@ -487,8 +385,8 @@ export default function AcademicsPage() {
                                    <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                        <SelectContent>
-                                           {activeDepts.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                           {activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                           {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                           {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                        </SelectContent>
                                    </Select>
                                </div>
@@ -540,7 +438,7 @@ export default function AcademicsPage() {
                                 <Table>
                                     <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Patient</TableHead><TableHead>Department</TableHead><TableHead>Diagnosis</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {activeCaseHistories.map(ch => (
+                                        {caseHistories.map(ch => (
                                             <TableRow key={ch.id}>
                                                 <TableCell>{ch.createdAt ? format(ch.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                                                 <TableCell className="font-medium">{ch.patientName}</TableCell>
@@ -569,7 +467,7 @@ export default function AcademicsPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            {activeCaseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
+                            {caseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -582,7 +480,7 @@ export default function AcademicsPage() {
                         <CardContent className="space-y-6">
                              <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
                                  <DialogTrigger asChild>
-                                     <Button variant="outline" onClick={() => setFormTarget(isPersonalMode ? 'personal' : 'clinic')}><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
+                                     <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
                                  </DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
@@ -599,8 +497,8 @@ export default function AcademicsPage() {
                                             <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
                                                 <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                                 <SelectContent>
-                                                    {activeDepts.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                    {activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -621,8 +519,8 @@ export default function AcademicsPage() {
                                             onMonthChange={setSummaryMonth}
                                             components={{ DayContent: DayWithAttendance }}
                                             modifiers={{
-                                                present: (date) => activeAttendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
-                                                absent: (date) => activeAttendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
+                                                present: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
+                                                absent: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
                                             }}
                                             modifiersClassNames={{
                                                 present: cn('bg-green-100 dark:bg-green-800/50 text-green-800 dark:text-green-200 rounded-md'),
@@ -634,28 +532,28 @@ export default function AcademicsPage() {
                                      <CardFooter className="flex flex-col gap-4">
                                         <div className="flex justify-around text-sm w-full">
                                             <div className="text-center">
-                                                <p className="font-bold text-green-600">{activeAttendanceStats.present}</p>
+                                                <p className="font-bold text-green-600">{attendanceStats.present}</p>
                                                 <p>Present</p>
                                             </div>
                                             <div className="text-center">
-                                                <p className="font-bold text-red-600">{activeAttendanceStats.absent}</p>
+                                                <p className="font-bold text-red-600">{attendanceStats.absent}</p>
                                                 <p>Absent</p>
                                             </div>
                                         </div>
-                                        {selectedCalendarDate && activeAttendance[selectedCalendarDate] && (
+                                        {selectedCalendarDate && attendance[selectedCalendarDate] && (
                                             <div className="w-full rounded-lg border bg-muted/50 p-4 space-y-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
                                                 <p className="text-sm font-semibold text-muted-foreground">
                                                     {format(new Date(selectedCalendarDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy')}
                                                 </p>
                                                 <div className="flex items-center gap-3">
-                                                    <Badge variant={activeAttendance[selectedCalendarDate].status === 'Present' ? 'secondary' : 'destructive'} className={activeAttendance[selectedCalendarDate].status === 'Present' ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200' : ''}>
-                                                        {activeAttendance[selectedCalendarDate].status}
+                                                    <Badge variant={attendance[selectedCalendarDate].status === 'Present' ? 'secondary' : 'destructive'} className={attendance[selectedCalendarDate].status === 'Present' ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200' : ''}>
+                                                        {attendance[selectedCalendarDate].status}
                                                     </Badge>
-                                                    <span className="text-sm">Department: <strong>{activeAttendance[selectedCalendarDate].departmentName}</strong></span>
+                                                    <span className="text-sm">Department: <strong>{attendance[selectedCalendarDate].departmentName}</strong></span>
                                                 </div>
                                             </div>
                                         )}
-                                        {selectedCalendarDate && !activeAttendance[selectedCalendarDate] && (
+                                        {selectedCalendarDate && !attendance[selectedCalendarDate] && (
                                             <div className="w-full rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-2 duration-200">
                                                 <p>No attendance recorded for {format(new Date(selectedCalendarDate + 'T00:00:00'), 'dd MMMM yyyy')}.</p>
                                             </div>
@@ -676,20 +574,20 @@ export default function AcademicsPage() {
                             <div className="grid gap-4 md:grid-cols-3">
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Total Receivable</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.totalReceivable.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalReceivable.toLocaleString()}</p></CardContent>
                                 </Card>
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Total Payable</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.totalPayable.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalPayable.toLocaleString()}</p></CardContent>
                                 </Card>
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Net Balance</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.netBalance.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.netBalance.toLocaleString()}</p></CardContent>
                                 </Card>
                             </div>
 
                             <Dialog open={isFinanceFormOpen} onOpenChange={setIsFinanceFormOpen}>
-                                <DialogTrigger asChild><Button variant="outline" onClick={() => setFormTarget(isPersonalMode ? 'personal' : 'clinic')}><PlusCircle className="mr-2 h-4 w-4"/> Add New Entry</Button></DialogTrigger>
+                                <DialogTrigger asChild><Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/> Add New Entry</Button></DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader><DialogTitle>Add Financial Entry</DialogTitle></DialogHeader>
                                     <form onSubmit={handleFinanceSubmit} className="space-y-4">
@@ -720,7 +618,7 @@ export default function AcademicsPage() {
                                 <Table>
                                     <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead>Patient</TableHead><TableHead className="text-right">Amount (₹)</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {activeFinances.map(f => (
+                                        {finances.map(f => (
                                             <TableRow key={f.id}>
                                                 <TableCell>{format(new Date(f.date), 'dd/MM/yyyy')}</TableCell>
                                                 <TableCell><Badge variant={f.type === 'Receivable' ? 'secondary' : 'destructive'}>{f.type}</Badge></TableCell>
@@ -732,7 +630,7 @@ export default function AcademicsPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            {activeFinances.length === 0 && <p className="text-center p-4 text-muted-foreground">No financial entries yet.</p>}
+                            {finances.length === 0 && <p className="text-center p-4 text-muted-foreground">No financial entries yet.</p>}
                         </CardContent>
                     </Card>
                 </TabsContent>
