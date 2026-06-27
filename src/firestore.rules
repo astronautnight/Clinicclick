@@ -183,12 +183,12 @@ service cloud.firestore {
     =============================================================== */
 
     /* Personal Consultation: patients, appointments, transactions */
-    match /users/{userId}/personalConsultation/{col}/{docId} {
+    match /users/{userId}/personalConsultation/data/{col}/{docId} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
     }
 
     /* Personal Academics: departments, studentCaseHistories, attendance, finances */
-    match /users/{userId}/personalAcademics/{col}/{docId} {
+    match /users/{userId}/personalAcademics/data/{col}/{docId} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
     }
   }

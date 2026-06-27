@@ -90,7 +90,7 @@ export default function AcademicsPage() {
     // ── Personal data (ALWAYS populated, regardless of clinic membership) ──
     const [personalDepts, setPersonalDepts] = useState<Department[]>([]);
     const [personalCaseHistories, setPersonalCaseHistories] = useState<StudentCaseHistory[]>([]);
-    const [personalAttendance, setPersonalAttendance] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
+    const [personalAttendance, setPersonalAttendanceData] = useState<Record<string, { status: AttendanceStatus, departmentName: string }>>({});
     const [personalFinances, setPersonalFinances] = useState<StudentFinancialEntry[]>([]);
 
     const [loading, setLoading] = useState(true);
@@ -136,7 +136,7 @@ export default function AcademicsPage() {
             onSnapshot(getPersonalAcademicsCol(uid, 'attendance'), snap => {
                 const data: Record<string, { status: AttendanceStatus, departmentName: string }> = {};
                 snap.forEach(doc => { const d = doc.data(); data[doc.id] = { status: d.status, departmentName: d.departmentName || 'N/A' }; });
-                setPersonalAttendance(data);
+                setPersonalAttendanceData(data);
             }),
             onSnapshot(query(getPersonalAcademicsCol(uid, 'finances'), orderBy('date', 'desc')), snap => {
                 setPersonalFinances(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentFinancialEntry)));
@@ -201,7 +201,7 @@ export default function AcademicsPage() {
         }
 
         // Look up dept from whichever list is active
-        const deptList = formTarget === 'personal' ? personalDepts : departments;
+        const deptList = isPersonalMode ? personalDepts : departments;
         const dept = deptList.find(d => d.id === caseFormData.departmentId);
         
         const payload = {
@@ -213,7 +213,7 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (formTarget === 'personal') {
+            if (isPersonalMode) {
                 if (editingCaseHistoryId) {
                     await updatePersonalCaseHistory(user.uid, editingCaseHistoryId, payload);
                     toast({ title: "Personal Case History Updated" });
@@ -326,7 +326,7 @@ export default function AcademicsPage() {
              return;
         }
         
-        const deptList = formTarget === 'personal' ? personalDepts : departments;
+        const deptList = isPersonalMode ? personalDepts : departments;
         const dept = deptList.find(d => d.id === attendanceDepartmentId);
         if (!dept) {
             toast({ title: "Invalid Department", description: "The selected department could not be found.", variant: 'destructive'});
@@ -334,7 +334,7 @@ export default function AcademicsPage() {
         }
         
         try {
-            if (formTarget === 'personal') {
+            if (isPersonalMode) {
                 await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
             } else {
                 await setStudentAttendance(clinicId!, user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
@@ -365,7 +365,7 @@ export default function AcademicsPage() {
         };
         
         try {
-            if (formTarget === 'personal') {
+            if (isPersonalMode) {
                 await addPersonalFinance(user.uid, payload);
             } else {
                 await addDoc(collection(db, 'clinics', clinicId!, 'students', user.uid, 'finances'), { ...payload, createdAt: serverTimestamp() });
@@ -381,7 +381,7 @@ export default function AcademicsPage() {
     
     const DayWithAttendance = ({ date }: { date: Date }) => {
         const dateStr = format(date, 'yyyy-MM-dd');
-        const dayAttendance = attendance[dateStr];
+        const dayAttendance = activeAttendance[dateStr];
     
         const dayContent = (
           <div className="relative w-full h-full flex items-center justify-center">
@@ -422,7 +422,6 @@ export default function AcademicsPage() {
         }
         return { present, absent };
     }, [attendance, summaryMonth]);
-
     const financeSummary = useMemo(() => {
         const totalReceivable = finances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
         const totalPayable = finances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
@@ -430,10 +429,34 @@ export default function AcademicsPage() {
         return { totalReceivable, totalPayable, netBalance };
     }, [finances]);
 
-
     if (loading) {
         return <div>Loading academic data...</div>;
     }
+
+    const activeDepts = isPersonalMode ? personalDepts : departments;
+    const activeCaseHistories = isPersonalMode ? personalCaseHistories : caseHistories;
+    const activeAttendance = isPersonalMode ? personalAttendance : attendance;
+    const activeFinances = isPersonalMode ? personalFinances : finances;
+
+    const activeAttendanceStats = (() => {
+        const daysInMonth = getDaysInMonth(summaryMonth);
+        let present = 0;
+        let absent = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(summaryMonth.getFullYear(), summaryMonth.getMonth(), day);
+            const dateStr = format(date, 'yyyy-MM-dd');
+            if (activeAttendance[dateStr]?.status === 'Present') present++;
+            else if (activeAttendance[dateStr]?.status === 'Absent') absent++;
+        }
+        return { present, absent };
+    })();
+
+    const activeFinanceSummary = (() => {
+        const totalReceivable = activeFinances.filter(f => f.type === 'Receivable').reduce((acc, curr) => acc + curr.amount, 0);
+        const totalPayable = activeFinances.filter(f => f.type === 'Payable').reduce((acc, curr) => acc + curr.amount, 0);
+        const netBalance = totalReceivable - totalPayable;
+        return { totalReceivable, totalPayable, netBalance };
+    })();
 
     return (
         <div className="space-y-8">
@@ -454,7 +477,7 @@ export default function AcademicsPage() {
                                     <div className="space-y-2"><Label>Patient Name *</Label><Input value={caseFormData.patientName} onChange={e => setCaseFormData({...caseFormData, patientName: e.target.value})} required/></div>
                                     <div className="space-y-2"><Label>Patient Age</Label><Input type="number" value={caseFormData.patientAge} onChange={e => setCaseFormData({...caseFormData, patientAge: e.target.value})}/></div>
                                     <div className="space-y-2"><Label>Patient Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
-                               </div>
+                                </div>
                                <div className="space-y-2">
                                    <div className="flex justify-between items-center">
                                        <Label>Department</Label>
@@ -466,8 +489,8 @@ export default function AcademicsPage() {
                                    <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                        <SelectContent>
-                                           {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                           {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                           {activeDepts.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                           {activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                        </SelectContent>
                                    </Select>
                                </div>
@@ -519,7 +542,7 @@ export default function AcademicsPage() {
                                 <Table>
                                     <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Patient</TableHead><TableHead>Department</TableHead><TableHead>Diagnosis</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {caseHistories.map(ch => (
+                                        {activeCaseHistories.map(ch => (
                                             <TableRow key={ch.id}>
                                                 <TableCell>{ch.createdAt ? format(ch.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                                                 <TableCell className="font-medium">{ch.patientName}</TableCell>
@@ -548,7 +571,7 @@ export default function AcademicsPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            {caseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
+                            {activeCaseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -560,9 +583,9 @@ export default function AcademicsPage() {
                         </CardHeader>
                         <CardContent className="space-y-6">
                              <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
-                                <DialogTrigger asChild>
-                                    <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
-                                </DialogTrigger>
+                                 <DialogTrigger asChild>
+                                     <Button variant="outline" onClick={() => setFormTarget(isPersonalMode ? 'personal' : 'clinic')}><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
+                                 </DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
                                      <form onSubmit={handleAttendanceSubmit} className="space-y-4">
@@ -578,8 +601,8 @@ export default function AcademicsPage() {
                                             <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
                                                 <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                                 <SelectContent>
-                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    {activeDepts.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {activeDepts.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -611,8 +634,8 @@ export default function AcademicsPage() {
                                             onMonthChange={setSummaryMonth}
                                             components={{ DayContent: DayWithAttendance }}
                                             modifiers={{
-                                                present: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
-                                                absent: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
+                                                present: (date) => activeAttendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
+                                                absent: (date) => activeAttendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
                                             }}
                                             modifiersClassNames={{
                                                 present: cn('bg-green-100 dark:bg-green-800/50 text-green-800 dark:text-green-200 rounded-md'),
@@ -623,11 +646,11 @@ export default function AcademicsPage() {
                                      </CardContent>
                                      <CardFooter className="flex justify-around text-sm">
                                         <div className="text-center">
-                                            <p className="font-bold text-green-600">{attendanceStats.present}</p>
+                                            <p className="font-bold text-green-600">{activeAttendanceStats.present}</p>
                                             <p>Present</p>
                                         </div>
                                         <div className="text-center">
-                                            <p className="font-bold text-red-600">{attendanceStats.absent}</p>
+                                            <p className="font-bold text-red-600">{activeAttendanceStats.absent}</p>
                                             <p>Absent</p>
                                         </div>
                                      </CardFooter>
@@ -646,20 +669,20 @@ export default function AcademicsPage() {
                             <div className="grid gap-4 md:grid-cols-3">
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Total Receivable</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalReceivable.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.totalReceivable.toLocaleString()}</p></CardContent>
                                 </Card>
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Total Payable</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.totalPayable.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.totalPayable.toLocaleString()}</p></CardContent>
                                 </Card>
                                 <Card>
                                     <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Net Balance</CardTitle></CardHeader>
-                                    <CardContent><p className="text-2xl font-bold">₹{financeSummary.netBalance.toLocaleString()}</p></CardContent>
+                                    <CardContent><p className="text-2xl font-bold">₹{activeFinanceSummary.netBalance.toLocaleString()}</p></CardContent>
                                 </Card>
                             </div>
 
                             <Dialog open={isFinanceFormOpen} onOpenChange={setIsFinanceFormOpen}>
-                                <DialogTrigger asChild><Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/> Add New Entry</Button></DialogTrigger>
+                                <DialogTrigger asChild><Button variant="outline" onClick={() => setFormTarget(isPersonalMode ? 'personal' : 'clinic')}><PlusCircle className="mr-2 h-4 w-4"/> Add New Entry</Button></DialogTrigger>
                                 <DialogContent>
                                     <DialogHeader><DialogTitle>Add Financial Entry</DialogTitle></DialogHeader>
                                     <form onSubmit={handleFinanceSubmit} className="space-y-4">
@@ -690,7 +713,7 @@ export default function AcademicsPage() {
                                 <Table>
                                     <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead>Patient</TableHead><TableHead className="text-right">Amount (₹)</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {finances.map(f => (
+                                        {activeFinances.map(f => (
                                             <TableRow key={f.id}>
                                                 <TableCell>{format(new Date(f.date), 'dd/MM/yyyy')}</TableCell>
                                                 <TableCell><Badge variant={f.type === 'Receivable' ? 'secondary' : 'destructive'}>{f.type}</Badge></TableCell>
@@ -702,7 +725,7 @@ export default function AcademicsPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            {finances.length === 0 && <p className="text-center p-4 text-muted-foreground">No financial entries yet.</p>}
+                            {activeFinances.length === 0 && <p className="text-center p-4 text-muted-foreground">No financial entries yet.</p>}
                         </CardContent>
                     </Card>
                 </TabsContent>
