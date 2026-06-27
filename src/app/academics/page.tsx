@@ -109,6 +109,7 @@ export default function AcademicsPage() {
     const [attendanceDate, setAttendanceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [attendanceDepartmentId, setAttendanceDepartmentId] = useState('');
     const [summaryMonth, setSummaryMonth] = useState(new Date());
+    const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
     const [isFinanceFormOpen, setIsFinanceFormOpen] = useState(false);
     const [financeFormData, setFinanceFormData] = useState(initialFinanceData);
@@ -382,28 +383,25 @@ export default function AcademicsPage() {
     const DayWithAttendance = ({ date }: { date: Date }) => {
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayAttendance = activeAttendance[dateStr];
-    
-        const dayContent = (
-          <div className="relative w-full h-full flex items-center justify-center">
-            {format(date, 'd')}
-          </div>
-        );
-    
-        if (!dayAttendance) return dayContent;
+        const isSelected = selectedCalendarDate === dateStr;
     
         return (
-            <Popover>
-                <PopoverTrigger asChild>
-                    <button type="button" className="w-full h-full p-0 m-0 bg-transparent border-none rounded-md">
-                        {dayContent}
-                    </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-2 text-sm">
-                    <p>Status: <strong>{dayAttendance.status}</strong></p>
-                    <p>Department: <strong>{dayAttendance.departmentName}</strong></p>
-                </PopoverContent>
-            </Popover>
-        )
+          <button
+            type="button"
+            onClick={() => setSelectedCalendarDate(prev => prev === dateStr ? null : dateStr)}
+            className={cn(
+              "relative w-full h-full flex items-center justify-center rounded-md transition-all",
+              isSelected && "ring-2 ring-primary ring-offset-1",
+              dayAttendance && "cursor-pointer",
+              !dayAttendance && "cursor-default"
+            )}
+          >
+            {format(date, 'd')}
+            {dayAttendance && (
+              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-current" />
+            )}
+          </button>
+        );
     };
 
     const attendanceStats = useMemo(() => {
@@ -616,18 +614,7 @@ export default function AcademicsPage() {
                              
                             <div className="overflow-x-auto">
                                  <Card>
-                                     <CardHeader>
-                                         <div className="flex items-center justify-center">
-                                            <Button variant="outline" size="icon" onClick={() => setSummaryMonth(prev => subMonths(prev, 1))}>
-                                                <ChevronLeft className="h-4 w-4" />
-                                            </Button>
-                                            <span className="w-48 text-center font-semibold">{format(summaryMonth, 'MMMM yyyy')}</span>
-                                            <Button variant="outline" size="icon" onClick={() => setSummaryMonth(prev => addMonths(prev, 1))}>
-                                                <ChevronRight className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                     </CardHeader>
-                                     <CardContent className="flex justify-center">
+                                     <CardContent className="flex justify-center pt-6">
                                           <Calendar
                                             mode="single"
                                             month={summaryMonth}
@@ -644,15 +631,35 @@ export default function AcademicsPage() {
                                             className="p-0"
                                         />
                                      </CardContent>
-                                     <CardFooter className="flex justify-around text-sm">
-                                        <div className="text-center">
-                                            <p className="font-bold text-green-600">{activeAttendanceStats.present}</p>
-                                            <p>Present</p>
+                                     <CardFooter className="flex flex-col gap-4">
+                                        <div className="flex justify-around text-sm w-full">
+                                            <div className="text-center">
+                                                <p className="font-bold text-green-600">{activeAttendanceStats.present}</p>
+                                                <p>Present</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-bold text-red-600">{activeAttendanceStats.absent}</p>
+                                                <p>Absent</p>
+                                            </div>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="font-bold text-red-600">{activeAttendanceStats.absent}</p>
-                                            <p>Absent</p>
-                                        </div>
+                                        {selectedCalendarDate && activeAttendance[selectedCalendarDate] && (
+                                            <div className="w-full rounded-lg border bg-muted/50 p-4 space-y-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+                                                <p className="text-sm font-semibold text-muted-foreground">
+                                                    {format(new Date(selectedCalendarDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy')}
+                                                </p>
+                                                <div className="flex items-center gap-3">
+                                                    <Badge variant={activeAttendance[selectedCalendarDate].status === 'Present' ? 'secondary' : 'destructive'} className={activeAttendance[selectedCalendarDate].status === 'Present' ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200' : ''}>
+                                                        {activeAttendance[selectedCalendarDate].status}
+                                                    </Badge>
+                                                    <span className="text-sm">Department: <strong>{activeAttendance[selectedCalendarDate].departmentName}</strong></span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {selectedCalendarDate && !activeAttendance[selectedCalendarDate] && (
+                                            <div className="w-full rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-2 duration-200">
+                                                <p>No attendance recorded for {format(new Date(selectedCalendarDate + 'T00:00:00'), 'dd MMMM yyyy')}.</p>
+                                            </div>
+                                        )}
                                      </CardFooter>
                                  </Card>
                              </div>
