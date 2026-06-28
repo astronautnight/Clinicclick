@@ -596,7 +596,7 @@ export default function ClinicPage() {
             <div className="flex flex-col md:flex-row border-t border-slate-200 dark:border-[#4A4A4A]">
                 <div className="flex-1 p-6 md:border-r border-slate-200 dark:border-[#4A4A4A]">
                     <Label className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-[#A0A0A0] uppercase mb-3 block">Invite code — Share with doctors to join</Label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <div className="h-9 px-4 flex items-center justify-center font-mono text-sm font-bold tracking-widest border border-slate-200 dark:border-transparent rounded-md bg-slate-50 dark:bg-[#1A1A1A] text-slate-900 dark:text-white">{inviteCode}</div>
                         <Button
                             size="sm"
@@ -693,8 +693,8 @@ export default function ClinicPage() {
             </div>
 
             {/* Bottom row: Action Buttons */}
-            <div className="p-4 px-6 border-t border-slate-200 dark:border-[#4A4A4A] flex justify-between items-center bg-white dark:bg-transparent rounded-b-lg">
-                <div className="flex gap-3">
+            <div className="p-4 px-6 border-t border-slate-200 dark:border-[#4A4A4A] flex flex-wrap justify-between items-center gap-4 bg-white dark:bg-transparent rounded-b-lg">
+                <div className="flex flex-wrap gap-3">
                     <Button variant="outline" onClick={() => window.location.href='/patients'} className="font-medium shadow-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:bg-[#3A3A3A] dark:hover:text-white dark:hover:border-[#6A6A6A] transition-colors">
                         <UserPlus className="mr-2 h-4 w-4" />
                         Add patient

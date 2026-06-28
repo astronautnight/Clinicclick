@@ -29,10 +29,10 @@ service cloud.firestore {
       // User can update self
       allow update: if signedIn() && request.auth.uid == userId
 
-      // OR clinic admin can update users in their clinic
+      // OR clinic admin can update users in their clinic (adding or removing)
       || (
-        resource.data.clinicId != null
-        && isClinicAdmin(resource.data.clinicId)
+        (resource.data.clinicId != null && isClinicAdmin(resource.data.clinicId)) ||
+        (request.resource.data.clinicId != null && isClinicAdmin(request.resource.data.clinicId))
       );
 
       allow create: if signedIn();
@@ -55,17 +55,17 @@ service cloud.firestore {
 
     /* ================= MEMBERS ================= */
     match /clinics/{clinicId}/members/{uid} {
-
       // Anyone in clinic can read members
       allow read: if signedIn() && isClinicMember(clinicId);
 
-      // ✅ FIRST ADMIN (creator) can add themselves
-      allow create: if signedIn()
-        && request.auth.uid == uid;
+      // ONLY clinic admins can add a member, EXCEPT the creator of the clinic can create their own member doc initially.
+      allow create: if signedIn() && (
+        isClinicAdmin(clinicId) ||
+        (request.auth.uid == uid && get(/databases/$(database)/documents/clinics/$(clinicId)).data.createdBy == request.auth.uid)
+      );
 
       // Admin controls members AFTER creation, OR member can remove themselves (leave)
-      allow update: if signedIn()
-        && isClinicAdmin(clinicId);
+      allow update: if signedIn() && isClinicAdmin(clinicId);
       allow delete: if signedIn()
         && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }

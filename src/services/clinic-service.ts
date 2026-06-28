@@ -92,6 +92,7 @@ export async function createClinic({
       phone,
       clinicType,
       inviteCode: generateInviteCode(),
+      createdBy: ownerUid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
