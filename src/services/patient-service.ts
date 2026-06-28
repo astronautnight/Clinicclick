@@ -42,7 +42,6 @@ export async function addPatient(
     | "photos"
     | "videos"
     | "linkedProcedures"
-    | "markedTeeth"
   > & { photos?: File[]; videos?: File[] }
 ): Promise<string | undefined> {
   if (!clinicId) {
@@ -58,7 +57,8 @@ export async function addPatient(
   const payload = {
     ...dataToSave,
     linkedProcedures: [],
-    markedTeeth: [],
+    markedTeeth: dataToSave.markedTeeth || [],
+    stagedObservations: dataToSave.stagedObservations || [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };

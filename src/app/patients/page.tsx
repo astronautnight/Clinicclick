@@ -39,7 +39,7 @@ import { FirestorePermissionError } from "@/firebase/errors";
 import { format, subYears, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 
-const initialPatientData: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'photos' | 'videos' | 'linkedProcedures' | 'markedTeeth' | 'totalPaidOverride' | 'stagedObservations'> & { photos?: File[], videos?: File[] } = {
+const initialPatientData: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'photos' | 'videos' | 'linkedProcedures' | 'totalPaidOverride'> & { photos?: File[], videos?: File[] } = {
   firstName: "",
   lastName: "",
   dateOfBirth: "",
@@ -56,6 +56,8 @@ const initialPatientData: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'phot
   treatmentPlan: "",
   isConsult: false,
   consultLocation: "",
+  markedTeeth: [],
+  stagedObservations: [],
 };
 
 
@@ -89,7 +91,7 @@ export default function PatientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'photos' | 'videos' | 'markedTeeth' | 'linkedProcedures' | 'stagedObservations'> & { photos?: File[], videos?: File[] }>(initialPatientData);
+  const [formData, setFormData] = useState<Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'photos' | 'videos' | 'linkedProcedures'> & { photos?: File[], videos?: File[] }>(initialPatientData);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [patientToLink, setPatientToLink] = useState<Patient | null>(null);
@@ -260,6 +262,8 @@ export default function PatientsPage() {
     setFormData({
       ...initialPatientData,
       ...patient,
+      markedTeeth: patient.markedTeeth || [],
+      stagedObservations: patient.stagedObservations || [],
       photos: [],
       videos: [],
     });
@@ -842,6 +846,18 @@ export default function PatientsPage() {
                   <div className="space-y-4">
                     <div className="space-y-2"><Label htmlFor="diagnosis">Diagnosis</Label><Textarea id="diagnosis" name="diagnosis" value={formData.diagnosis || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
                     <div className="space-y-2"><Label htmlFor="treatmentPlan">Treatment Plan</Label><Textarea id="treatmentPlan" name="treatmentPlan" value={formData.treatmentPlan || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
+                    
+                    <div className="space-y-2 pt-4">
+                      <Label>Initial Dental Chart</Label>
+                      <div className="border rounded-md p-4 bg-slate-50/50 dark:bg-[#1C1C1C]">
+                        <DentalChart
+                          markedTeeth={formData.markedTeeth || []}
+                          onTeethChange={(teeth) => setFormData(prev => ({ ...prev, markedTeeth: teeth }))}
+                          stagedObservations={formData.stagedObservations || []}
+                          onObservationsChange={(obs) => setFormData(prev => ({ ...prev, stagedObservations: obs }))}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </fieldset>
 
