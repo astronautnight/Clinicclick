@@ -30,6 +30,9 @@ const { firestore: db } = initializeFirebase();
 interface CreateClinicInput {
   ownerUid: string;
   clinicName: string;
+  address: string;
+  phone: string;
+  clinicType: 'General' | 'Specialist' | 'Multi-specialty';
 }
 
 interface JoinClinicInput {
@@ -67,6 +70,9 @@ async function deleteSubcollection(clinicId: string, subcollectionName: string) 
 export async function createClinic({
   ownerUid,
   clinicName,
+  address,
+  phone,
+  clinicType,
 }: CreateClinicInput): Promise<{ clinicId: string }> {
   if (!ownerUid || !clinicName) {
     throw new Error('Owner UID and clinic name are required');
@@ -82,6 +88,9 @@ export async function createClinic({
     // 1️⃣ Create clinic document
     const clinicRef = await addDoc(collection(db, 'clinics'), {
       name: clinicName,
+      address,
+      phone,
+      clinicType,
       inviteCode: generateInviteCode(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -365,7 +374,12 @@ export async function regenerateInviteCode(
  */
 export async function updateClinic(
   clinicId: string,
-  clinicData: { name?: string }
+  clinicData: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    clinicType?: 'General' | 'Specialist' | 'Multi-specialty';
+  }
 ): Promise<void> {
   if (!clinicId) {
     throw new Error('Clinic ID is required to update clinic details.');

@@ -31,8 +31,8 @@ service cloud.firestore {
 
       // OR clinic admin can update users in their clinic
       || (
-        request.resource.data.clinicId is string
-        && isClinicAdmin(request.resource.data.clinicId)
+        resource.data.clinicId != null
+        && isClinicAdmin(resource.data.clinicId)
       );
 
       allow create: if signedIn();

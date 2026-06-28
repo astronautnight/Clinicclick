@@ -265,40 +265,42 @@ export default function DashboardPage() {
                         {/* Left Content */}
                         <div className="flex flex-col justify-center space-y-6 z-10">
                             <div>
-                                <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 dark:text-white leading-tight">
-                                    Welcome to<br />
-                                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                                <h1 className="leading-tight text-gray-900 dark:text-white">
+                                    <span className="block text-lg lg:text-xl font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Welcome to</span>
+                                    <span className="text-5xl lg:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                                         Clinic@Click!
-                                    </span>{' '}
+                                    </span>
                                 </h1>
                                 <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-md leading-relaxed">
                                     Let&apos;s set up your clinic so you can start managing patients, appointments, and more – all in one place.
                                 </p>
                             </div>
 
-                            <div className="flex flex-col sm:flex-row gap-3">
-                                <Button asChild size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
-                                    <Link href="/clinic" className="flex items-center gap-3">
-                                        <ClipboardList className="h-5 w-5" />
-                                        Add Your Clinic
-                                        <ArrowRight className="h-5 w-5" />
-                                    </Link>
-                                </Button>
-                                <Button asChild size="lg" variant="outline" className="border-2 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5">
-                                    <Link href="/clinic" className="flex items-center gap-3">
-                                        <UserPlus className="h-5 w-5" />
-                                        Join Your Clinic
-                                        <ArrowRight className="h-5 w-5" />
-                                    </Link>
-                                </Button>
-                            </div>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    <Button asChild size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
+                                        <Link href="/clinic" className="flex items-center gap-3">
+                                            <ClipboardList className="h-5 w-5" />
+                                            Add Your Clinic
+                                            <ArrowRight className="h-5 w-5" />
+                                        </Link>
+                                    </Button>
+                                    <Button asChild size="lg" variant="outline" className="border-2 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5">
+                                        <Link href="/clinic" className="flex items-center gap-3">
+                                            <UserPlus className="h-5 w-5" />
+                                            Join Your Clinic
+                                            <ArrowRight className="h-5 w-5" />
+                                        </Link>
+                                    </Button>
+                                </div>
 
-                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                </svg>
-                                You can always update details later
+                                <div className="flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                    You can always update details later
+                                </div>
                             </div>
                         </div>
 
