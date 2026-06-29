@@ -246,85 +246,85 @@ export function DentalChart({ markedTeeth, onTeethChange, stagedObservations, on
 
 
   return (
-    <Card>
-      <CardHeader className="items-center">
-        <Tabs value={activeDentition} onValueChange={setActiveDentition} className="w-auto">
-          <TabsList>
-            <TabsTrigger value="permanent">Permanent Dentition</TabsTrigger>
-            <TabsTrigger value="pediatric">Pediatric (Deciduous)</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </CardHeader>
-      <CardContent className="p-2 sm:p-4">
-        {activeDentition === 'permanent' ? (
-          <div className="w-full overflow-x-auto pb-2">
-            <div className="min-w-[320px] w-full flex flex-col items-center">
-              <table className="w-full max-w-3xl">
-                <tbody>
-                  <tr className="border-b">
-                    <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
-                      <div className="flex justify-end gap-0.5 sm:gap-1">
-                        {renderToothRow(upperRight)}
-                      </div>
-                    </td>
-                    <td className="pl-1 sm:pl-2 pb-2 w-1/2">
-                      <div className="flex justify-start gap-0.5 sm:gap-1">
-                        {renderToothRow(upperLeft)}
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
-                      <div className="flex justify-end gap-0.5 sm:gap-1">
-                        {renderToothRow(lowerRight)}
-                      </div>
-                    </td>
-                    <td className="pl-1 sm:pl-2 pt-2 w-1/2">
-                      <div className="flex justify-start gap-0.5 sm:gap-1">
-                        {renderToothRow(lowerLeft)}
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          // Pediatric Chart
-          <div className="w-full overflow-x-auto pb-2">
-            <div className="min-w-[240px] w-full flex flex-col items-center">
-              <table className="w-full max-w-2xl">
-                <tbody>
-                  <tr className="border-b">
-                    <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
-                      <div className="flex justify-end gap-0.5 sm:gap-1">
-                        {renderToothRow(pediatricUpperRight)}
-                      </div>
-                    </td>
-                    <td className="pl-1 sm:pl-2 pb-2 w-1/2">
-                      <div className="flex justify-start gap-0.5 sm:gap-1">
-                        {renderToothRow(pediatricUpperLeft)}
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
-                      <div className="flex justify-end gap-0.5 sm:gap-1">
-                        {renderToothRow(pediatricLowerRight)}
-                      </div>
-                    </td>
-                    <td className="pl-1 sm:pl-2 pt-2 w-1/2">
-                      <div className="flex justify-start gap-0.5 sm:gap-1">
-                        {renderToothRow(pediatricLowerLeft)}
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </CardContent>
+    <Card className="w-full max-w-full overflow-hidden">
+      <div className="w-0 min-w-full overflow-x-auto">
+        <div style={{ minWidth: '480px' }}>
+          <CardHeader className="items-center">
+            <Tabs value={activeDentition} onValueChange={setActiveDentition} className="w-auto">
+              <TabsList>
+                <TabsTrigger value="permanent">Permanent Dentition</TabsTrigger>
+                <TabsTrigger value="pediatric">Pediatric (Deciduous)</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardHeader>
+          <CardContent className="p-2 sm:p-4">
+            {activeDentition === 'permanent' ? (
+              <div className="w-full flex flex-col items-center pb-2">
+                <table className="w-full max-w-3xl">
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
+                        <div className="flex justify-end gap-0.5 sm:gap-1">
+                          {renderToothRow(upperRight)}
+                        </div>
+                      </td>
+                      <td className="pl-1 sm:pl-2 pb-2 w-1/2">
+                        <div className="flex justify-start gap-0.5 sm:gap-1">
+                          {renderToothRow(upperLeft)}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
+                        <div className="flex justify-end gap-0.5 sm:gap-1">
+                          {renderToothRow(lowerRight)}
+                        </div>
+                      </td>
+                      <td className="pl-1 sm:pl-2 pt-2 w-1/2">
+                        <div className="flex justify-start gap-0.5 sm:gap-1">
+                          {renderToothRow(lowerLeft)}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              // Pediatric Chart
+              <div className="w-full flex flex-col items-center pb-2">
+                <table className="w-full max-w-2xl">
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
+                        <div className="flex justify-end gap-0.5 sm:gap-1">
+                          {renderToothRow(pediatricUpperRight)}
+                        </div>
+                      </td>
+                      <td className="pl-1 sm:pl-2 pb-2 w-1/2">
+                        <div className="flex justify-start gap-0.5 sm:gap-1">
+                          {renderToothRow(pediatricUpperLeft)}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
+                        <div className="flex justify-end gap-0.5 sm:gap-1">
+                          {renderToothRow(pediatricLowerRight)}
+                        </div>
+                      </td>
+                      <td className="pl-1 sm:pl-2 pt-2 w-1/2">
+                        <div className="flex justify-start gap-0.5 sm:gap-1">
+                          {renderToothRow(pediatricLowerLeft)}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </div>
+      </div>
       <CardFooter className="flex-col items-start gap-4">
         <div className="w-full">
             <div className="flex justify-between items-center">

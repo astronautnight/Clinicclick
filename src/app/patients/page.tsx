@@ -849,7 +849,7 @@ export default function PatientsPage() {
                     
                     <div className="space-y-2 pt-4">
                       <Label>Initial Dental Chart</Label>
-                      <div className="border rounded-md p-4 bg-slate-50/50 dark:bg-[#1C1C1C]">
+                      <div className="border rounded-md p-2 sm:p-4 bg-slate-50/50 dark:bg-[#1C1C1C] overflow-hidden max-w-full">
                         <DentalChart
                           markedTeeth={formData.markedTeeth || []}
                           onTeethChange={(teeth) => setFormData(prev => ({ ...prev, markedTeeth: teeth }))}
