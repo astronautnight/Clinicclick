@@ -86,22 +86,25 @@ const STATUS_BG_COLORS: Record<string, string> = {
 interface ToothProps {
   toothNumber: string;
   status: string;
+  isMissing?: boolean;
   onClick: () => void;
   onDoubleClick: () => void;
+  className?: string;
 }
 
-function Tooth({ toothNumber, status, onClick, onDoubleClick }: ToothProps) {
-  const statusClass = STATUS_COLORS[status] || "text-gray-500 dark:text-gray-400";
-  const isMissing = status === 'missing';
-
+function Tooth({ toothNumber, status, isMissing, onClick, onDoubleClick, className }: ToothProps) {
+  const statusClass = STATUS_COLORS[status] || "text-slate-200 dark:text-slate-700";
   return (
     <div
-      className="flex flex-col items-center cursor-pointer p-1 rounded-md hover:bg-muted"
+      className={cn(
+        "flex flex-col items-center justify-center p-0.5 sm:p-1 cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors",
+        className
+      )}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
-      <ToothIcon className={cn("h-8 w-8 transition-colors", statusClass, isMissing && "opacity-50")} />
-      <span className={cn("text-xs mt-1 w-6 text-center", isMissing ? 'line-through text-muted-foreground' : 'text-foreground')}>
+      <ToothIcon className={cn("h-5 w-5 sm:h-7 sm:w-7 md:h-8 md:w-8 transition-colors", statusClass, isMissing && "opacity-50")} />
+      <span className={cn("text-[9px] sm:text-[10px] md:text-xs mt-0.5 sm:mt-1 w-4 sm:w-5 md:w-6 text-center", isMissing ? 'line-through text-muted-foreground' : 'text-foreground')}>
         {toothNumber}
       </span>
     </div>
@@ -252,36 +255,72 @@ export function DentalChart({ markedTeeth, onTeethChange, stagedObservations, on
           </TabsList>
         </Tabs>
       </CardHeader>
-      <CardContent className="p-4">
+      <CardContent className="p-2 sm:p-4">
         {activeDentition === 'permanent' ? (
-          <div className="overflow-x-auto pb-2">
-            <div className="space-y-4 min-w-[680px]">
-              <div className="flex justify-center items-center gap-1 border-b pb-4">
-                  {renderToothRow(upperRight)}
-                  <div className="border-l h-16 mx-2"></div>
-                  {renderToothRow(upperLeft)}
-              </div>
-              <div className="flex justify-center items-center gap-1">
-                  {renderToothRow(lowerRight)}
-                  <div className="border-l h-16 mx-2"></div>
-                  {renderToothRow(lowerLeft)}
-              </div>
+          <div className="w-full overflow-x-auto pb-2">
+            <div className="min-w-[320px] w-full flex flex-col items-center">
+              <table className="w-full max-w-3xl">
+                <tbody>
+                  <tr className="border-b">
+                    <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
+                      <div className="flex justify-end gap-0.5 sm:gap-1">
+                        {renderToothRow(upperRight)}
+                      </div>
+                    </td>
+                    <td className="pl-1 sm:pl-2 pb-2 w-1/2">
+                      <div className="flex justify-start gap-0.5 sm:gap-1">
+                        {renderToothRow(upperLeft)}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
+                      <div className="flex justify-end gap-0.5 sm:gap-1">
+                        {renderToothRow(lowerRight)}
+                      </div>
+                    </td>
+                    <td className="pl-1 sm:pl-2 pt-2 w-1/2">
+                      <div className="flex justify-start gap-0.5 sm:gap-1">
+                        {renderToothRow(lowerLeft)}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         ) : (
           // Pediatric Chart
-          <div className="overflow-x-auto pb-2">
-            <div className="space-y-4 min-w-[500px]">
-                <div className="flex justify-center items-center gap-1 border-b pb-4">
-                    {renderToothRow(pediatricUpperRight)}
-                    <div className="border-l h-16 mx-2"></div>
-                    {renderToothRow(pediatricUpperLeft)}
-                </div>
-                <div className="flex justify-center items-center gap-1">
-                    {renderToothRow(pediatricLowerRight)}
-                    <div className="border-l h-16 mx-2"></div>
-                    {renderToothRow(pediatricLowerLeft)}
-                </div>
+          <div className="w-full overflow-x-auto pb-2">
+            <div className="min-w-[240px] w-full flex flex-col items-center">
+              <table className="w-full max-w-2xl">
+                <tbody>
+                  <tr className="border-b">
+                    <td className="border-r pr-1 sm:pr-2 pb-2 w-1/2">
+                      <div className="flex justify-end gap-0.5 sm:gap-1">
+                        {renderToothRow(pediatricUpperRight)}
+                      </div>
+                    </td>
+                    <td className="pl-1 sm:pl-2 pb-2 w-1/2">
+                      <div className="flex justify-start gap-0.5 sm:gap-1">
+                        {renderToothRow(pediatricUpperLeft)}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="border-r pr-1 sm:pr-2 pt-2 w-1/2">
+                      <div className="flex justify-end gap-0.5 sm:gap-1">
+                        {renderToothRow(pediatricLowerRight)}
+                      </div>
+                    </td>
+                    <td className="pl-1 sm:pl-2 pt-2 w-1/2">
+                      <div className="flex justify-start gap-0.5 sm:gap-1">
+                        {renderToothRow(pediatricLowerLeft)}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         )}
