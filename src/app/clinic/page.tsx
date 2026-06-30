@@ -42,7 +42,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2 } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -73,6 +73,8 @@ export default function ClinicPage() {
   const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
   const [clinicPhone, setClinicPhone] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [editingClinicName, setEditingClinicName] = useState('');
   const [editingClinicAddress, setEditingClinicAddress] = useState('');
   const [editingClinicPhone, setEditingClinicPhone] = useState('');
@@ -114,6 +116,7 @@ export default function ClinicPage() {
             setClinicAddress(data.address || '');
             setClinicPhone(data.phone || '');
             setInviteCode(data.inviteCode || '');
+            setLogoUrl(data.logoUrl || '');
         }
     }, (error) => {
         const permissionError = new FirestorePermissionError({
@@ -313,6 +316,73 @@ export default function ClinicPage() {
         toast({ title: "Error", description: error.message || "Could not update clinic name", variant: "destructive" });
     } finally {
         setIsSavingName(false);
+    }
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !clinicId) return;
+
+    // Validate size (200 KB)
+    const maxSize = 200 * 1024; // 200 KB in bytes
+    if (file.size > maxSize) {
+      toast({
+        title: "File too large",
+        description: "Clinic logo must be smaller than 200 KB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate is image
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file (PNG, JPG, SVG, etc.).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64String = reader.result as string;
+        await updateClinic(clinicId, { logoUrl: base64String });
+        toast({ title: "Logo uploaded successfully" });
+      } catch (err: any) {
+        toast({
+          title: "Upload failed",
+          description: err.message || "Could not save logo",
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploadingLogo(false);
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Read error",
+        description: "Could not read image file",
+        variant: "destructive",
+      });
+      setIsUploadingLogo(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!clinicId) return;
+    try {
+      await updateClinic(clinicId, { logoUrl: "" });
+      toast({ title: "Logo removed successfully" });
+    } catch (err: any) {
+      toast({
+        title: "Remove failed",
+        description: err.message || "Could not remove logo",
+        variant: "destructive",
+      });
     }
   };
   
@@ -521,9 +591,34 @@ export default function ClinicPage() {
             {/* Top row: Name, Icon, Active Badge, Edit, Menu */}
             <div className="flex justify-between items-start p-6 pb-5">
                 <div className="flex gap-4 items-center">
-                    {/* Placeholder Icon */}
-                    <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center shrink-0 border border-blue-100 dark:bg-[#E3F2FD] dark:border-transparent dark:text-blue-500">
-                        <Hospital className="h-8 w-8" />
+                    {/* Clinic Logo / Placeholder Icon */}
+                    <div className="relative group h-16 w-16 shrink-0">
+                      <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center border border-blue-100 overflow-hidden dark:bg-[#E3F2FD] dark:border-transparent dark:text-blue-500">
+                        {logoUrl ? (
+                          <img src={logoUrl} alt={`${clinicName} logo`} className="h-full w-full object-cover" />
+                        ) : (
+                          <Hospital className="h-8 w-8" />
+                        )}
+                      </div>
+                      {clinicRole === 'admin' && (
+                        <>
+                          <label
+                            htmlFor="logo-upload-input"
+                            className="absolute inset-0 bg-black/40 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                            title="Upload logo (max 200KB)"
+                          >
+                            <Camera className="h-5 w-5" />
+                          </label>
+                          <input
+                            id="logo-upload-input"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoChange}
+                            disabled={isUploadingLogo}
+                            className="hidden"
+                          />
+                        </>
+                      )}
                     </div>
                     <div>
                         <div className="flex items-center gap-3 mb-1">
@@ -577,15 +672,23 @@ export default function ClinicPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
                             {clinicRole === 'admin' && (
-                                <DropdownMenuItem onClick={() => {
-                                    setEditingClinicName(clinicName);
-                                    setEditingClinicAddress(clinicAddress);
-                                    setEditingClinicPhone(clinicPhone);
-                                    setIsEditingName(true);
-                                }}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit Details
-                                </DropdownMenuItem>
+                                <>
+                                    <DropdownMenuItem onClick={() => {
+                                        setEditingClinicName(clinicName);
+                                        setEditingClinicAddress(clinicAddress);
+                                        setEditingClinicPhone(clinicPhone);
+                                        setIsEditingName(true);
+                                    }}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit Details
+                                    </DropdownMenuItem>
+                                    {logoUrl && (
+                                        <DropdownMenuItem onClick={handleRemoveLogo} className="text-red-600 hover:text-red-700 dark:text-red-400">
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Remove Logo
+                                        </DropdownMenuItem>
+                                    )}
+                                </>
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>

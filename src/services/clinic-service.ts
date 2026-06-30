@@ -380,6 +380,7 @@ export async function updateClinic(
     address?: string;
     phone?: string;
     clinicType?: 'General' | 'Specialist' | 'Multi-specialty';
+    logoUrl?: string;
   }
 ): Promise<void> {
   if (!clinicId) {

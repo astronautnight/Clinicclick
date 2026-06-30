@@ -24,11 +24,12 @@ import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { signOutUser } from "@/services/auth-service";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
+import { requestNotificationPermission } from "@/services/notification-service";
 
 export default function SettingsPage() {
   const { user, clinicId, clinicLoading } = useUser();
@@ -37,6 +38,53 @@ export default function SettingsPage() {
 
   const [importing, setImporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [enablingNotifications, setEnablingNotifications] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<string>("default");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationStatus(Notification.permission);
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    if (!user || !db) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to enable notifications.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEnablingNotifications(true);
+    try {
+      const token = await requestNotificationPermission(db, user.uid);
+      if (token) {
+        setNotificationStatus("granted");
+        toast({
+          title: "Notifications Enabled",
+          description: "This device will now receive push notifications.",
+        });
+      } else {
+        setNotificationStatus(Notification.permission);
+        toast({
+          title: "Failed to Enable",
+          description: "Notification permission was not granted.",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setEnablingNotifications(false);
+    }
+  };
 
   // ============================
   //       EXPORT FUNCTION
@@ -208,6 +256,31 @@ export default function SettingsPage() {
               </p>
             </div>
             <ThemeToggle />
+          </div>
+
+          {/* PUSH NOTIFICATIONS */}
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <Label className="text-base font-medium">Push Notifications</Label>
+              <p className="text-sm text-muted-foreground">
+                {notificationStatus === "granted" 
+                  ? "Notifications are enabled on this browser." 
+                  : notificationStatus === "denied"
+                    ? "Notifications are blocked. Please enable them in browser settings."
+                    : "Receive updates, reminders, and alerts."}
+              </p>
+            </div>
+            <Button 
+              onClick={handleEnableNotifications} 
+              disabled={enablingNotifications || notificationStatus === "granted"}
+              variant={notificationStatus === "granted" ? "secondary" : "default"}
+            >
+              {enablingNotifications 
+                ? "Enabling..." 
+                : notificationStatus === "granted" 
+                  ? "Enabled" 
+                  : "Enable Notifications"}
+            </Button>
           </div>
 
           {/* DATA MANAGEMENT */}

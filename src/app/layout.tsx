@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { GeistSans } from 'geist/font/sans';
+import { Inter } from 'next/font/google';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { cn } from '@/lib/utils';
@@ -21,8 +21,12 @@ import Link from 'next/link';
 import { PwaHandler } from '@/components/layout/pwa-handler';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
+import { NotificationListener } from '@/components/NotificationListener';
 
-const geistSans = GeistSans;
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 const geistMono = GeistMono;
 
 const APP_NAME = 'Clinic@Click - Clinic Management Software for Dentists';
@@ -77,12 +81,13 @@ export default function RootLayout({
       <body
         className={cn(
           "h-full bg-background font-sans antialiased",
-          geistSans.variable,
+          inter.variable,
           geistMono.variable
         )}
       >
         <FirebaseClientProvider>
           <FirebaseErrorListener />
+          <NotificationListener />
           <PwaHandler />
 
           <SidebarProvider defaultOpen={true}>

@@ -384,9 +384,10 @@ export default function PharmacyPage() {
     const patient = patients.find(p => p.id === prescriptionToPreview.patientId);
     const doctor = doctors.find(d => d.id === prescriptionToPreview.doctorId);
     
-    let text = ``;
-    text += `${clinicProfile?.clinicName || 'Dental Clinic'}\n`;
-    text += `Dr. ${doctor?.name || ''}\n`;
+    let text = `${clinicProfile?.clinicName || 'Dental Clinic'}\n`;
+    const doctorName = doctor?.name || '';
+    const formattedDocName = doctorName.startsWith('Dr. ') ? doctorName : `Dr. ${doctorName}`;
+    text += `${formattedDocName}\n`;
     if (doctor?.specialization) text += `${doctor.specialization}\n`;
     text += `\n`;
     text += `Patient: ${patient?.firstName} ${patient?.lastName}\n`;

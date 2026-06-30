@@ -149,8 +149,13 @@ export default function DoctorsPage() {
         chosenColor = getNextAvailableColor(doctors);
       }
 
+      let finalName = formData.name.trim();
+      if (!finalName.startsWith("Dr. ")) {
+        finalName = `Dr. ${finalName}`;
+      }
+
       const payload: any = {
-        name: formData.name,
+        name: finalName,
         specialization: formData.specialization,
         registrationNumber: formData.registrationNumber || '',
         contactNumber: formData.contactNumber || '',
@@ -161,10 +166,10 @@ export default function DoctorsPage() {
 
       if (editingDoctorId) {
         await updateDoctor(clinicId, editingDoctorId, payload);
-        toast({ title: "Doctor Updated", description: `${formData.name} has been updated.` });
+        toast({ title: "Doctor Updated", description: `${finalName} has been updated.` });
       } else {
         await addDoctor(clinicId, payload);
-        toast({ title: "Doctor Added", description: `${formData.name} has been added.` });
+        toast({ title: "Doctor Added", description: `${finalName} has been added.` });
       }
 
       setFormData(initialDoctorData);
@@ -199,8 +204,12 @@ export default function DoctorsPage() {
 
   const openEditForm = (doctor: Doctor) => {
     setEditingDoctorId(doctor.id);
+    let displayNameWithoutDr = doctor.name || '';
+    if (displayNameWithoutDr.startsWith("Dr. ")) {
+      displayNameWithoutDr = displayNameWithoutDr.substring(4);
+    }
     setFormData({
-      name: doctor.name,
+      name: displayNameWithoutDr,
       specialization: doctor.specialization,
       registrationNumber: doctor.registrationNumber || '',
       contactNumber: doctor.contactNumber || '',
@@ -334,7 +343,10 @@ export default function DoctorsPage() {
               <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div>
                   <Label htmlFor="name">Doctor Name</Label>
-                  <Input id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="e.g., Dr. Jane Doe" required disabled={isSubmitting} />
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm font-semibold text-muted-foreground bg-muted px-3 py-2 border rounded-md select-none shrink-0">Dr.</span>
+                    <Input id="name" name="name" value={formData.name} onChange={handleInputChange} placeholder="Jane Doe" required disabled={isSubmitting} />
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="specialization">Specialization</Label>
