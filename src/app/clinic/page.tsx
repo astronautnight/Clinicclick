@@ -615,7 +615,7 @@ export default function ClinicPage() {
                             accept="image/*"
                             onChange={handleLogoChange}
                             disabled={isUploadingLogo}
-                            className="hidden"
+                            className="sr-only"
                           />
                         </>
                       )}
