@@ -70,8 +70,30 @@ export function NotificationListener() {
 
   // 3. Auto-refresh FCM push token or request permission if user logged in and notifications enabled
   useEffect(() => {
-    if (user && db && typeof window !== 'undefined' && 'Notification' in window) {
-      if ((Notification.permission === 'granted' || Notification.permission === 'default') && notificationsEnabled) {
+    if (!user || !db || !notificationsEnabled || typeof window === 'undefined') return;
+
+    let isNative = false;
+    try {
+      const { isNativePlatform } = require('@/lib/capacitor-plugins');
+      isNative = isNativePlatform();
+    } catch (e) {}
+
+    if (isNative) {
+      const checkNativePerms = async () => {
+        try {
+          const { getPushNotifications } = require('@/lib/capacitor-plugins');
+          const PushNotifications = getPushNotifications();
+          if (PushNotifications) {
+            const status = await PushNotifications.checkPermissions();
+            if (status.receive === 'granted') {
+              requestNotificationPermission(db, user.uid);
+            }
+          }
+        } catch (e) {}
+      };
+      checkNativePerms();
+    } else {
+      if ('Notification' in window && (Notification.permission === 'granted' || Notification.permission === 'default')) {
         requestNotificationPermission(db, user.uid);
       }
     }

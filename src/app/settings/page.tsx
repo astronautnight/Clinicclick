@@ -24,14 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { signOutUser } from "@/services/auth-service";
 import { errorEmitter } from "@/firebase/error-emitter";
-import { FirestorePermissionError } from "@/firebase/errors";
 import { requestNotificationPermission } from "@/services/notification-service";
+import { isNativePlatform, getPushNotifications } from "@/lib/capacitor-plugins";
 
 export default function SettingsPage() {
   const { user, clinicId, clinicLoading } = useUser();
@@ -56,8 +55,17 @@ export default function SettingsPage() {
   }, [db, user]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setNotificationStatus(Notification.permission);
+    if (isNativePlatform()) {
+      const PushNotifications = getPushNotifications();
+      if (PushNotifications) {
+        PushNotifications.checkPermissions().then((status: any) => {
+          setNotificationStatus(status.receive === 'granted' ? 'granted' : 'default');
+        }).catch(() => setNotificationStatus('denied'));
+      }
+    } else {
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setNotificationStatus(Notification.permission);
+      }
     }
   }, []);
 
@@ -81,7 +89,15 @@ export default function SettingsPage() {
           description: "This device will now receive push notifications.",
         });
       } else {
-        setNotificationStatus(typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : "denied");
+        if (isNativePlatform()) {
+          const PushNotifications = getPushNotifications();
+          if (PushNotifications) {
+             const status = await PushNotifications.checkPermissions();
+             setNotificationStatus(status.receive === 'granted' ? 'granted' : 'denied');
+          }
+        } else {
+          setNotificationStatus(typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : "denied");
+        }
         toast({
           title: "Failed to Enable",
           description: "Notification permission was not granted.",
