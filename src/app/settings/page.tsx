@@ -81,7 +81,7 @@ export default function SettingsPage() {
           description: "This device will now receive push notifications.",
         });
       } else {
-        setNotificationStatus(Notification.permission);
+        setNotificationStatus(typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : "denied");
         toast({
           title: "Failed to Enable",
           description: "Notification permission was not granted.",

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
-import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2, User, Stethoscope, Clipboard, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, getDaysInMonth } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
@@ -88,6 +88,7 @@ export default function AcademicsPage() {
     const [caseFormData, setCaseFormData] = useState(initialCaseHistoryData);
     const [editingCaseHistoryId, setEditingCaseHistoryId] = useState<string | null>(null);
     const [caseHistoryToDelete, setCaseHistoryToDelete] = useState<StudentCaseHistory | null>(null);
+    const [isChartExpanded, setIsChartExpanded] = useState(false);
 
 
     const [isAttendanceFormOpen, setIsAttendanceFormOpen] = useState(false);
@@ -133,6 +134,7 @@ export default function AcademicsPage() {
     }, [user?.uid, db]);
     
     const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
+        setIsChartExpanded(false);
         if (caseHistory) {
             setEditingCaseHistoryId(caseHistory.id);
             setCaseFormData({
@@ -368,51 +370,102 @@ export default function AcademicsPage() {
                         <DialogTrigger asChild><Button onClick={() => handleOpenCaseForm(null)}><PlusCircle className="mr-2 h-4 w-4" /> Add Case History</Button></DialogTrigger>
                         <DialogContent className="sm:max-w-5xl">
                             <DialogHeader><DialogTitle>{editingCaseHistoryId ? 'Edit Case History' : 'Add New Case History'}</DialogTitle></DialogHeader>
-                            <form onSubmit={handleCaseHistorySubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-4">
-                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="space-y-2"><Label>Patient Name *</Label><Input value={caseFormData.patientName} onChange={e => setCaseFormData({...caseFormData, patientName: e.target.value})} required/></div>
-                                    <div className="space-y-2"><Label>Patient Age</Label><Input type="number" value={caseFormData.patientAge} onChange={e => setCaseFormData({...caseFormData, patientAge: e.target.value})}/></div>
-                                    <div className="space-y-2"><Label>Patient Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                            <form onSubmit={handleCaseHistorySubmit} className="space-y-6 max-h-[80vh] overflow-y-auto px-1 py-2 pr-4">
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">All records are private to you.</p>
                                 </div>
-                               <div className="space-y-2">
-                                   <div className="flex justify-between items-center">
-                                       <Label>Department</Label>
-                                       <Button type="button" variant="outline" size="sm" onClick={() => openAddDeptDialog('case')} title="Add Department">
-                                           <PlusCircle className="mr-2 h-4 w-4" />
-                                           Add
-                                       </Button>
-                                   </div>
-                                   <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
-                                       <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
-                                       <SelectContent>
-                                           {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                           {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                       </SelectContent>
-                                   </Select>
-                               </div>
-                               <div className="space-y-2"><Label>Chief Complaint</Label><Textarea value={caseFormData.chiefComplaint} onChange={e => setCaseFormData({...caseFormData, chiefComplaint: e.target.value})}/></div>
-                               <div className="space-y-2"><Label>Medical History</Label><Textarea value={caseFormData.medicalHistory} onChange={e => setCaseFormData(prev => ({...prev, medicalHistory: e.target.value}))} /></div>
-                               <div className="space-y-2"><Label>Dental History</Label><Textarea value={caseFormData.dentalHistory} onChange={e => setCaseFormData(prev => ({...prev, dentalHistory: e.target.value}))} /></div>
-                               <div className="space-y-2"><Label>Examination Findings</Label><Textarea value={caseFormData.examinationFindings} onChange={e => setCaseFormData({...caseFormData, examinationFindings: e.target.value})}/></div>
-                               
-                               <div className="space-y-2">
-                                   <Label>Dental Chart &amp; Observations</Label>
-                                   <div className="p-2 border rounded-md">
-                                       <DentalChart 
-                                            markedTeeth={caseFormData.markedTeeth}
-                                            onTeethChange={(teeth) => setCaseFormData(prev => ({ ...prev, markedTeeth: teeth }))}
-                                            stagedObservations={caseFormData.stagedObservations}
-                                            onObservationsChange={(observations) => setCaseFormData(prev => ({...prev, stagedObservations: observations}))}
-                                       />
-                                   </div>
-                               </div>
-                               
-                               <div className="space-y-2"><Label>Diagnosis *</Label><Textarea value={caseFormData.diagnosis} onChange={e => setCaseFormData({...caseFormData, diagnosis: e.target.value})} required/></div>
-                               <div className="space-y-2"><Label>Treatment Plan</Label><Textarea value={caseFormData.treatmentPlan} onChange={e => setCaseFormData({...caseFormData, treatmentPlan: e.target.value})}/></div>
 
-                                <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background">
+                                {/* Patient info */}
+                                <div className="border rounded-xl bg-card overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b font-medium text-sm">
+                                        <User className="h-4 w-4 text-primary" />
+                                        Patient info
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div className="md:col-span-2 space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Patient Name *</Label><Input value={caseFormData.patientName} onChange={e => setCaseFormData({...caseFormData, patientName: e.target.value})} required/></div>
+                                            <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Age</Label><Input type="number" value={caseFormData.patientAge} onChange={e => setCaseFormData({...caseFormData, patientAge: e.target.value})}/></div>
+                                            <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Gender</Label><Select value={caseFormData.patientGender} onValueChange={(val) => setCaseFormData({...caseFormData, patientGender: val as any})}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-xs text-muted-foreground font-semibold uppercase">Department</Label>
+                                                <button type="button" className="text-xs text-primary hover:underline" onClick={() => openAddDeptDialog('case')}>+ Add Department</button>
+                                            </div>
+                                            <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
+                                                <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                                <SelectContent>
+                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Clinical history */}
+                                <div className="border rounded-xl bg-card overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b font-medium text-sm">
+                                        <FileText className="h-4 w-4 text-primary" />
+                                        Clinical history
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Chief Complaint</Label><Textarea placeholder="Patient's primary concern in their own words..." value={caseFormData.chiefComplaint} onChange={e => setCaseFormData({...caseFormData, chiefComplaint: e.target.value})} className="min-h-[80px]" /></div>
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Medical History</Label><Textarea placeholder="Systemic conditions, medications, allergies..." value={caseFormData.medicalHistory} onChange={e => setCaseFormData(prev => ({...prev, medicalHistory: e.target.value}))} className="min-h-[80px]" /></div>
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Dental History</Label><Textarea placeholder="Previous treatments, extractions, habits..." value={caseFormData.dentalHistory} onChange={e => setCaseFormData(prev => ({...prev, dentalHistory: e.target.value}))} className="min-h-[80px]" /></div>
+                                    </div>
+                                </div>
+
+                                {/* Examination and findings */}
+                                <div className="border rounded-xl bg-card overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b font-medium text-sm">
+                                        <Stethoscope className="h-4 w-4 text-primary" />
+                                        Examination and findings
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Examination Findings</Label><Textarea placeholder="Extraoral, intraoral, soft tissue observations..." value={caseFormData.examinationFindings} onChange={e => setCaseFormData({...caseFormData, examinationFindings: e.target.value})} className="min-h-[80px]"/></div>
+                                        
+                                        <div className="border rounded-lg p-3 flex flex-col gap-3">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <h4 className="text-sm font-semibold">Dental chart</h4>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {caseFormData.markedTeeth.length === 0 ? "No teeth marked yet" : `${caseFormData.markedTeeth.length} teeth marked`}
+                                                    </p>
+                                                </div>
+                                                <Button type="button" variant="outline" size="sm" onClick={() => setIsChartExpanded(!isChartExpanded)}>
+                                                    {isChartExpanded ? 'Close chart' : 'Open chart'}
+                                                </Button>
+                                            </div>
+                                            {isChartExpanded && (
+                                                <div className="pt-2 border-t mt-1">
+                                                    <DentalChart 
+                                                        markedTeeth={caseFormData.markedTeeth}
+                                                        onTeethChange={(teeth) => setCaseFormData(prev => ({ ...prev, markedTeeth: teeth }))}
+                                                        stagedObservations={caseFormData.stagedObservations}
+                                                        onObservationsChange={(observations) => setCaseFormData(prev => ({...prev, stagedObservations: observations}))}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Diagnosis and plan */}
+                                <div className="border rounded-xl bg-card overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b font-medium text-sm">
+                                        <Clipboard className="h-4 w-4 text-primary" />
+                                        Diagnosis and plan
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Diagnosis *</Label><Textarea placeholder="Clinical diagnosis based on history and examination..." value={caseFormData.diagnosis} onChange={e => setCaseFormData({...caseFormData, diagnosis: e.target.value})} required className="min-h-[80px]" /></div>
+                                        <div className="space-y-1.5"><Label className="text-xs text-muted-foreground font-semibold uppercase">Treatment Plan</Label><Textarea placeholder="Proposed sequence of treatment..." value={caseFormData.treatmentPlan} onChange={e => setCaseFormData({...caseFormData, treatmentPlan: e.target.value})} className="min-h-[80px]"/></div>
+                                    </div>
+                                </div>
+
+                                <DialogFooter className="pt-6 mt-2">
                                     <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                                    <Button type="submit">{editingCaseHistoryId ? 'Save Changes' : 'Save Case'}</Button>
+                                    <Button type="submit">{editingCaseHistoryId ? 'Save Changes' : 'Save case history'}</Button>
                                 </DialogFooter>
                             </form>
                         </DialogContent>

@@ -20,6 +20,9 @@ export async function getMessagingInstance() {
  */
 export async function requestNotificationPermission(db: any, userId: string): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+  if (!('Notification' in window)) {
+    throw new Error('Push notifications are not supported on this device/browser.');
+  }
 
   try {
     const permission = await Notification.requestPermission();
