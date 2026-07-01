@@ -8,6 +8,8 @@ import {
   doc,
   deleteDoc,
   setDoc,
+  onSnapshot,
+  updateDoc,
 } from "firebase/firestore";
 
 import {
@@ -40,6 +42,18 @@ export default function SettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [enablingNotifications, setEnablingNotifications] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<string>("default");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // Sync notificationsEnabled in real-time
+  useEffect(() => {
+    if (!db || !user) return;
+    const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+      if (snap.exists()) {
+        setNotificationsEnabled(snap.data().notificationsEnabled !== false);
+      }
+    });
+    return () => unsub();
+  }, [db, user]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -262,25 +276,39 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between p-4 border rounded-lg">
             <div>
               <Label className="text-base font-medium">Push Notifications</Label>
-              <p className="text-sm text-muted-foreground">
-                {notificationStatus === "granted" 
-                  ? "Notifications are enabled on this browser." 
-                  : notificationStatus === "denied"
-                    ? "Notifications are blocked. Please enable them in browser settings."
-                    : "Receive updates, reminders, and alerts."}
+              <p className="text-sm text-muted-foreground font-normal">
+                {notificationStatus === "denied"
+                  ? "Notifications are blocked by your browser settings. Please allow them to receive updates."
+                  : !notificationsEnabled
+                    ? "Notifications are muted. You won't receive push alerts."
+                    : "Receive updates, reminders, and alerts on this account."}
               </p>
             </div>
-            <Button 
-              onClick={handleEnableNotifications} 
-              disabled={enablingNotifications || notificationStatus === "granted"}
-              variant={notificationStatus === "granted" ? "secondary" : "default"}
-            >
-              {enablingNotifications 
-                ? "Enabling..." 
-                : notificationStatus === "granted" 
-                  ? "Enabled" 
-                  : "Enable Notifications"}
-            </Button>
+            <div className="flex items-center gap-4">
+              {notificationStatus !== "granted" ? (
+                <Button 
+                  onClick={handleEnableNotifications} 
+                  disabled={enablingNotifications}
+                  size="sm"
+                >
+                  {enablingNotifications ? "Enabling..." : "Enable Notifications"}
+                </Button>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="settings-mute-switch" className="text-sm text-muted-foreground font-medium select-none">Mute</Label>
+                  <Switch 
+                    id="settings-mute-switch"
+                    checked={!notificationsEnabled}
+                    onCheckedChange={async (checked) => {
+                      if (!db || !user) return;
+                      await updateDoc(doc(db, "users", user.uid), {
+                        notificationsEnabled: !checked
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* DATA MANAGEMENT */}

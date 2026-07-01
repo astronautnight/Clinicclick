@@ -4,6 +4,7 @@ import Link from "next/link";
 import { UserCircle } from "lucide-react";
 import { LogoCC } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ export function Header() {
 
         <div className="flex items-center space-x-2">
           <ThemeToggle />
+          {user && <NotificationBell />}
           {user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
