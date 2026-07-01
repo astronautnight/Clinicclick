@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { 
   collection, 
@@ -10,7 +11,9 @@ import {
   limit, 
   onSnapshot, 
   updateDoc, 
-  writeBatch 
+  writeBatch,
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { 
   Popover, 
@@ -21,13 +24,23 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { 
   Bell, 
   BellOff, 
   CalendarDays, 
   UserPlus, 
   Check,
-  CheckCheck
+  CheckCheck,
+  HelpCircle
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -37,16 +50,22 @@ interface AppNotification {
   body: string;
   createdAt: any;
   read: boolean;
-  type: 'appointment' | 'join_request';
+  type: 'appointment' | 'join_request' | 'survey_source';
 }
 
 export function NotificationBell() {
+  const router = useRouter();
   const { user } = useUser();
   const db = useFirestore();
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Survey Modal State
+  const [isSurveyOpen, setIsSurveyOpen] = useState(false);
+  const [surveyNotifId, setSurveyNotifId] = useState<string | null>(null);
+  const [surveyResponse, setSurveyResponse] = useState<string>('');
 
   // 1. Subscribe to notifications preference & list
   useEffect(() => {
@@ -137,8 +156,50 @@ export function NotificationBell() {
     }
   };
 
+  // 5. Handle click on a single notification
+  const handleNotificationClick = async (n: AppNotification) => {
+    if (n.type === 'survey_source') {
+      setSurveyNotifId(n.id);
+      setIsSurveyOpen(true);
+    } else if (n.type === 'join_request') {
+      if (!n.read) await handleMarkRead(n.id);
+      router.push('/clinic');
+    } else {
+      if (!n.read) await handleMarkRead(n.id);
+    }
+  };
+
+  // 6. Submit survey response
+  const handleSurveySubmit = async () => {
+    if (!db || !user || !surveyResponse || !surveyNotifId) return;
+    try {
+      await handleMarkRead(surveyNotifId);
+      
+      // Save to global responses collection
+      await addDoc(collection(db, 'survey_responses'), {
+        uid: user.uid,
+        email: user.email,
+        source: surveyResponse,
+        createdAt: serverTimestamp()
+      });
+
+      // Save to user profile
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        heardAboutAppFrom: surveyResponse
+      });
+
+      setIsSurveyOpen(false);
+      setSurveyNotifId(null);
+    } catch (error) {
+      console.error('Failed to submit survey:', error);
+    }
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'survey_source':
+        return <HelpCircle className="h-4 w-4 text-emerald-500" />;
       case 'join_request':
         return <UserPlus className="h-4 w-4 text-blue-500" />;
       case 'appointment':
@@ -199,7 +260,7 @@ export function NotificationBell() {
               {notifications.map((n) => (
                 <div 
                   key={n.id}
-                  onClick={() => !n.read && handleMarkRead(n.id)}
+                  onClick={() => handleNotificationClick(n)}
                   className={`flex gap-3 p-3 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#3A3A3A] cursor-pointer ${
                     !n.read ? 'bg-slate-50/50 dark:bg-[#323232]' : ''
                   }`}
@@ -250,6 +311,46 @@ export function NotificationBell() {
           </div>
         )}
       </PopoverContent>
+
+      <Dialog open={isSurveyOpen} onOpenChange={setIsSurveyOpen}>
+        <DialogContent className="sm:max-w-[425px] dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
+          <DialogHeader>
+            <DialogTitle>Welcome to ClinicClick!</DialogTitle>
+            <DialogDescription>
+              We'd love to know, where did you hear about us?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <RadioGroup value={surveyResponse} onValueChange={setSurveyResponse} className="flex flex-col gap-3">
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Instagram" id="r1" />
+                <Label htmlFor="r1">Instagram</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Google Search" id="r2" />
+                <Label htmlFor="r2">Google Search</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Chatgpt or Ai" id="r3" />
+                <Label htmlFor="r3">Chatgpt or Ai</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Youtube" id="r4" />
+                <Label htmlFor="r4">Youtube</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="Others" id="r5" />
+                <Label htmlFor="r5">Others</Label>
+              </div>
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleSurveySubmit} disabled={!surveyResponse}>
+              Submit Response
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Popover>
   );
 }

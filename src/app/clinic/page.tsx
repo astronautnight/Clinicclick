@@ -698,7 +698,7 @@ export default function ClinicPage() {
             {/* Middle row: Invite code and Requests */}
             <div className="flex flex-col md:flex-row border-t border-slate-200 dark:border-[#4A4A4A]">
                 <div className="flex-1 p-6 md:border-r border-slate-200 dark:border-[#4A4A4A]">
-                    <Label className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-[#A0A0A0] uppercase mb-3 block">Invite code — Share with doctors to join</Label>
+                    <Label className="text-[11px] font-bold tracking-widest uppercase mb-3 block" style={{ backgroundImage: 'linear-gradient(to right, #ef4444, #3b82f6, #10b981, #eab308)', WebkitBackgroundClip: 'text', color: 'transparent' }}>Invite code - Share with your associate dentists and team to let them join.</Label>
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="h-9 px-4 flex items-center justify-center font-mono text-sm font-bold tracking-widest border border-slate-200 dark:border-transparent rounded-md bg-slate-50 dark:bg-[#1A1A1A] text-slate-900 dark:text-white">{inviteCode}</div>
                         <Button

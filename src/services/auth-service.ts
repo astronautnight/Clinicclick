@@ -64,6 +64,16 @@ async function ensureUserProfile(user: User): Promise<void> {
       updatedAt: serverTimestamp(),
     };
     await setDoc(ref, payload);
+
+    // Create a welcome survey notification for the new user
+    const notifRef = doc(collection(db, 'users', user.uid, 'notifications'));
+    await setDoc(notifRef, {
+      type: 'survey_source',
+      title: 'Welcome! How did you hear about us?',
+      body: 'Tap here to let us know where you heard about ClinicClick.',
+      createdAt: serverTimestamp(),
+      read: false,
+    });
   }
 }
 
