@@ -178,6 +178,7 @@ function toast({ ...props }: Toast) {
               title: titleStr,
               body: bodyStr,
               id: Math.floor(Math.random() * 1000000),
+              channelId: 'default-channel',
             }
           ]
         }).catch((err: any) => {

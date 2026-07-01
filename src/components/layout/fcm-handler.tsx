@@ -122,6 +122,19 @@ export function FcmHandler() {
 
     const requestPermissionAndRegister = async () => {
       try {
+        // Create default notification channel for Android (required for Android 8.0+)
+        if (LocalNotifications) {
+          await LocalNotifications.createChannel({
+            id: 'default-channel',
+            name: 'Default Alerts',
+            description: 'Default notification channel for app alerts',
+            importance: 5, // High importance (shows heads-up/banners)
+            visibility: 1, // Public visibility
+            sound: 'default'
+          });
+          console.log('FCM: Created/verified default notification channel');
+        }
+
         // 4. Permission request started
         console.log('FCM: Permission request started');
         let permStatus = await PushNotifications.checkPermissions();
