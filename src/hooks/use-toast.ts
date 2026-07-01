@@ -167,27 +167,41 @@ function toast({ ...props }: Toast) {
   // Schedule a native Android notification if inside Capacitor WebView
   try {
     const cap = (window as any).Capacitor;
-    if (cap?.isNativePlatform?.()) {
+    const isNative = cap?.isNativePlatform?.() ?? false;
+    console.log('TOAST-NATIVE: isNativePlatform =', isNative);
+
+    if (isNative) {
       const LocalNotifications = cap.Plugins?.LocalNotifications;
+      console.log('TOAST-NATIVE: LocalNotifications plugin available =', !!LocalNotifications);
+      console.log('TOAST-NATIVE: Available plugins =', Object.keys(cap.Plugins || {}));
+
       if (LocalNotifications) {
         const titleStr = typeof props.title === 'string' ? props.title : 'Notification';
         const bodyStr = typeof props.description === 'string' ? props.description : '';
+        const notifId = Math.floor(Math.random() * 1000000);
+
+        console.log('TOAST-NATIVE: Scheduling notification:', { title: titleStr, body: bodyStr, id: notifId, channelId: 'default-channel' });
+
         LocalNotifications.schedule({
           notifications: [
             {
               title: titleStr,
               body: bodyStr,
-              id: Math.floor(Math.random() * 1000000),
+              id: notifId,
               channelId: 'default-channel',
             }
           ]
+        }).then((result: any) => {
+          console.log('TOAST-NATIVE: Notification scheduled successfully:', result);
         }).catch((err: any) => {
-          console.error("FCM: Failed to schedule local notification:", err);
+          console.error("TOAST-NATIVE: Failed to schedule local notification:", err);
         });
+      } else {
+        console.warn('TOAST-NATIVE: LocalNotifications plugin is NOT available. Did you rebuild the Android APK?');
       }
     }
-  } catch (_) {
-    // Ignore errors on non-native platforms
+  } catch (e) {
+    console.error('TOAST-NATIVE: Exception during notification scheduling:', e);
   }
 
   return {
