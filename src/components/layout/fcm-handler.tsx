@@ -4,14 +4,12 @@ import { useEffect } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useUser, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import {
+  isNativePlatform,
+  getPushNotifications,
+  getLocalNotifications,
+} from '@/lib/capacitor-plugins';
 
-/**
- * FcmHandler — registers for push notifications on the native Android app.
- *
- * Because this web app is loaded inside a Capacitor WebView (via server.url),
- * the Capacitor bridge is injected at runtime. We access it through `window.Capacitor`
- * rather than npm imports.
- */
 export function FcmHandler() {
   const { user } = useUser();
   const db = useFirestore();
@@ -21,9 +19,7 @@ export function FcmHandler() {
     // 1. FCM initialization started
     console.log('FCM: FCM initialization started');
 
-    const cap = (window as any).Capacitor;
-    const isNative = cap?.isNativePlatform?.() ?? false;
-
+    const isNative = isNativePlatform();
     // 2. Is native platform result
     console.log('FCM: Is native platform result:', isNative);
 
@@ -31,9 +27,9 @@ export function FcmHandler() {
       return;
     }
 
-    const PushNotifications = cap.Plugins?.PushNotifications;
+    const PushNotifications = getPushNotifications();
     if (!PushNotifications) {
-      console.error('FCM: PushNotifications plugin not available on bridge.');
+      console.error('FCM: PushNotifications plugin not available.');
       return;
     }
 
@@ -98,22 +94,15 @@ export function FcmHandler() {
 
   // Register for push notifications & request permissions
   useEffect(() => {
-    const cap = (window as any).Capacitor;
-    const isNative = cap?.isNativePlatform?.() ?? false;
+    const isNative = isNativePlatform();
+    if (!isNative) return;
 
-    if (!isNative) {
-      return;
-    }
+    if (!user) return;
+    // 3. User detected
+    console.log('FCM: User detected:', user.uid);
 
-    if (user) {
-      // 3. User detected
-      console.log('FCM: User detected:', user.uid);
-    } else {
-      return;
-    }
-
-    const PushNotifications = cap.Plugins?.PushNotifications;
-    const LocalNotifications = cap.Plugins?.LocalNotifications;
+    const PushNotifications = getPushNotifications();
+    const LocalNotifications = getLocalNotifications();
 
     if (!PushNotifications) {
       console.error('FCM: PushNotifications plugin not available.');
@@ -124,15 +113,21 @@ export function FcmHandler() {
       try {
         // Create default notification channel for Android (required for Android 8.0+)
         if (LocalNotifications) {
-          await LocalNotifications.createChannel({
-            id: 'default-channel',
-            name: 'Default Alerts',
-            description: 'Default notification channel for app alerts',
-            importance: 5, // High importance (shows heads-up/banners)
-            visibility: 1, // Public visibility
-            sound: 'default'
-          });
-          console.log('FCM: Created/verified default notification channel');
+          try {
+            await LocalNotifications.createChannel({
+              id: 'default-channel',
+              name: 'Default Alerts',
+              description: 'Default notification channel for app alerts',
+              importance: 5,
+              visibility: 1,
+              sound: 'default',
+            });
+            console.log('FCM: Created/verified default notification channel');
+          } catch (channelErr) {
+            console.error('FCM: Error creating notification channel:', channelErr);
+          }
+        } else {
+          console.warn('FCM: LocalNotifications plugin not available — cannot create channel');
         }
 
         // 4. Permission request started
@@ -147,11 +142,15 @@ export function FcmHandler() {
 
         // Also request local notification permission
         if (LocalNotifications) {
-          let localPerm = await LocalNotifications.checkPermissions();
-          if (localPerm.display === 'prompt') {
-            localPerm = await LocalNotifications.requestPermissions();
+          try {
+            let localPerm = await LocalNotifications.checkPermissions();
+            if (localPerm.display === 'prompt') {
+              localPerm = await LocalNotifications.requestPermissions();
+            }
+            console.log('FCM: Local notification permission result:', localPerm.display);
+          } catch (localErr) {
+            console.error('FCM: Error requesting local notification permissions:', localErr);
           }
-          console.log('FCM: Local notification permission result:', localPerm.display);
         }
 
         if (permStatus.receive === 'granted') {

@@ -3,19 +3,17 @@
 import React, { useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
+import { isAndroid as checkIsAndroid, getAppUpdate } from '@/lib/capacitor-plugins';
 
 export function AppUpdateHandler() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const cap = (window as any).Capacitor;
-    const isAndroid = cap?.getPlatform() === 'android';
-
-    if (!isAndroid) {
+    if (!checkIsAndroid()) {
       return;
     }
 
-    const AppUpdate = cap.Plugins?.AppUpdate;
+    const AppUpdate = getAppUpdate();
     if (!AppUpdate) {
       console.error('AppUpdate: Plugin is not available on Android.');
       return;

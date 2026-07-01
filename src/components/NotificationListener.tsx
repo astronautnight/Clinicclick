@@ -95,63 +95,126 @@ export function NotificationListener() {
     return () => unsubAppts();
   }, [db, user, clinicId, notificationsEnabled]);
 
-  // 5. Periodic Checker: Upcoming appointment in 15 minutes reminder trigger
+  // 5. Periodic Checker (Web UI) and Native Pre-scheduler
   useEffect(() => {
     if (!db || !user || !notificationsEnabled || activeAppts.length === 0) return;
 
-    const checkAppts = async () => {
-      const now = new Date();
-      const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60 * 1000);
+    let isNative = false;
+    try {
+      const { isNativePlatform } = require('@/lib/capacitor-plugins');
+      isNative = isNativePlatform();
+    } catch (e) {}
 
-      for (const appt of activeAppts) {
-        if (!appt.date || !appt.startTime || appt.status === 'Cancelled' || appt.status === 'Completed') continue;
-
+    // A: Native Android Pre-scheduling (Runs once when activeAppts changes)
+    if (isNative) {
+      const scheduleNativeAppts = async () => {
         try {
-          const [year, month, day] = appt.date.split('-').map(Number);
-          const [hours, minutes] = appt.startTime.split(':').map(Number);
-          const apptTime = new Date(year, month - 1, day, hours, minutes);
+          const { getLocalNotifications } = require('@/lib/capacitor-plugins');
+          const LocalNotifications = getLocalNotifications();
+          if (!LocalNotifications) return;
 
-          const tenMinsAgo = new Date(now.getTime() - 10 * 60 * 1000);
-          
-          // Trigger notification if appointment starts between 10 minutes ago and 15 minutes from now
-          if (apptTime >= tenMinsAgo && apptTime <= fifteenMinsFromNow) {
-            const notifId = `appointment_reminder_${appt.id}`;
-            const notifRef = doc(db, 'users', user.uid, 'notifications', notifId);
-            
-            const notifSnap = await getDoc(notifRef);
-            if (!notifSnap.exists()) {
-              await setDoc(notifRef, {
-                id: notifId,
-                title: "Upcoming Appointment",
-                body: `You have an appointment with ${appt.patientName || 'a patient'} at ${appt.startTime}.`,
-                createdAt: serverTimestamp(),
-                read: false,
-                type: 'appointment'
-              });
+          const now = new Date();
+          const scheduledNotifications: any[] = [];
 
-              toast({
-                title: "Upcoming Appointment",
-                description: `Appointment at ${appt.startTime} starting soon.`,
-              });
+          for (const appt of activeAppts) {
+            if (!appt.date || !appt.startTime || appt.status === 'Cancelled' || appt.status === 'Completed') continue;
 
-              if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification("Upcoming Appointment", {
+            try {
+              const [year, month, day] = appt.date.split('-').map(Number);
+              const [hours, minutes] = appt.startTime.split(':').map(Number);
+              const apptTime = new Date(year, month - 1, day, hours, minutes);
+
+              const reminderTime = new Date(apptTime.getTime() - 15 * 60 * 1000);
+
+              // Only schedule if the reminder time is in the future
+              if (reminderTime > now) {
+                // Generate a numeric ID from the appointment ID
+                let numericId = 0;
+                for (let i = 0; i < appt.id.length; i++) {
+                  numericId = (numericId << 5) - numericId + appt.id.charCodeAt(i);
+                  numericId |= 0;
+                }
+                numericId = Math.abs(numericId);
+
+                scheduledNotifications.push({
+                  id: numericId,
+                  title: "Upcoming Appointment",
                   body: `Appointment at ${appt.startTime} starting soon.`,
+                  schedule: { at: reminderTime },
+                  channelId: 'default-channel',
                 });
               }
+            } catch (e) {
+              console.error("Error calculating appointment time:", e);
             }
           }
-        } catch (e) {
-          console.error("Error processing appointment time trigger:", e);
+
+          if (scheduledNotifications.length > 0) {
+            await LocalNotifications.schedule({ notifications: scheduledNotifications });
+            console.log(`Pre-scheduled ${scheduledNotifications.length} appointment reminders.`);
+          }
+        } catch (error) {
+          console.error("Error scheduling local notifications:", error);
         }
-      }
-    };
+      };
+      
+      scheduleNativeAppts();
+    }
 
-    // Run check initially
-    checkAppts();
+    // B: Web UI Interval Checker (Only runs on web to avoid duplicate native notifications)
+    if (!isNative) {
+      const checkAppts = async () => {
+        const now = new Date();
+        const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60 * 1000);
 
-    const intervalId = setInterval(checkAppts, 30000); // Check every 30 seconds
-    return () => clearInterval(intervalId);
+        for (const appt of activeAppts) {
+          if (!appt.date || !appt.startTime || appt.status === 'Cancelled' || appt.status === 'Completed') continue;
+
+          try {
+            const [year, month, day] = appt.date.split('-').map(Number);
+            const [hours, minutes] = appt.startTime.split(':').map(Number);
+            const apptTime = new Date(year, month - 1, day, hours, minutes);
+
+            const tenMinsAgo = new Date(now.getTime() - 10 * 60 * 1000);
+            
+            // Trigger notification if appointment starts between 10 minutes ago and 15 minutes from now
+            if (apptTime >= tenMinsAgo && apptTime <= fifteenMinsFromNow) {
+              const notifId = `appointment_reminder_${appt.id}`;
+              const notifRef = doc(db, 'users', user.uid, 'notifications', notifId);
+              
+              const notifSnap = await getDoc(notifRef);
+              if (!notifSnap.exists()) {
+                await setDoc(notifRef, {
+                  id: notifId,
+                  title: "Upcoming Appointment",
+                  body: `You have an appointment with ${appt.patientName || 'a patient'} at ${appt.startTime}.`,
+                  createdAt: serverTimestamp(),
+                  read: false,
+                  type: 'appointment'
+                });
+
+                toast({
+                  title: "Upcoming Appointment",
+                  description: `Appointment at ${appt.startTime} starting soon.`,
+                });
+
+                if ('Notification' in window && Notification.permission === 'granted') {
+                  new Notification("Upcoming Appointment", {
+                    body: `Appointment at ${appt.startTime} starting soon.`,
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error processing appointment time trigger:", e);
+          }
+        }
+      };
+
+      checkAppts();
+      const intervalId = setInterval(checkAppts, 30000);
+      return () => clearInterval(intervalId);
+    }
   }, [db, user, notificationsEnabled, activeAppts, toast]);
 
   // 6. Subscribe to new user requests (Admins only)

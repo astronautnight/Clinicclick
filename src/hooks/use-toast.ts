@@ -166,21 +166,20 @@ function toast({ ...props }: Toast) {
 
   // Schedule a native Android notification if inside Capacitor WebView
   try {
-    const cap = (window as any).Capacitor;
-    const isNative = cap?.isNativePlatform?.() ?? false;
-    console.log('TOAST-NATIVE: isNativePlatform =', isNative);
+    // Dynamic import to avoid SSR issues
+    const { isNativePlatform, getLocalNotifications } = require('@/lib/capacitor-plugins');
+    const isNative = isNativePlatform();
 
     if (isNative) {
-      const LocalNotifications = cap.Plugins?.LocalNotifications;
-      console.log('TOAST-NATIVE: LocalNotifications plugin available =', !!LocalNotifications);
-      console.log('TOAST-NATIVE: Available plugins =', Object.keys(cap.Plugins || {}));
+      const LocalNotifications = getLocalNotifications();
+      console.log('TOAST-NATIVE: LocalNotifications plugin registered =', !!LocalNotifications);
 
       if (LocalNotifications) {
         const titleStr = typeof props.title === 'string' ? props.title : 'Notification';
         const bodyStr = typeof props.description === 'string' ? props.description : '';
         const notifId = Math.floor(Math.random() * 1000000);
 
-        console.log('TOAST-NATIVE: Scheduling notification:', { title: titleStr, body: bodyStr, id: notifId, channelId: 'default-channel' });
+        console.log('TOAST-NATIVE: Scheduling notification:', { title: titleStr, body: bodyStr, id: notifId });
 
         LocalNotifications.schedule({
           notifications: [
@@ -194,10 +193,10 @@ function toast({ ...props }: Toast) {
         }).then((result: any) => {
           console.log('TOAST-NATIVE: Notification scheduled successfully:', result);
         }).catch((err: any) => {
-          console.error("TOAST-NATIVE: Failed to schedule local notification:", err);
+          console.error('TOAST-NATIVE: Failed to schedule local notification:', err);
         });
       } else {
-        console.warn('TOAST-NATIVE: LocalNotifications plugin is NOT available. Did you rebuild the Android APK?');
+        console.warn('TOAST-NATIVE: LocalNotifications plugin is NOT available. Rebuild the Android APK.');
       }
     }
   } catch (e) {
