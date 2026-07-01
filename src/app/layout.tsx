@@ -22,6 +22,7 @@ import { PwaHandler } from '@/components/layout/pwa-handler';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import { NotificationListener } from '@/components/NotificationListener';
+import { FcmHandler } from '@/components/layout/fcm-handler';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -89,6 +90,7 @@ export default function RootLayout({
           <FirebaseErrorListener />
           <NotificationListener />
           <PwaHandler />
+          <FcmHandler />
 
           <SidebarProvider defaultOpen={true}>
             {/* Fixed height container with flex column */}

@@ -164,6 +164,31 @@ function toast({ ...props }: Toast) {
     },
   })
 
+  // Schedule a native Android notification if inside Capacitor WebView
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap?.isNativePlatform?.()) {
+      const LocalNotifications = cap.Plugins?.LocalNotifications;
+      if (LocalNotifications) {
+        const titleStr = typeof props.title === 'string' ? props.title : 'Notification';
+        const bodyStr = typeof props.description === 'string' ? props.description : '';
+        LocalNotifications.schedule({
+          notifications: [
+            {
+              title: titleStr,
+              body: bodyStr,
+              id: Math.floor(Math.random() * 1000000),
+            }
+          ]
+        }).catch((err: any) => {
+          console.error("FCM: Failed to schedule local notification:", err);
+        });
+      }
+    }
+  } catch (_) {
+    // Ignore errors on non-native platforms
+  }
+
   return {
     id: id,
     dismiss,
