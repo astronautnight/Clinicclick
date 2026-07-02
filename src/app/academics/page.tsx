@@ -34,7 +34,7 @@ import {
 import { uploadCasePhoto, deleteCasePhoto } from '@/services/case-photo-service';
 import { Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { Camera } from '@capacitor/camera';
+import { Camera as CapacitorCamera } from '@capacitor/camera';
 
 
 const initialCaseHistoryData: {
@@ -275,7 +275,7 @@ export default function AcademicsPage() {
         if (!user) return;
         try {
             console.log("[Capacitor Upload] Triggering Camera.pickImages()");
-            const images = await Camera.pickImages({
+            const images = await CapacitorCamera.pickImages({
                 quality: 90,
                 limit: 5
             });
