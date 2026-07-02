@@ -17,6 +17,7 @@
   "dependencies": {
     "@capacitor/camera": "^8.2.0",
     "@capacitor/core": "^8.4.1",
+    "@capacitor/filesystem": "^8.1.2",
     "@genkit-ai/googleai": "1.6.2",
     "@genkit-ai/next": "1.6.2",
     "@hookform/resolvers": "^4.1.3",

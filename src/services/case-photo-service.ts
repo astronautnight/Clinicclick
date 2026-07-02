@@ -46,26 +46,32 @@ export async function uploadCasePhoto(
       maxWidthOrHeight: 1920,
       useWebWorker: true,
     };
+    console.log(`[Step 5.1] Compressing image with browser-image-compression...`);
     // Compress the image before uploading
-    fileToUpload = await imageCompression(file, options);
-    console.log(`Original size: ${file.size / 1024 / 1024} MB, Compressed size: ${fileToUpload.size / 1024 / 1024} MB`);
-  } catch (error) {
-    console.warn("Image compression failed, falling back to original file:", error);
+    fileToUpload = await imageCompression(file as any, options);
+    console.log(`[Step 5.1] Compression successful. Original size: ${file.size}, Compressed size: ${fileToUpload.size}`);
+  } catch (error: any) {
+    console.warn(`[Step 5.1 Warning] Image compression failed, falling back to original file. Error: ${error.message}`);
   }
 
-  const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeName = fileToUpload.name ? fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_') : `photo_${Date.now()}.jpg`;
   const storagePath = `users/${uid}/casePhotos/${caseId}/${Date.now()}_${safeName}`;
   const storageRef = ref(storage, storagePath);
 
   try {
-    await uploadBytes(storageRef, fileToUpload, {
+    console.log(`[Step 5.2] Calling Firebase uploadBytes() for path: ${storagePath}`);
+    await uploadBytes(storageRef, fileToUpload as Blob, {
       contentType: fileToUpload.type || file.type,
       customMetadata: { uploadedBy: uid },
     });
+    console.log(`[Step 5.3] uploadBytes() finished successfully.`);
+    
+    console.log(`[Step 5.4] Calling getDownloadURL()...`);
     const url = await getDownloadURL(storageRef);
+    console.log(`[Step 5.4] getDownloadURL() finished: ${url}`);
     return url;
   } catch (error: any) {
-    console.error('Error uploading case photo:', error);
+    console.error(`[Step 5 Error] Error in uploadCasePhoto: ${error.message}`, error);
     throw new Error(`Upload failed: ${error.message || 'Unknown error'}`);
   }
 }

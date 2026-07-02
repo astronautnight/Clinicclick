@@ -35,6 +35,7 @@ import { uploadCasePhoto, deleteCasePhoto } from '@/services/case-photo-service'
 import { Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Camera as CapacitorCamera } from '@capacitor/camera';
+import { Filesystem } from '@capacitor/filesystem';
 
 
 const initialCaseHistoryData: {
@@ -284,15 +285,47 @@ export default function AcademicsPage() {
             const fetchedFiles: File[] = [];
             for (let i = 0; i < images.photos.length; i++) {
                 const photo = images.photos[i];
-                if (!photo.webPath) continue;
-                console.log(`[Capacitor Upload] Fetching blob for: ${photo.webPath}`);
-                const response = await fetch(photo.webPath);
-                const blob = await response.blob();
-                console.log(`[Capacitor Upload] Blob generated. Size: ${blob.size}, type: ${blob.type}`);
+                let blob: Blob;
+
+                try {
+                    console.log(`[Step 1] Image selected:`, JSON.stringify({ format: photo.format, hasPath: !!photo.path, hasWebPath: !!photo.webPath }));
+                    if (photo.path) {
+                        console.log(`[Step 2] Filesystem.readFile() starting on path: ${photo.path}`);
+                        const result = await Filesystem.readFile({ path: photo.path });
+                        
+                        console.log(`[Step 3] Base64 received. Data length: ${result.data.length}`);
+                        
+                        const format = photo.format || 'jpeg';
+                        const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+                        console.log(`[Step 4] Converting to Blob using fetch on data URI...`);
+                        const fetchRes = await fetch(`data:${mimeType};base64,${result.data}`);
+                        blob = await fetchRes.blob();
+                        console.log(`[Step 4] Blob created successfully. Size: ${blob.size}, type: ${blob.type}`);
+                    } else if (photo.webPath) {
+                        console.log(`[Step 2 WebPath] Fetching blob for: ${photo.webPath}`);
+                        const response = await fetch(photo.webPath);
+                        blob = await response.blob();
+                        console.log(`[Step 4 WebPath] Blob generated. Size: ${blob.size}, type: ${blob.type}`);
+                    } else {
+                        console.warn("[Capacitor Upload] No path or webPath available for photo");
+                        continue;
+                    }
+                } catch (e: any) {
+                    console.error(`[Capacitor Upload] Error during Step 2/3/4: ${e.message}`, e.stack);
+                    continue;
+                }
                 
-                const file = new File([blob], `photo_${Date.now()}_${i}.${photo.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
-                fetchedFiles.push(file);
-                console.log(`[Capacitor Upload] Converted to File: ${file.name}`);
+                try {
+                    const file = new File([blob], `photo_${Date.now()}_${i}.${photo.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
+                    fetchedFiles.push(file);
+                    console.log(`[Step 4.1] Converted to File object: ${file.name}`);
+                } catch (e: any) {
+                    console.error(`[Capacitor Upload] Error creating File object: ${e.message}`, e.stack);
+                    // Fallback to pushing the raw blob if File constructor is broken in this WebView
+                    (blob as any).name = `photo_${Date.now()}_${i}.${photo.format || 'jpg'}`;
+                    fetchedFiles.push(blob as any);
+                    console.log(`[Step 4.1] Fallback: Used Blob instead of File object`);
+                }
             }
 
             if (fetchedFiles.length === 0) return;
@@ -310,19 +343,31 @@ export default function AcademicsPage() {
 
                  try {
                      for (const file of fetchedFiles) {
-                         console.log(`[Capacitor Upload] Uploading to Firebase Storage: ${file.name}`);
-                         const url = await uploadCasePhoto(user.uid, caseId, file);
-                         if (url) {
-                             newUrls.push(url);
-                             console.log(`[Capacitor Upload] Upload completed. Download URL: ${url}`);
+                         console.log(`[Step 5] Initiating upload to Firebase Storage: ${file.name}`);
+                         try {
+                             const url = await uploadCasePhoto(user.uid, caseId, file);
+                             if (url) {
+                                 newUrls.push(url);
+                                 console.log(`[Step 6] getDownloadURL() succeeded. URL: ${url}`);
+                             }
+                         } catch (e: any) {
+                             console.error(`[Step 5/6 Error] uploadBytes/getDownloadURL failed: ${e.message}`, e.stack);
+                             throw e;
                          }
                      }
 
                      if (newUrls.length > 0) {
-                         await updatePersonalCaseHistory(user.uid, caseId, {
-                             clinicalPhotos: [...existingPhotos, ...newUrls],
-                         });
-                         toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+                         console.log(`[Step 7] Writing URLs to Firestore case document...`);
+                         try {
+                             await updatePersonalCaseHistory(user.uid, caseId, {
+                                 clinicalPhotos: [...existingPhotos, ...newUrls],
+                             });
+                             console.log(`[Step 7] Firestore write completed successfully.`);
+                             toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+                         } catch (e: any) {
+                             console.error(`[Step 7 Error] Firestore write failed: ${e.message}`, e.stack);
+                             throw e;
+                         }
                      }
                  } catch (error: any) {
                      console.error("[Capacitor Upload] Card photo upload error:", error);
