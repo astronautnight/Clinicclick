@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type FormEvent, type ChangeEvent } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { onSnapshot, query, orderBy } from 'firebase/firestore';
 import type { Department, StudentCaseHistory, AttendanceStatus, MarkedTooth, StudentFinancialEntry } from '@/types';
@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
-import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2, User, Stethoscope, Clipboard, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookUser, PlusCircle, CalendarDays, ClipboardList, ChevronLeft, ChevronRight, CalendarIcon, DollarSign, Edit, Trash2, User, Stethoscope, Clipboard, FileText, ChevronDown, ChevronUp, Camera, ImagePlus, X, Eye, Check } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { format, getDaysInMonth } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
@@ -30,6 +31,7 @@ import {
     addPersonalFinance,
     getPersonalAcademicsCol,
 } from '@/services/personal-academics-service';
+import { uploadCasePhoto, deleteCasePhoto } from '@/services/case-photo-service';
 import { Info } from 'lucide-react';
 
 
@@ -47,6 +49,7 @@ const initialCaseHistoryData: {
     treatmentPlan: string;
     markedTeeth: MarkedTooth[];
     stagedObservations: string[];
+    clinicalPhotos: string[];
 } = {
     patientName: '',
     patientAge: '',
@@ -61,6 +64,7 @@ const initialCaseHistoryData: {
     treatmentPlan: '',
     markedTeeth: [],
     stagedObservations: [],
+    clinicalPhotos: [],
 };
 
 const initialFinanceData = {
@@ -89,6 +93,15 @@ export default function AcademicsPage() {
     const [editingCaseHistoryId, setEditingCaseHistoryId] = useState<string | null>(null);
     const [caseHistoryToDelete, setCaseHistoryToDelete] = useState<StudentCaseHistory | null>(null);
     const [isChartExpanded, setIsChartExpanded] = useState(false);
+
+    // Photo upload states
+    const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
+    const [pendingPhotoUrls, setPendingPhotoUrls] = useState<string[]>([]); // preview URLs for pending files
+    const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+    const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+    const cardPhotoInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingForCaseId, setUploadingForCaseId] = useState<string | null>(null);
 
 
     const [isAttendanceFormOpen, setIsAttendanceFormOpen] = useState(false);
@@ -135,6 +148,8 @@ export default function AcademicsPage() {
     
     const handleOpenCaseForm = (caseHistory: StudentCaseHistory | null) => {
         setIsChartExpanded(false);
+        setPendingPhotoFiles([]);
+        setPendingPhotoUrls([]);
         if (caseHistory) {
             setEditingCaseHistoryId(caseHistory.id);
             setCaseFormData({
@@ -151,6 +166,7 @@ export default function AcademicsPage() {
                 treatmentPlan: caseHistory.treatmentPlan,
                 markedTeeth: caseHistory.markedTeeth || [],
                 stagedObservations: caseHistory.stagedObservations || [],
+                clinicalPhotos: caseHistory.clinicalPhotos || [],
             });
         } else {
             setEditingCaseHistoryId(null);
@@ -169,8 +185,21 @@ export default function AcademicsPage() {
 
         const dept = departments.find(d => d.id === caseFormData.departmentId);
         
+        // Upload any pending photo files first
+        let allPhotoUrls = [...caseFormData.clinicalPhotos];
+        if (pendingPhotoFiles.length > 0) {
+            setIsUploadingPhotos(true);
+            const targetCaseId = editingCaseHistoryId || 'temp_' + Date.now();
+            for (const file of pendingPhotoFiles) {
+                const url = await uploadCasePhoto(user.uid, targetCaseId, file);
+                if (url) allPhotoUrls.push(url);
+            }
+            setIsUploadingPhotos(false);
+        }
+
         const payload = {
             ...caseFormData,
+            clinicalPhotos: allPhotoUrls,
             studentId: user.uid,
             studentName: user.displayName || 'Student',
             departmentName: dept?.name || '',
@@ -187,11 +216,74 @@ export default function AcademicsPage() {
             }
             setIsCaseFormOpen(false);
             setEditingCaseHistoryId(null);
+            setPendingPhotoFiles([]);
+            setPendingPhotoUrls([]);
         } catch (error) {
             console.error("Error saving case history", error);
             toast({ title: "Error", description: "Could not save case history.", variant: 'destructive'});
         }
     }
+
+    // ── Photo helpers ──
+    const handlePhotoFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        const validFiles = files.filter(f => {
+            if (f.size > 5 * 1024 * 1024) {
+                toast({ title: 'File too large', description: `"${f.name}" exceeds the 5 MB limit.`, variant: 'destructive' });
+                return false;
+            }
+            if (!f.type.startsWith('image/')) {
+                toast({ title: 'Invalid file', description: `"${f.name}" is not an image.`, variant: 'destructive' });
+                return false;
+            }
+            return true;
+        });
+        if (validFiles.length === 0) return;
+        setPendingPhotoFiles(prev => [...prev, ...validFiles]);
+        const newUrls = validFiles.map(f => URL.createObjectURL(f));
+        setPendingPhotoUrls(prev => [...prev, ...newUrls]);
+        // Reset the input so the same file can be re-selected
+        if (e.target) e.target.value = '';
+    };
+
+    const removePendingPhoto = (index: number) => {
+        URL.revokeObjectURL(pendingPhotoUrls[index]);
+        setPendingPhotoFiles(prev => prev.filter((_, i) => i !== index));
+        setPendingPhotoUrls(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const removeExistingPhoto = (index: number) => {
+        setCaseFormData(prev => ({
+            ...prev,
+            clinicalPhotos: prev.clinicalPhotos.filter((_, i) => i !== index),
+        }));
+    };
+
+    const handleCardPhotoUpload = async (caseId: string, e: ChangeEvent<HTMLInputElement>) => {
+        if (!user) return;
+        const files = Array.from(e.target.files || []);
+        const validFiles = files.filter(f => f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/'));
+        if (validFiles.length === 0) return;
+
+        setUploadingForCaseId(caseId);
+        const existingCase = caseHistories.find(c => c.id === caseId);
+        const existingPhotos = existingCase?.clinicalPhotos || [];
+        const newUrls: string[] = [];
+
+        for (const file of validFiles) {
+            const url = await uploadCasePhoto(user.uid, caseId, file);
+            if (url) newUrls.push(url);
+        }
+
+        if (newUrls.length > 0) {
+            await updatePersonalCaseHistory(user.uid, caseId, {
+                clinicalPhotos: [...existingPhotos, ...newUrls],
+            });
+            toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+        }
+        setUploadingForCaseId(null);
+        if (e.target) e.target.value = '';
+    };
 
     const openAddDeptDialog = (context: 'case' | 'attendance') => {
         setAddDeptContext(context);
@@ -463,9 +555,81 @@ export default function AcademicsPage() {
                                     </div>
                                 </div>
 
+                                {/* Clinical photos */}
+                                <div className="border rounded-xl bg-card overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b font-medium text-sm">
+                                        <Camera className="h-4 w-4 text-primary" />
+                                        Clinical photos
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        {/* Existing photos */}
+                                        {caseFormData.clinicalPhotos.length > 0 && (
+                                            <div className="space-y-2">
+                                                <Label className="text-xs text-muted-foreground font-semibold uppercase">Saved photos</Label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {caseFormData.clinicalPhotos.map((url, i) => (
+                                                        <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted">
+                                                            <img src={url} alt={`Clinical photo ${i + 1}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeExistingPhoto(i)}
+                                                                className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* Pending photos */}
+                                        {pendingPhotoUrls.length > 0 && (
+                                            <div className="space-y-2">
+                                                <Label className="text-xs text-muted-foreground font-semibold uppercase">New photos (unsaved)</Label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {pendingPhotoUrls.map((url, i) => (
+                                                        <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border-2 border-dashed border-primary/40 bg-muted">
+                                                            <img src={url} alt={`New photo ${i + 1}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removePendingPhoto(i)}
+                                                                className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* Upload button */}
+                                        <input
+                                            ref={photoInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handlePhotoFileSelect}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => photoInputRef.current?.click()}
+                                            className="gap-2"
+                                        >
+                                            <ImagePlus className="h-4 w-4" />
+                                            Add photos
+                                        </Button>
+                                        <p className="text-xs text-muted-foreground">Max 5 MB per image. JPG, PNG, WebP supported.</p>
+                                    </div>
+                                </div>
+
                                 <DialogFooter className="pt-6 mt-2">
                                     <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                                    <Button type="submit">{editingCaseHistoryId ? 'Save Changes' : 'Save case history'}</Button>
+                                    <Button type="submit" disabled={isUploadingPhotos}>
+                                        {isUploadingPhotos ? 'Uploading photos...' : editingCaseHistoryId ? 'Save Changes' : 'Save case history'}
+                                    </Button>
                                 </DialogFooter>
                             </form>
                         </DialogContent>
@@ -487,42 +651,178 @@ export default function AcademicsPage() {
                             <CardTitle>My Submitted Case Histories</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Patient</TableHead><TableHead>Department</TableHead><TableHead>Diagnosis</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {caseHistories.map(ch => (
-                                            <TableRow key={ch.id}>
-                                                <TableCell>{ch.createdAt ? format(ch.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}</TableCell>
-                                                <TableCell className="font-medium">{ch.patientName}</TableCell>
-                                                <TableCell>{ch.departmentName}</TableCell>
-                                                <TableCell className="text-muted-foreground max-w-xs truncate">{ch.diagnosis}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenCaseForm(ch)}><Edit className="h-4 w-4" /></Button>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon" onClick={() => setCaseHistoryToDelete(ch)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                                <AlertDialogDescription>This will permanently delete the case history for "{caseHistoryToDelete?.patientName}".</AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={handleDeleteCaseHistory}>Delete</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
                             {caseHistories.length === 0 && <p className="text-center p-4 text-muted-foreground">You have not submitted any case histories yet.</p>}
+                            <Accordion type="single" collapsible className="space-y-3">
+                                {caseHistories.map(ch => {
+                                    const photos = ch.clinicalPhotos || [];
+                                    return (
+                                        <AccordionItem key={ch.id} value={ch.id} className="border rounded-xl overflow-hidden bg-card data-[state=open]:ring-1 data-[state=open]:ring-primary/30 transition-all">
+                                            {/* Collapsed header — always visible */}
+                                            <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 gap-3 [&>svg]:text-muted-foreground">
+                                                <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-2 text-left">
+                                                    <span className="font-semibold text-base">{ch.patientName}</span>
+                                                    {ch.departmentName && (
+                                                        <Badge variant="outline" className="text-xs font-medium border-primary/40 text-primary">
+                                                            {ch.departmentName}
+                                                        </Badge>
+                                                    )}
+                                                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                        <CalendarIcon className="h-3.5 w-3.5" />
+                                                        {ch.createdAt ? format(ch.createdAt.toDate(), 'dd/MM/yyyy') : 'N/A'}
+                                                    </span>
+                                                    <Badge variant="secondary" className="text-xs gap-1 bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-0">
+                                                        <Check className="h-3 w-3" />
+                                                        Submitted
+                                                    </Badge>
+                                                </div>
+                                            </AccordionTrigger>
+
+                                            {/* Expanded content */}
+                                            <AccordionContent className="px-5 pb-5">
+                                                <div className="space-y-5 pt-2">
+                                                    {/* Diagnosis highlight */}
+                                                    {ch.diagnosis && (
+                                                        <div className="rounded-lg bg-muted/40 dark:bg-muted/20 p-4 border-l-4 border-primary">
+                                                            <p className="text-xs font-semibold uppercase text-primary tracking-wider mb-1">Diagnosis</p>
+                                                            <p className="font-medium text-foreground">{ch.diagnosis}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Two-column grid: Complaint + Medical History */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {ch.chiefComplaint && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">Chief Complaint</p>
+                                                                <p className="text-sm text-foreground">{ch.chiefComplaint}</p>
+                                                            </div>
+                                                        )}
+                                                        {ch.medicalHistory && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">Medical History</p>
+                                                                <p className="text-sm text-foreground">{ch.medicalHistory}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Two-column grid: Findings + Treatment Plan */}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {ch.examinationFindings && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">Examination Findings</p>
+                                                                <p className="text-sm text-foreground">{ch.examinationFindings}</p>
+                                                            </div>
+                                                        )}
+                                                        {ch.treatmentPlan && (
+                                                            <div>
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">Treatment Plan</p>
+                                                                <p className="text-sm text-foreground">{ch.treatmentPlan}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Clinical Photos */}
+                                                    <div>
+                                                        <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2">Clinical Photos</p>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {photos.slice(0, 2).map((url, i) => (
+                                                                <button
+                                                                    key={i}
+                                                                    type="button"
+                                                                    onClick={() => setPreviewPhotoUrl(url)}
+                                                                    className="w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                                                                >
+                                                                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                                                                </button>
+                                                            ))}
+                                                            {photos.length > 2 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPreviewPhotoUrl(photos[2])}
+                                                                    className="w-14 h-14 rounded-lg border-2 border-border bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground hover:border-primary transition-colors"
+                                                                >
+                                                                    +{photos.length - 2}
+                                                                </button>
+                                                            )}
+                                                            {/* Add photo button */}
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    multiple
+                                                                    className="hidden"
+                                                                    id={`card-photo-${ch.id}`}
+                                                                    onChange={(e) => handleCardPhotoUpload(ch.id, e)}
+                                                                />
+                                                                <label
+                                                                    htmlFor={`card-photo-${ch.id}`}
+                                                                    className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+                                                                >
+                                                                    {uploadingForCaseId === ch.id ? (
+                                                                        <span className="text-xs text-muted-foreground animate-pulse">...</span>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Camera className="h-4 w-4 text-muted-foreground" />
+                                                                            <span className="text-[10px] text-muted-foreground mt-0.5">Add</span>
+                                                                        </>
+                                                                    )}
+                                                                </label>
+                                                            </div>
+                                                            {photos.length === 0 && uploadingForCaseId !== ch.id && (
+                                                                <span className="text-xs text-muted-foreground">No photos yet</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Action buttons */}
+                                                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
+                                                        <Button variant="outline" size="sm" onClick={() => handleOpenCaseForm(ch)} className="gap-1.5">
+                                                            <Edit className="h-3.5 w-3.5" />
+                                                            Edit
+                                                        </Button>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button variant="outline" size="sm" onClick={() => setCaseHistoryToDelete(ch)} className="gap-1.5">
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                    Delete
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                                    <AlertDialogDescription>This will permanently delete the case history for "{caseHistoryToDelete?.patientName}".</AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={handleDeleteCaseHistory}>Delete</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                        {(ch.markedTeeth?.length || 0) > 0 && (
+                                                            <Button variant="outline" size="sm" onClick={() => handleOpenCaseForm(ch)} className="ml-auto gap-1.5 border-primary/40 text-primary hover:bg-primary/5">
+                                                                View dental chart
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    );
+                                })}
+                            </Accordion>
                         </CardContent>
                     </Card>
+
+                    {/* Photo preview modal */}
+                    {previewPhotoUrl && (
+                        <Dialog open={!!previewPhotoUrl} onOpenChange={() => setPreviewPhotoUrl(null)}>
+                            <DialogContent className="sm:max-w-2xl p-2">
+                                <DialogHeader className="sr-only">
+                                    <DialogTitle>Photo Preview</DialogTitle>
+                                </DialogHeader>
+                                <img src={previewPhotoUrl} alt="Clinical photo preview" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />
+                            </DialogContent>
+                        </Dialog>
+                    )}
                 </TabsContent>
                 <TabsContent value="attendance" className="mt-4">
                     <Card>

@@ -405,6 +405,7 @@ export interface StudentCaseHistory {
   treatmentPlan: string;
   markedTeeth: MarkedTooth[];
   stagedObservations?: string[];
+  clinicalPhotos?: string[];
   createdAt: any; 
   updatedAt: any;
   departmentId?: string;

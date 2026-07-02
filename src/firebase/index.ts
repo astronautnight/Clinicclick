@@ -2,6 +2,7 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from './config';
 
 // Export the hooks and providers from their respective files
@@ -14,6 +15,7 @@ interface FirebaseInstances {
   firebaseApp: FirebaseApp;
   auth: Auth;
   firestore: Firestore;
+  storage: FirebaseStorage;
 }
 
 export function initializeFirebase(): FirebaseInstances {
@@ -21,12 +23,14 @@ export function initializeFirebase(): FirebaseInstances {
     const firebaseApp = getApp();
     const auth = getAuth(firebaseApp);
     const firestore = getFirestore(firebaseApp);
-    return { firebaseApp, auth, firestore };
+    const storage = getStorage(firebaseApp);
+    return { firebaseApp, auth, firestore, storage };
   }
 
   const firebaseApp = initializeApp(firebaseConfig);
   const auth = getAuth(firebaseApp);
   const firestore = getFirestore(firebaseApp);
+  const storage = getStorage(firebaseApp);
 
   if (typeof window !== 'undefined') {
     enableIndexedDbPersistence(firestore)
@@ -40,5 +44,6 @@ export function initializeFirebase(): FirebaseInstances {
       });
   }
 
-  return { firebaseApp, auth, firestore };
+  return { firebaseApp, auth, firestore, storage };
 }
+
