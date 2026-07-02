@@ -37,6 +37,21 @@ import { Capacitor } from '@capacitor/core';
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { Filesystem } from '@capacitor/filesystem';
 
+const DEFAULT_DEPARTMENTS: {id: string, name: string}[] = [
+    { id: 'default-general-dentistry', name: 'General Dentistry' },
+    { id: 'default-dental-hygiene', name: 'Dental Hygiene' },
+    { id: 'default-endodontics', name: 'Endodontics' },
+    { id: 'default-orthodontics', name: 'Orthodontics and Dentofacial Orthopedics' },
+    { id: 'default-prosthodontics', name: 'Prosthodontics' },
+    { id: 'default-oral-surgery', name: 'Oral and Maxillofacial Surgery' },
+    { id: 'default-periodontics', name: 'Periodontics' },
+    { id: 'default-pediatric', name: 'Pediatric Dentistry' },
+    { id: 'default-orofacial-pain', name: 'Orofacial Pain' },
+    { id: 'default-oral-medicine', name: 'Oral Medicine' },
+    { id: 'default-oral-pathology', name: 'Oral and Maxillofacial Pathology' },
+    { id: 'default-oral-radiology', name: 'Oral and Maxillofacial Radiology' },
+    { id: 'default-public-health', name: 'Dental Public Health' }
+];
 
 const initialCaseHistoryData: {
     patientName: string;
@@ -89,6 +104,11 @@ export default function AcademicsPage() {
     const [finances, setFinances] = useState<StudentFinancialEntry[]>([]);
 
     const [loading, setLoading] = useState(true);
+
+    const allDepartments = [
+        ...DEFAULT_DEPARTMENTS, 
+        ...departments.filter(d => !DEFAULT_DEPARTMENTS.some(def => def.name.toLowerCase() === d.name.toLowerCase()))
+    ];
 
     // UI states
     const [isCaseFormOpen, setIsCaseFormOpen] = useState(false);
@@ -186,7 +206,7 @@ export default function AcademicsPage() {
             return;
         }
 
-        const dept = departments.find(d => d.id === caseFormData.departmentId);
+        const dept = allDepartments.find(d => d.id === caseFormData.departmentId);
         
         let allPhotoUrls = [...caseFormData.clinicalPhotos];
         if (pendingPhotoFiles.length > 0) {
@@ -511,7 +531,7 @@ export default function AcademicsPage() {
              return;
         }
         
-        const dept = departments.find(d => d.id === attendanceDepartmentId);
+        const dept = allDepartments.find(d => d.id === attendanceDepartmentId);
         if (!dept) {
             toast({ title: "Invalid Department", description: "The selected department could not be found.", variant: 'destructive'});
             return;
@@ -643,8 +663,8 @@ export default function AcademicsPage() {
                                             <Select value={caseFormData.departmentId} onValueChange={val => setCaseFormData({...caseFormData, departmentId: val})}>
                                                 <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                                 <SelectContent>
-                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    {allDepartments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {allDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1023,8 +1043,8 @@ export default function AcademicsPage() {
                                             <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
                                                 <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
                                                 <SelectContent>
-                                                    {departments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    {allDepartments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                    {allDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>

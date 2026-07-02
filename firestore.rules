@@ -38,6 +38,16 @@ service cloud.firestore {
       allow create: if signedIn();
     }
 
+    match /users/{userId}/notifications/{notificationId} {
+      allow read, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    /* ================= SURVEY RESPONSES ================= */
+    match /survey_responses/{responseId} {
+      allow create: if signedIn();
+      allow read: if false; // Only accessible via admin panel/Firebase console
+    }
+
     /* ================= CLINICS ================= */
     match /clinics/{clinicId} {
 
