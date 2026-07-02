@@ -6,7 +6,7 @@ export const firebaseConfig = {
   apiKey: "AIzaSyD8miPEbYU8-aNe4BEXCfAg4N5bIjaYp0U",
   authDomain: "clinicclick-xreue.firebaseapp.com",
   projectId: "clinicclick-xreue",
-  storageBucket: "clinicclick-xreue.appspot.com",
+  storageBucket: "clinicclick-xreue.firebasestorage.app",
   messagingSenderId: "773560277187",
   appId: "1:773560277187:web:4c6ca9393c9473fe942a76",
 };

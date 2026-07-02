@@ -185,14 +185,24 @@ export default function AcademicsPage() {
 
         const dept = departments.find(d => d.id === caseFormData.departmentId);
         
-        // Upload any pending photo files first
         let allPhotoUrls = [...caseFormData.clinicalPhotos];
         if (pendingPhotoFiles.length > 0) {
             setIsUploadingPhotos(true);
             const targetCaseId = editingCaseHistoryId || 'temp_' + Date.now();
-            for (const file of pendingPhotoFiles) {
-                const url = await uploadCasePhoto(user.uid, targetCaseId, file);
-                if (url) allPhotoUrls.push(url);
+            try {
+                for (const file of pendingPhotoFiles) {
+                    const url = await uploadCasePhoto(user.uid, targetCaseId, file);
+                    allPhotoUrls.push(url);
+                }
+            } catch (err: any) {
+                console.error("Upload error:", err);
+                toast({ 
+                    title: "Photo Upload Failed", 
+                    description: err.message || "Failed to upload clinical photos. Please try again.", 
+                    variant: 'destructive'
+                });
+                setIsUploadingPhotos(false);
+                return; // Stop submission if upload fails
             }
             setIsUploadingPhotos(false);
         }
@@ -228,8 +238,8 @@ export default function AcademicsPage() {
     const handlePhotoFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         const validFiles = files.filter(f => {
-            if (f.size > 5 * 1024 * 1024) {
-                toast({ title: 'File too large', description: `"${f.name}" exceeds the 5 MB limit.`, variant: 'destructive' });
+            if (f.size > 20 * 1024 * 1024) {
+                toast({ title: 'File too large', description: `"${f.name}" exceeds the 20 MB limit.`, variant: 'destructive' });
                 return false;
             }
             if (!f.type.startsWith('image/')) {
@@ -262,7 +272,8 @@ export default function AcademicsPage() {
     const handleCardPhotoUpload = async (caseId: string, e: ChangeEvent<HTMLInputElement>) => {
         if (!user) return;
         const files = Array.from(e.target.files || []);
-        const validFiles = files.filter(f => f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/'));
+        // Allow up to 20MB, it will be compressed automatically
+        const validFiles = files.filter(f => f.size <= 20 * 1024 * 1024 && f.type.startsWith('image/'));
         if (validFiles.length === 0) return;
 
         setUploadingForCaseId(caseId);
@@ -270,19 +281,48 @@ export default function AcademicsPage() {
         const existingPhotos = existingCase?.clinicalPhotos || [];
         const newUrls: string[] = [];
 
-        for (const file of validFiles) {
-            const url = await uploadCasePhoto(user.uid, caseId, file);
-            if (url) newUrls.push(url);
-        }
+        try {
+            for (const file of validFiles) {
+                const url = await uploadCasePhoto(user.uid, caseId, file);
+                if (url) newUrls.push(url);
+            }
 
-        if (newUrls.length > 0) {
-            await updatePersonalCaseHistory(user.uid, caseId, {
-                clinicalPhotos: [...existingPhotos, ...newUrls],
-            });
-            toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+            if (newUrls.length > 0) {
+                await updatePersonalCaseHistory(user.uid, caseId, {
+                    clinicalPhotos: [...existingPhotos, ...newUrls],
+                });
+                toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+            }
+        } catch (error: any) {
+            console.error("Card photo upload error:", error);
+            toast({ title: "Upload Failed", description: error.message || "Failed to upload photo.", variant: "destructive" });
+        } finally {
+            setUploadingForCaseId(null);
+            if (e.target) e.target.value = '';
         }
-        setUploadingForCaseId(null);
-        if (e.target) e.target.value = '';
+    };
+
+    const handleDeleteCardPhoto = async (caseId: string, photoUrl: string) => {
+        if (!user) return;
+        if (!confirm("Are you sure you want to delete this photo? This cannot be undone.")) return;
+
+        const existingCase = caseHistories.find(c => c.id === caseId);
+        if (!existingCase) return;
+
+        try {
+            // Delete from Firebase Storage
+            await deleteCasePhoto(photoUrl);
+            
+            // Remove from Firestore document
+            const updatedPhotos = (existingCase.clinicalPhotos || []).filter(url => url !== photoUrl);
+            await updatePersonalCaseHistory(user.uid, caseId, {
+                clinicalPhotos: updatedPhotos
+            });
+            toast({ title: "Photo deleted" });
+        } catch (error) {
+            console.error("Error deleting photo:", error);
+            toast({ title: "Error", description: "Could not delete photo.", variant: "destructive" });
+        }
     };
 
     const openAddDeptDialog = (context: 'case' | 'attendance') => {
@@ -724,25 +764,24 @@ export default function AcademicsPage() {
                                                     <div>
                                                         <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2">Clinical Photos</p>
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            {photos.slice(0, 2).map((url, i) => (
-                                                                <button
-                                                                    key={i}
-                                                                    type="button"
-                                                                    onClick={() => setPreviewPhotoUrl(url)}
-                                                                    className="w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
-                                                                >
-                                                                    <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                                                                </button>
+                                                            {photos.map((url, i) => (
+                                                                <div key={i} className="relative group w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPreviewPhotoUrl(url)}
+                                                                        className="w-full h-full focus:outline-none focus:ring-2 focus:ring-primary"
+                                                                    >
+                                                                        <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteCardPhoto(ch.id, url); }}
+                                                                        className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                                                    >
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                </div>
                                                             ))}
-                                                            {photos.length > 2 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setPreviewPhotoUrl(photos[2])}
-                                                                    className="w-14 h-14 rounded-lg border-2 border-border bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground hover:border-primary transition-colors"
-                                                                >
-                                                                    +{photos.length - 2}
-                                                                </button>
-                                                            )}
                                                             {/* Add photo button */}
                                                             <div className="relative">
                                                                 <input
