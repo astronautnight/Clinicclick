@@ -61,7 +61,7 @@ const diagnosePatientFlow = ai.defineFlow(
     outputSchema: AIDiagnosisOutputSchema,
   },
   async (input: AIDiagnosisInput) => {
-    const {output} = await prompt(input);
+    const {output} = await diagnosePatientPrompt(input);
     if (!output) {
         // Fallback in case the model fails to produce structured output
         // or if there's an unexpected issue.

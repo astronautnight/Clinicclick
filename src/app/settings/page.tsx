@@ -30,6 +30,7 @@ import { useState, useEffect } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { signOutUser } from "@/services/auth-service";
 import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
 import { requestNotificationPermission } from "@/services/notification-service";
 import { isNativePlatform, getPushNotifications } from "@/lib/capacitor-plugins";
 
