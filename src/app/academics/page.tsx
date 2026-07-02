@@ -33,6 +33,8 @@ import {
 } from '@/services/personal-academics-service';
 import { uploadCasePhoto, deleteCasePhoto } from '@/services/case-photo-service';
 import { Info } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Camera } from '@capacitor/camera';
 
 
 const initialCaseHistoryData: {
@@ -98,7 +100,7 @@ export default function AcademicsPage() {
     const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
     const [pendingPhotoUrls, setPendingPhotoUrls] = useState<string[]>([]); // preview URLs for pending files
     const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-    const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+    const [previewPhoto, setPreviewPhoto] = useState<{url: string, caseId: string} | null>(null);
     const photoInputRef = useRef<HTMLInputElement>(null);
     const cardPhotoInputRef = useRef<HTMLInputElement>(null);
     const [uploadingForCaseId, setUploadingForCaseId] = useState<string | null>(null);
@@ -267,6 +269,75 @@ export default function AcademicsPage() {
             ...prev,
             clinicalPhotos: prev.clinicalPhotos.filter((_, i) => i !== index),
         }));
+    };
+
+    const handleNativePhotoPicker = async (context: 'form' | 'card', caseId?: string) => {
+        if (!user) return;
+        try {
+            console.log("[Capacitor Upload] Triggering Camera.pickImages()");
+            const images = await Camera.pickImages({
+                quality: 90,
+                limit: 5
+            });
+            console.log(`[Capacitor Upload] Picked ${images.photos.length} files:`, images.photos.map(p => p.webPath));
+            
+            const fetchedFiles: File[] = [];
+            for (let i = 0; i < images.photos.length; i++) {
+                const photo = images.photos[i];
+                if (!photo.webPath) continue;
+                console.log(`[Capacitor Upload] Fetching blob for: ${photo.webPath}`);
+                const response = await fetch(photo.webPath);
+                const blob = await response.blob();
+                console.log(`[Capacitor Upload] Blob generated. Size: ${blob.size}, type: ${blob.type}`);
+                
+                const file = new File([blob], `photo_${Date.now()}_${i}.${photo.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
+                fetchedFiles.push(file);
+                console.log(`[Capacitor Upload] Converted to File: ${file.name}`);
+            }
+
+            if (fetchedFiles.length === 0) return;
+
+            if (context === 'form') {
+                 setPendingPhotoFiles(prev => [...prev, ...fetchedFiles]);
+                 const newUrls = fetchedFiles.map(f => URL.createObjectURL(f));
+                 setPendingPhotoUrls(prev => [...prev, ...newUrls]);
+            } else if (context === 'card' && caseId) {
+                 console.log("[Capacitor Upload] Starting direct upload for case ID:", caseId);
+                 setUploadingForCaseId(caseId);
+                 const existingCase = caseHistories.find(c => c.id === caseId);
+                 const existingPhotos = existingCase?.clinicalPhotos || [];
+                 const newUrls: string[] = [];
+
+                 try {
+                     for (const file of fetchedFiles) {
+                         console.log(`[Capacitor Upload] Uploading to Firebase Storage: ${file.name}`);
+                         const url = await uploadCasePhoto(user.uid, caseId, file);
+                         if (url) {
+                             newUrls.push(url);
+                             console.log(`[Capacitor Upload] Upload completed. Download URL: ${url}`);
+                         }
+                     }
+
+                     if (newUrls.length > 0) {
+                         await updatePersonalCaseHistory(user.uid, caseId, {
+                             clinicalPhotos: [...existingPhotos, ...newUrls],
+                         });
+                         toast({ title: 'Photos uploaded', description: `${newUrls.length} photo(s) added.` });
+                     }
+                 } catch (error: any) {
+                     console.error("[Capacitor Upload] Card photo upload error:", error);
+                     toast({ title: "Upload Failed", description: error.message || "Failed to upload photo.", variant: "destructive" });
+                 } finally {
+                     setUploadingForCaseId(null);
+                 }
+            }
+
+        } catch(err: any) {
+             console.error("[Capacitor Upload] Camera picker error:", err);
+             if (err.message !== 'User cancelled photos app') {
+                 toast({ title: "Picker Error", description: err.message, variant: "destructive" });
+             }
+        }
     };
 
     const handleCardPhotoUpload = async (caseId: string, e: ChangeEvent<HTMLInputElement>) => {
@@ -655,7 +726,13 @@ export default function AcademicsPage() {
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => photoInputRef.current?.click()}
+                                            onClick={() => {
+                                                if (Capacitor.isNativePlatform()) {
+                                                    handleNativePhotoPicker('form');
+                                                } else {
+                                                    photoInputRef.current?.click();
+                                                }
+                                            }}
                                             className="gap-2"
                                         >
                                             <ImagePlus className="h-4 w-4" />
@@ -765,20 +842,13 @@ export default function AcademicsPage() {
                                                         <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2">Clinical Photos</p>
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             {photos.map((url, i) => (
-                                                                <div key={i} className="relative group w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted">
+                                                                <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setPreviewPhotoUrl(url)}
+                                                                        onClick={() => setPreviewPhoto({ url, caseId: ch.id })}
                                                                         className="w-full h-full focus:outline-none focus:ring-2 focus:ring-primary"
                                                                     >
                                                                         <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteCardPhoto(ch.id, url); }}
-                                                                        className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                                                                    >
-                                                                        <X className="h-3 w-3" />
                                                                     </button>
                                                                 </div>
                                                             ))}
@@ -794,6 +864,12 @@ export default function AcademicsPage() {
                                                                 />
                                                                 <label
                                                                     htmlFor={`card-photo-${ch.id}`}
+                                                                    onClick={(e) => {
+                                                                        if (Capacitor.isNativePlatform()) {
+                                                                            e.preventDefault();
+                                                                            handleNativePhotoPicker('card', ch.id);
+                                                                        }
+                                                                    }}
                                                                     className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
                                                                 >
                                                                     {uploadingForCaseId === ch.id ? (
@@ -851,14 +927,27 @@ export default function AcademicsPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Photo preview modal */}
-                    {previewPhotoUrl && (
-                        <Dialog open={!!previewPhotoUrl} onOpenChange={() => setPreviewPhotoUrl(null)}>
-                            <DialogContent className="sm:max-w-2xl p-2">
+                    {/* Full-screen Photo Preview Dialog */}
+                    {previewPhoto && (
+                        <Dialog open={!!previewPhoto} onOpenChange={() => setPreviewPhoto(null)}>
+                            <DialogContent className="max-w-4xl bg-transparent border-none shadow-none flex flex-col justify-center items-center">
                                 <DialogHeader className="sr-only">
                                     <DialogTitle>Photo Preview</DialogTitle>
                                 </DialogHeader>
-                                <img src={previewPhotoUrl} alt="Clinical photo preview" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />
+                                <div className="relative w-full flex flex-col items-center gap-4">
+                                    <img src={previewPhoto.url} alt="Clinical photo preview" className="w-full h-auto max-h-[75vh] object-contain rounded-lg" />
+                                    <Button 
+                                        variant="destructive" 
+                                        className="w-full max-w-sm gap-2"
+                                        onClick={() => {
+                                            handleDeleteCardPhoto(previewPhoto.caseId, previewPhoto.url);
+                                            setPreviewPhoto(null);
+                                        }}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete Photo
+                                    </Button>
+                                </div>
                             </DialogContent>
                         </Dialog>
                     )}
