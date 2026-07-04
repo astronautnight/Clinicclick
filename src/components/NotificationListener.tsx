@@ -10,8 +10,13 @@ import {
   getDoc, 
   setDoc, 
   onSnapshot, 
-  serverTimestamp 
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
+
 
 export function NotificationListener() {
   const { user, clinicId, clinicRole } = useUser();
@@ -185,61 +190,60 @@ export function NotificationListener() {
       scheduleNativeAppts();
     }
 
-    // B: Web UI Interval Checker (Only runs on web to avoid duplicate native notifications)
-    if (!isNative) {
-      const checkAppts = async () => {
-        const now = new Date();
-        const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60 * 1000);
+    // B: Interval Checker for both Web and Native (to catch near-term appointments and populate notifications center)
+    const checkAppts = async () => {
+      const now = new Date();
+      const fifteenMinsFromNow = new Date(now.getTime() + 15 * 60 * 1000);
 
-        for (const appt of activeAppts) {
-          if (!appt.date || !appt.startTime || appt.status === 'Cancelled' || appt.status === 'Completed') continue;
+      for (const appt of activeAppts) {
+        if (!appt.date || !appt.startTime || appt.status === 'Cancelled' || appt.status === 'Completed') continue;
 
-          try {
-            const [year, month, day] = appt.date.split('-').map(Number);
-            const [hours, minutes] = appt.startTime.split(':').map(Number);
-            const apptTime = new Date(year, month - 1, day, hours, minutes);
+        try {
+          const [year, month, day] = appt.date.split('-').map(Number);
+          const [hours, minutes] = appt.startTime.split(':').map(Number);
+          const apptTime = new Date(year, month - 1, day, hours, minutes);
 
-            const tenMinsAgo = new Date(now.getTime() - 10 * 60 * 1000);
+          const tenMinsAgo = new Date(now.getTime() - 10 * 60 * 1000);
+          
+          // Trigger notification if appointment starts between 10 minutes ago and 15 minutes from now
+          if (apptTime >= tenMinsAgo && apptTime <= fifteenMinsFromNow) {
+            const notifId = `appointment_reminder_${appt.id}`;
+            const notifRef = doc(db, 'users', user.uid, 'notifications', notifId);
             
-            // Trigger notification if appointment starts between 10 minutes ago and 15 minutes from now
-            if (apptTime >= tenMinsAgo && apptTime <= fifteenMinsFromNow) {
-              const notifId = `appointment_reminder_${appt.id}`;
-              const notifRef = doc(db, 'users', user.uid, 'notifications', notifId);
-              
-              const notifSnap = await getDoc(notifRef);
-               if (!notifSnap.exists()) {
-                notifiedIds.add(notifId);
-                await setDoc(notifRef, {
-                  id: notifId,
-                  title: "Upcoming Appointment",
-                  body: `You have an appointment with ${appt.patientName || 'a patient'} at ${appt.startTime}.`,
-                  createdAt: serverTimestamp(),
-                  read: false,
-                  type: 'appointment'
-                });
+            const notifSnap = await getDoc(notifRef);
+            if (!notifSnap.exists()) {
+              notifiedIds.add(notifId);
+              await setDoc(notifRef, {
+                id: notifId,
+                title: "Upcoming Appointment",
+                body: `You have an appointment with ${appt.patientName || 'a patient'} at ${appt.startTime}.`,
+                createdAt: serverTimestamp(),
+                read: false,
+                type: 'appointment'
+              });
 
-                toast({
-                  title: "Upcoming Appointment",
-                  description: `Appointment at ${appt.startTime} starting soon.`,
-                });
+              toast({
+                title: "Upcoming Appointment",
+                description: `Appointment at ${appt.startTime} starting soon.`,
+              });
 
-                if ('Notification' in window && Notification.permission === 'granted') {
-                  new Notification("Upcoming Appointment", {
-                    body: `Appointment at ${appt.startTime} starting soon.`,
-                  });
-                }
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification("Upcoming Appointment", {
+                  body: `Appointment at ${appt.startTime} starting soon.`,
+                });
               }
             }
-          } catch (e) {
-            console.error("Error processing appointment time trigger:", e);
           }
+        } catch (e) {
+          console.error("Error processing appointment time trigger:", e);
         }
-      };
+      }
+    };
 
-      checkAppts();
-      const intervalId = setInterval(checkAppts, 30000);
-      return () => clearInterval(intervalId);
-    }
+    checkAppts();
+    const intervalId = setInterval(checkAppts, 30000);
+    return () => clearInterval(intervalId);
+
   }, [db, user, notificationsEnabled, activeAppts, toast]);
 
   // 6. Subscribe to new user requests (Admins only)
@@ -321,6 +325,39 @@ export function NotificationListener() {
     return () => unsub();
   }, [db, user, notificationsEnabled, toast, notifiedIds]);
 
+  // 8. Auto-delete notifications older than 2 days
+  useEffect(() => {
+    if (!db || !user) return;
+
+    const cleanupOldNotifications = async () => {
+      try {
+        const twoDaysAgo = new Date();
+        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+        const colRef = collection(db, 'users', user.uid, 'notifications');
+        const q = query(colRef, where('createdAt', '<', twoDaysAgo));
+        const snap = await getDocs(q);
+        
+        if (!snap.empty) {
+          const batch = writeBatch(db);
+          snap.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+          });
+          await batch.commit();
+          console.log(`FCM-CLEANUP: Deleted ${snap.size} notifications older than 2 days.`);
+        }
+      } catch (error) {
+        console.warn("FCM-CLEANUP: Failed to clean up old notifications:", error);
+      }
+    };
+
+    cleanupOldNotifications();
+    // Run cleanup every 12 hours
+    const cleanupInterval = setInterval(cleanupOldNotifications, 12 * 60 * 60 * 1000);
+    return () => clearInterval(cleanupInterval);
+  }, [db, user]);
+
   return null;
+
 
 }

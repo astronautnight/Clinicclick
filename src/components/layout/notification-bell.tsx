@@ -13,7 +13,8 @@ import {
   updateDoc, 
   writeBatch,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  where
 } from 'firebase/firestore';
 import { 
   Popover, 
@@ -79,9 +80,16 @@ export function NotificationBell() {
       }
     });
 
-    // B. Subscribe to last 20 notifications
+    // B. Subscribe to notifications from the previous 2 days
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
     const colRef = collection(db, 'users', user.uid, 'notifications');
-    const q = query(colRef, orderBy('createdAt', 'desc'), limit(20));
+    const q = query(
+      colRef, 
+      where('createdAt', '>=', twoDaysAgo),
+      orderBy('createdAt', 'desc')
+    );
     
     const unsubNotifs = onSnapshot(q, (snap) => {
       const list: AppNotification[] = [];
