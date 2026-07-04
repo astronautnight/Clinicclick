@@ -20,6 +20,8 @@ export function NotificationListener() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [activeAppts, setActiveAppts] = useState<any[]>([]);
+  const [notifiedIds] = useState(() => new Set<string>());
+
 
   // 1. Subscribe to the user's notification preferences
   useEffect(() => {
@@ -205,7 +207,8 @@ export function NotificationListener() {
               const notifRef = doc(db, 'users', user.uid, 'notifications', notifId);
               
               const notifSnap = await getDoc(notifRef);
-              if (!notifSnap.exists()) {
+               if (!notifSnap.exists()) {
+                notifiedIds.add(notifId);
                 await setDoc(notifRef, {
                   id: notifId,
                   title: "Upcoming Appointment",
@@ -252,6 +255,7 @@ export function NotificationListener() {
         
         const notifSnap = await getDoc(notifRef);
         if (!notifSnap.exists()) {
+          notifiedIds.add(notifId);
           await setDoc(notifRef, {
             id: notifId,
             title: "New Join Request",
@@ -265,6 +269,7 @@ export function NotificationListener() {
             title: "New Join Request",
             description: `${request.displayName || 'A user'} wants to join the clinic.`,
           });
+
 
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification("New Join Request", {
@@ -280,5 +285,42 @@ export function NotificationListener() {
     return () => unsubRequests();
   }, [db, user, clinicId, clinicRole, notificationsEnabled, toast]);
 
+  // 7. Subscribe to the notifications collection to trigger native notifications for any new entry
+  useEffect(() => {
+    if (!db || !user || !notificationsEnabled) return;
+
+    let isInitialLoad = true;
+    const colRef = collection(db, 'users', user.uid, 'notifications');
+    const unsub = onSnapshot(colRef, (snap) => {
+      if (isInitialLoad) {
+        isInitialLoad = false;
+        // On initial load, mark all existing notification IDs as already notified so we don't trigger alerts for old notifications.
+        snap.docs.forEach((doc) => {
+          notifiedIds.add(doc.id);
+        });
+        return;
+      }
+
+      snap.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const docId = change.doc.id;
+          if (notifiedIds.has(docId)) return;
+          notifiedIds.add(docId);
+
+          const data = change.doc.data();
+          toast({
+            title: data.title || "New Notification",
+            description: data.body || "",
+          });
+        }
+      });
+    }, (error) => {
+      console.warn("Could not subscribe to notifications collection:", error);
+    });
+
+    return () => unsub();
+  }, [db, user, notificationsEnabled, toast, notifiedIds]);
+
   return null;
+
 }

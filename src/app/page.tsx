@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { updateAppointment } from '@/services/appointment-service';
 
 
 // Reusable components from user's example, adapted to TSX and project styles
@@ -67,27 +68,67 @@ function StatCard({ title, value, icon, highlight, success, danger }: { title: s
     );
 }
 
-function QueueItem({ time, name, procedure, status, statusColor }: { time: string, name: string, procedure?: string, status?: string, statusColor?: string }) {
+const STATUS_COLORS: Record<Appointment['status'], string> = {
+    Scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+    Confirmed: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200',
+    Completed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
+    Cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-200',
+    Missed: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
+    Postponed: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
+};
+
+function QueueItem({ 
+    time, 
+    name, 
+    procedure, 
+    status, 
+    onStatusChange 
+}: { 
+    time: string, 
+    name: string, 
+    procedure?: string, 
+    status: Appointment['status'], 
+    onStatusChange?: (newStatus: Appointment['status']) => void 
+}) {
     return (
-        <div className="flex justify-between items-center py-3 border-b text-sm">
-            <div className="flex items-center gap-4">
-                <strong className="w-12 text-muted-foreground">{time}</strong>
-                <div>
-                    <p className="font-semibold">{name}</p>
-                    {procedure && <div className="text-muted-foreground text-xs">{procedure}</div>}
+        <div className="flex justify-between items-center py-3 border-b text-sm gap-4">
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+                <strong className="w-12 text-muted-foreground shrink-0">{time}</strong>
+                <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{name}</p>
+                    {procedure && <div className="text-muted-foreground text-xs truncate">{procedure}</div>}
                 </div>
             </div>
-            {status && (
-                <Badge variant={statusColor === 'green' ? 'secondary' : 'destructive'} className={cn(
-                    statusColor === 'green' && 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-                    statusColor === 'red' && 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
-                )}>
-                    {status}
-                </Badge>
-            )}
+            <div className="shrink-0">
+                <Select value={status} onValueChange={(val) => onStatusChange?.(val as Appointment['status'])}>
+                    <SelectTrigger className={cn(
+                        "w-[125px] h-7 text-xs border-none font-semibold rounded-full px-2.5 focus:ring-0 focus:ring-offset-0 justify-between items-center flex cursor-pointer transition-colors duration-200",
+                        STATUS_COLORS[status] || "bg-slate-100 text-slate-800 dark:bg-slate-900/50 dark:text-slate-200"
+                    )}>
+                        <SelectValue placeholder={status} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {(Object.keys(STATUS_COLORS) as Appointment['status'][]).map((s) => (
+                            <SelectItem key={s} value={s} className="text-xs cursor-pointer">
+                                <span className={cn(
+                                    "inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle",
+                                    s === 'Scheduled' && 'bg-blue-500',
+                                    s === 'Confirmed' && 'bg-indigo-500',
+                                    s === 'Completed' && 'bg-green-500',
+                                    s === 'Cancelled' && 'bg-gray-500',
+                                    s === 'Missed' && 'bg-yellow-500',
+                                    s === 'Postponed' && 'bg-red-500'
+                                )}></span>
+                                <span className="align-middle">{s}</span>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
         </div>
     );
 }
+
 
 function ActionButton({ icon, label, primary, danger, href }: { icon: React.ReactNode, label: string, primary?: boolean, danger?: boolean, href: string }) {
     return (
@@ -219,6 +260,25 @@ export default function DashboardPage() {
             .filter(app => isSameDay(new Date(app.date), new Date()))
             .sort((a, b) => a.startTime.localeCompare(b.startTime));
     }, [appointments]);
+
+    const handleStatusChange = async (appointmentId: string, newStatus: Appointment['status']) => {
+        if (!clinicId) return;
+        try {
+            await updateAppointment(clinicId, appointmentId, { status: newStatus });
+            toast({
+                title: "Status Updated",
+                description: `Appointment status is now ${newStatus}.`,
+            });
+        } catch (error) {
+            console.error("Failed to update status", error);
+            toast({
+                title: "Error",
+                description: "Failed to update appointment status. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
+
 
     const handleLabSubmit = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -498,8 +558,8 @@ export default function DashboardPage() {
                                 time={app.startTime}
                                 name={app.patientName || "Unknown"}
                                 procedure={app.notes || (app.procedureIds && app.procedureIds.length > 0 ? `${app.procedureIds.length} procedure(s)` : 'General Consultation')}
-                                status={app.status === 'Completed' ? 'Completed' : (app.status === 'Scheduled' || app.status === 'Confirmed' ? 'Waiting' : app.status)}
-                                statusColor={app.status === 'Completed' ? 'green' : 'red'}
+                                status={app.status}
+                                onStatusChange={(newStatus) => handleStatusChange(app.id, newStatus)}
                             />
                         ))
                     ) : (
