@@ -81,11 +81,15 @@ export default function SignupPage() {
         await createClinic({
           ownerUid: user.uid,
           clinicName: clinicName.trim(),
+          address: '',
+          phone: '',
+          clinicType: 'General',
         });
       } else {
         await joinClinicWithCode({
           userId: user.uid,
           inviteCode: inviteCode.trim(),
+          requestedRole: 'Other',
         });
       }
 

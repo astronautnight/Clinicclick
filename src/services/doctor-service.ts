@@ -39,6 +39,7 @@ export async function addDoctor(
 
   const payload = {
     ...doctorData,
+    doctorType: doctorData.doctorType || 'doctor',
     assignedPatients: [],
     assignedProcedures: [],
     createdAt: serverTimestamp(),

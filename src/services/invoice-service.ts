@@ -4,6 +4,7 @@
 import { collection, addDoc, doc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import type { Patient, Invoice, UserProfile, Doctor } from "@/types";
 import { initializeFirebase } from "@/firebase";
+import { recordActiveDay } from "./clinic-service";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -49,6 +50,7 @@ export async function addInvoice(clinicId: string, invoiceData: GeneratedInvoice
 
   try {
     const docRef = await addDoc(invoicesColRef, { ...payload, createdAt: serverTimestamp() });
+    await recordActiveDay(clinicId);
     return docRef.id;
   } catch (error: any) {
     if (error.code === 'permission-denied') {

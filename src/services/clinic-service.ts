@@ -14,12 +14,15 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
+  arrayUnion,
 } from 'firebase/firestore';
 
 import { initializeFirebase } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { getUserProfile } from './auth-service';
+import { addDoctor } from './doctor-service';
+import { addStaffMember } from './staff-service';
 
 const { firestore: db } = initializeFirebase();
 
@@ -38,6 +41,7 @@ interface CreateClinicInput {
 interface JoinClinicInput {
   userId: string;
   inviteCode: string;
+  requestedRole: string;
 }
 
 type ClinicRole = 'admin' | 'member';
@@ -138,9 +142,10 @@ export async function createClinic({
 export async function joinClinicWithCode({
   userId,
   inviteCode,
+  requestedRole,
 }: JoinClinicInput): Promise<{ clinicId: string }> {
-  if (!userId || !inviteCode) {
-    throw new Error('User ID and invite code required');
+  if (!userId || !inviteCode || !requestedRole) {
+    throw new Error('User ID, invite code, and requested role are required');
   }
 
   // ❗ SAFETY: user cannot already be in a clinic
@@ -169,7 +174,8 @@ export async function joinClinicWithCode({
     doc(db, 'clinics', clinicId, 'pendingRequests', userId),
     {
       requestedAt: serverTimestamp(),
-      displayName: userProfile?.displayName || 'Unknown User'
+      displayName: userProfile?.displayName || 'Unknown User',
+      requestedRole: requestedRole,
     }
   );
 
@@ -200,13 +206,20 @@ export async function approveClinicRequest({
     const effectiveRole = membersSnap.size <= 1 ? 'admin' : role;
 
     const userProfile = await getUserProfile(userId);
+    const displayName = userProfile?.displayName || 'User';
+
+    // Retrieve requestedRole from pendingRequest
+    const pendingReqSnap = await getDoc(doc(db, 'clinics', clinicId, 'pendingRequests', userId));
+    const requestedRole = pendingReqSnap.exists() ? pendingReqSnap.data().requestedRole : null;
+
     // 1️⃣ Add to members
     await setDoc(
       doc(db, 'clinics', clinicId, 'members', userId),
       {
         role: effectiveRole,
         joinedAt: serverTimestamp(),
-        displayName: userProfile?.displayName || 'User'
+        displayName: displayName,
+        jobRole: requestedRole || 'Other',
       }
     );
 
@@ -221,6 +234,23 @@ export async function approveClinicRequest({
     await deleteDoc(
       doc(db, 'clinics', clinicId, 'pendingRequests', userId)
     );
+
+    // 4️⃣ Auto-create Doctor or Staff record
+    if (requestedRole === 'Doctor') {
+      await addDoctor(clinicId, {
+        name: displayName,
+        email: userProfile?.email || undefined,
+        specialization: 'General Dentistry',
+        doctorType: 'activedoctor',
+        color: '#3b82f6', // Default blue color
+      });
+    } else if (requestedRole !== 'Doctor' && requestedRole) {
+      await addStaffMember(clinicId, {
+        name: displayName,
+        email: userProfile?.email || undefined,
+        role: requestedRole,
+      });
+    }
   } catch (error: any) {
     if (error.code === 'permission-denied') {
       errorEmitter.emit(
@@ -276,6 +306,89 @@ export async function updateMemberRole({
       updatedAt: serverTimestamp(),
     }
   );
+}
+
+/* ============================================================
+   UPDATE MEMBER JOB ROLE (ADMIN) - Syncs with Doctors/Staff
+============================================================ */
+
+export async function updateMemberJobRole({
+  clinicId,
+  userId,
+  memberEmail,
+  memberName,
+  newJobRole,
+}: {
+  clinicId: string;
+  userId: string;
+  memberEmail?: string;
+  memberName: string;
+  newJobRole: 'Doctor' | 'Receptionist' | 'Dental Assistant' | 'Hygienist' | 'Office Manager' | 'Other';
+}) {
+  // 1️⃣ Update the jobRole in members subcollection
+  await updateDoc(
+    doc(db, 'clinics', clinicId, 'members', userId),
+    { jobRole: newJobRole }
+  );
+
+  // 2️⃣ Find existing records in doctors and staff using email or name
+  const doctorsCol = collection(db, 'clinics', clinicId, 'doctors');
+  const staffCol = collection(db, 'clinics', clinicId, 'staff');
+
+  const doctorsSnap = await getDocs(doctorsCol);
+  const staffSnap = await getDocs(staffCol);
+
+  let existingDoctorId: string | null = null;
+  let existingStaffId: string | null = null;
+
+  doctorsSnap.forEach(docSnap => {
+    const data = docSnap.data();
+    if ((memberEmail && data.email === memberEmail) || data.name === memberName) {
+      existingDoctorId = docSnap.id;
+    }
+  });
+
+  staffSnap.forEach(docSnap => {
+    const data = docSnap.data();
+    if ((memberEmail && data.email === memberEmail) || data.name === memberName) {
+      existingStaffId = docSnap.id;
+    }
+  });
+
+  // 3️⃣ Delete from old collection and add to new collection based on newJobRole
+  if (newJobRole === 'Doctor') {
+    if (existingStaffId) {
+      await deleteDoc(doc(db, 'clinics', clinicId, 'staff', existingStaffId));
+    }
+    if (!existingDoctorId) {
+      await addDoctor(clinicId, {
+        name: memberName,
+        email: memberEmail || undefined,
+        specialization: 'General Dentistry',
+        doctorType: 'activedoctor',
+        color: '#3b82f6',
+      });
+    }
+  } else {
+    if (existingDoctorId) {
+      await deleteDoc(doc(db, 'clinics', clinicId, 'doctors', existingDoctorId));
+    }
+    
+    const staffRole = newJobRole;
+    if (!existingStaffId) {
+      await addStaffMember(clinicId, {
+        name: memberName,
+        email: memberEmail || undefined,
+        role: staffRole,
+      });
+    } else {
+      // If staff already exists, just update their role
+      await updateDoc(doc(db, 'clinics', clinicId, 'staff', existingStaffId), {
+        role: staffRole,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
 }
 
 /* ============================================================
@@ -470,5 +583,25 @@ export async function deleteClinic({
       );
     }
     throw error;
+  }
+}
+
+/* ============================================================
+   RECORD ACTIVE DAY
+============================================================ */
+
+export async function recordActiveDay(clinicId: string): Promise<void> {
+  if (!clinicId) return;
+  const dateStr = new Date().toISOString().split('T')[0];
+  const clinicDocRef = doc(db, 'clinics', clinicId);
+
+  try {
+    await updateDoc(clinicDocRef, {
+      activeDates: arrayUnion(dateStr),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error: any) {
+    console.error("Failed to record active day:", error);
+    // Non-blocking, so we don't throw an error to the user if it fails for some reason
   }
 }

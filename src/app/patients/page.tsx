@@ -1,13 +1,12 @@
-
-
 'use client';
 
 import { useState, useEffect, type ChangeEvent, type FormEvent, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
-import { addPatient, deletePatient, updatePatient } from "@/services/patient-service";
+import { addPatient, deletePatient, updatePatient, uploadPatientFile, deletePatientPhoto } from "@/services/patient-service";
 import { useUser, useFirestore } from '@/firebase';
-
-
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapacitorCamera } from '@capacitor/camera';
+import { Filesystem } from '@capacitor/filesystem';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent } from "lucide-react";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -108,6 +107,153 @@ export default function PatientsPage() {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   const [discountValueState, setDiscountValueState] = useState<string>('');
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+
+  // File Upload States
+  const [pendingFiles, setPendingFiles] = useState<{ photos: File[], xrays: File[], scans: File[] }>({ photos: [], xrays: [], scans: [] });
+  const [pendingUrls, setPendingUrls] = useState<{ photos: string[], xrays: string[], scans: string[] }>({ photos: [], xrays: [], scans: [] });
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [uploadingForPatientId, setUploadingForPatientId] = useState<string | null>(null);
+  const [uploadingFileType, setUploadingFileType] = useState<'photos' | 'xrays' | 'scans' | null>(null);
+
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>, fileType: 'photos' | 'xrays' | 'scans') => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(f => {
+      if (f.size > 20 * 1024 * 1024) {
+        toast({ title: 'File too large', description: `"${f.name}" exceeds the 20 MB limit.`, variant: 'destructive' });
+        return false;
+      }
+      if (fileType !== 'scans' && !f.type.startsWith('image/') && !f.name.endsWith('.dicom')) {
+        toast({ title: 'Invalid file', description: `"${f.name}" is not supported for this field.`, variant: 'destructive' });
+        return false;
+      }
+      return true;
+    });
+    if (validFiles.length === 0) return;
+    
+    setPendingFiles(prev => ({ ...prev, [fileType]: [...prev[fileType], ...validFiles] }));
+    const newUrls = validFiles.map(f => URL.createObjectURL(f));
+    setPendingUrls(prev => ({ ...prev, [fileType]: [...prev[fileType], ...newUrls] }));
+    if (e.target) e.target.value = '';
+  };
+
+  const removePendingFile = (index: number, fileType: 'photos' | 'xrays' | 'scans') => {
+    URL.revokeObjectURL(pendingUrls[fileType][index]);
+    setPendingFiles(prev => ({ ...prev, [fileType]: prev[fileType].filter((_, i) => i !== index) }));
+    setPendingUrls(prev => ({ ...prev, [fileType]: prev[fileType].filter((_, i) => i !== index) }));
+  };
+
+  const removeExistingFile = (index: number, fileType: 'photos' | 'xrays' | 'scans') => {
+    setFormData(prev => ({
+      ...prev,
+      [fileType]: (prev[fileType] as string[] || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleNativeFilePicker = async (context: 'form' | 'card', fileType: 'photos' | 'xrays' | 'scans', patientId?: string) => {
+    if (!user || !clinicId) return;
+    try {
+      const images = await CapacitorCamera.pickImages({ quality: 90, limit: 5 });
+      const fetchedFiles: File[] = [];
+      for (let i = 0; i < images.photos.length; i++) {
+        const photo = images.photos[i];
+        let blob: Blob;
+        try {
+          if (photo.path) {
+            const result = await Filesystem.readFile({ path: photo.path });
+            const format = photo.format || 'jpeg';
+            const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+            const fetchRes = await fetch(`data:${mimeType};base64,${result.data}`);
+            blob = await fetchRes.blob();
+          } else if (photo.webPath) {
+            const response = await fetch(photo.webPath);
+            blob = await response.blob();
+          } else continue;
+        } catch (e: any) { continue; }
+        
+        try {
+          const file = new File([blob], `${fileType}_${Date.now()}_${i}.${photo.format || 'jpg'}`, { type: blob.type || 'image/jpeg' });
+          fetchedFiles.push(file);
+        } catch (e: any) {
+          (blob as any).name = `${fileType}_${Date.now()}_${i}.${photo.format || 'jpg'}`;
+          fetchedFiles.push(blob as any);
+        }
+      }
+
+      if (fetchedFiles.length === 0) return;
+
+      if (context === 'form') {
+        setPendingFiles(prev => ({ ...prev, [fileType]: [...prev[fileType], ...fetchedFiles] }));
+        const newUrls = fetchedFiles.map(f => URL.createObjectURL(f));
+        setPendingUrls(prev => ({ ...prev, [fileType]: [...prev[fileType], ...newUrls] }));
+      } else if (context === 'card' && patientId) {
+        setUploadingForPatientId(patientId);
+        setUploadingFileType(fileType);
+        const existingPatient = patients.find(p => p.id === patientId);
+        const existingFiles = (existingPatient?.[fileType] || []) as string[];
+        const newUrls: string[] = [];
+
+        try {
+          for (const file of fetchedFiles) {
+            const url = await uploadPatientFile(clinicId, patientId, file, user.uid, fileType);
+            if (url) newUrls.push(url);
+          }
+          if (newUrls.length > 0) {
+            await updatePatient(clinicId, patientId, { [fileType]: [...existingFiles, ...newUrls] });
+            toast({ title: 'Files uploaded', description: `${newUrls.length} file(s) added.` });
+          }
+        } catch (error: any) {
+          toast({ title: "Upload Failed", description: error.message || "Failed to upload file.", variant: "destructive" });
+        } finally {
+          setUploadingForPatientId(null);
+          setUploadingFileType(null);
+        }
+      }
+    } catch(err: any) {
+      if (err.message && err.message.includes('User cancelled')) return;
+      toast({ title: 'Camera Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleCardFileSelect = async (e: ChangeEvent<HTMLInputElement>, fileType: 'photos' | 'xrays' | 'scans', patientId: string) => {
+    if (!user || !clinicId) return;
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(f => {
+      if (f.size > 20 * 1024 * 1024) {
+        toast({ title: 'File too large', description: `"${f.name}" exceeds the 20 MB limit.`, variant: 'destructive' });
+        return false;
+      }
+      if (fileType !== 'scans' && !f.type.startsWith('image/') && !f.name.endsWith('.dicom')) {
+        toast({ title: 'Invalid file', description: `"${f.name}" is not supported for this field.`, variant: 'destructive' });
+        return false;
+      }
+      return true;
+    });
+    if (validFiles.length === 0) return;
+
+    setUploadingForPatientId(patientId);
+    setUploadingFileType(fileType);
+    const existingPatient = patients.find(p => p.id === patientId);
+    const existingFiles = (existingPatient?.[fileType] || []) as string[];
+    const newUrls: string[] = [];
+
+    try {
+      for (const file of validFiles) {
+        const url = await uploadPatientFile(clinicId, patientId, file, user.uid, fileType);
+        if (url) newUrls.push(url);
+      }
+      if (newUrls.length > 0) {
+        await updatePatient(clinicId, patientId, { [fileType]: [...existingFiles, ...newUrls] });
+        toast({ title: 'Files uploaded', description: `${newUrls.length} file(s) added.` });
+      }
+    } catch (error: any) {
+      toast({ title: "Upload Failed", description: error.message || "Failed to upload file.", variant: "destructive" });
+    } finally {
+      setUploadingForPatientId(null);
+      setUploadingFileType(null);
+      if (e.target) e.target.value = '';
+    }
+  };
+
 
   const handleOpenDiscountDialog = (patient: Patient) => {
     setDiscountPatient(patient);
@@ -254,6 +400,8 @@ export default function PatientsPage() {
     setEditingPatientId(null);
     setFormData(initialPatientData);
     setAge('');
+    setPendingFiles({ photos: [], xrays: [], scans: [] });
+    setPendingUrls({ photos: [], xrays: [], scans: [] });
     setIsFormOpen(true);
   };
 
@@ -268,6 +416,8 @@ export default function PatientsPage() {
       videos: [],
     });
     setAge(''); // Reset age field on edit
+    setPendingFiles({ photos: [], xrays: [], scans: [] });
+    setPendingUrls({ photos: [], xrays: [], scans: [] });
     setIsFormOpen(true);
   };
 
@@ -280,6 +430,7 @@ export default function PatientsPage() {
 
     setIsSubmitting(true);
     let success = false;
+    let finalPatientId = editingPatientId;
     try {
       if (editingPatientId) {
         success = await updatePatient(clinicId, editingPatientId, formData);
@@ -293,10 +444,37 @@ export default function PatientsPage() {
         const newId = await addPatient(clinicId, formData);
         if (newId) {
           success = true;
+          finalPatientId = newId;
           toast({
             title: "Patient Added",
             description: `${formData.firstName} ${formData.lastName} added successfully.`,
           });
+        }
+      }
+
+      // Handle pending files
+      if (success && finalPatientId) {
+        setIsUploadingPhotos(true);
+        try {
+          const types: ('photos' | 'xrays' | 'scans')[] = ['photos', 'xrays', 'scans'];
+          for (const type of types) {
+            if (pendingFiles[type].length > 0) {
+              const newUrls: string[] = [];
+              for (const file of pendingFiles[type]) {
+                const url = await uploadPatientFile(clinicId, finalPatientId, file, user.uid, type);
+                if (url) newUrls.push(url);
+              }
+              if (newUrls.length > 0) {
+                const existingFiles = ((formData[type] as unknown as string[]) || []);
+                await updatePatient(clinicId, finalPatientId, { [type]: [...existingFiles, ...newUrls] });
+              }
+            }
+          }
+        } catch (uploadErr: any) {
+          console.error("File upload error:", uploadErr);
+          toast({ title: "File Upload Failed", description: "Patient saved, but some files failed to upload.", variant: "destructive" });
+        } finally {
+          setIsUploadingPhotos(false);
         }
       }
 
@@ -305,6 +483,8 @@ export default function PatientsPage() {
         setAge('');
         setIsFormOpen(false);
         setEditingPatientId(null);
+        setPendingFiles({ photos: [], xrays: [], scans: [] });
+        setPendingUrls({ photos: [], xrays: [], scans: [] });
       } else {
         toast({
           title: `Error ${editingPatientId ? 'Updating' : 'Adding'} Patient`,
@@ -590,47 +770,71 @@ export default function PatientsPage() {
                     </CardContent></Card>
                 </TabsContent>
                 <TabsContent value="attachments" className="mt-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Attachments</CardTitle>
-                      <CardDescription>
-                        Manage patient photos, X-rays, and other scans.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      {/* Display existing files would go here. For now, it's a placeholder. */}
-                      <div>
-                        <h4 className="text-md font-semibold mb-2">Uploaded Files</h4>
-                        <div className="p-4 border rounded-md text-center text-muted-foreground">
-                          {/* This is where we would map over and display patient.photos, patient.videos etc. */}
-                          <p>No files uploaded yet.</p>
-                          <p className="text-xs mt-1">File display coming soon.</p>
-                        </div>
-                      </div>
+                  <Card className="border-none shadow-none bg-transparent">
+                    <CardContent className="p-0 space-y-6">
+                      {[
+                        { type: 'photos', label: 'Patient Photos' },
+                        { type: 'xrays', label: 'X-Rays / Radiographs' },
+                        { type: 'scans', label: 'Intraoral Scans' }
+                      ].map(({ type, label }) => {
+                        const fileType = type as 'photos' | 'xrays' | 'scans';
+                        const existingFiles = (patient[fileType] as string[] || []);
+                        const isUploadingThis = uploadingForPatientId === patient.id && uploadingFileType === fileType;
 
-                      {/* Upload section */}
-                      <div className="space-y-4 pt-4 border-t">
-                        <h4 className="text-md font-semibold">Import New Files</h4>
-                        <div className="space-y-2">
-                          <Label htmlFor="patientPhotos">Patient Photos</Label>
-                          <Input id="patientPhotos" type="file" multiple accept="image/*" className="cursor-pointer" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="xrays">X-Rays / Radiographs</Label>
-                          <Input id="xrays" type="file" multiple accept="image/*,application/dicom" className="cursor-pointer" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="scans">Intraoral Scans</Label>
-                          <Input id="scans" type="file" multiple accept=".ply,.obj,.stl" className="cursor-pointer" />
-                        </div>
-                      </div>
+                        return (
+                          <div key={fileType}>
+                            <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-2">{label}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                {existingFiles.map((url, i) => (
+                                    <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted">
+                                        <a
+                                            href={url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block w-full h-full focus:outline-none focus:ring-2 focus:ring-primary"
+                                        >
+                                            <img src={url} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" />
+                                        </a>
+                                    </div>
+                                ))}
+                                {/* Add file button */}
+                                <div className="relative">
+                                    <input
+                                        id={`card-upload-${fileType}-${patient.id}`}
+                                        type="file"
+                                        accept={fileType === 'scans' ? '.ply,.obj,.stl' : 'image/*,.dicom'}
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => handleCardFileSelect(e, fileType, patient.id)}
+                                    />
+                                    <label
+                                        htmlFor={`card-upload-${fileType}-${patient.id}`}
+                                        onClick={(e) => {
+                                            if (Capacitor.isNativePlatform() && fileType !== 'scans') {
+                                                e.preventDefault();
+                                                handleNativeFilePicker('card', fileType, patient.id);
+                                            }
+                                        }}
+                                        className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+                                    >
+                                        {isUploadingThis ? (
+                                            <span className="text-xs text-muted-foreground animate-pulse">...</span>
+                                        ) : (
+                                            <>
+                                                <Camera className="h-4 w-4 text-muted-foreground" />
+                                                <span className="text-[10px] text-muted-foreground mt-0.5">Add</span>
+                                            </>
+                                        )}
+                                    </label>
+                                </div>
+                                {existingFiles.length === 0 && !isUploadingThis && (
+                                    <span className="text-xs text-muted-foreground">No {label.toLowerCase()} yet</span>
+                                )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </CardContent>
-                    <CardFooter>
-                      <Button disabled>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Files (Coming Soon)
-                      </Button>
-                    </CardFooter>
                   </Card>
                 </TabsContent>
                 <TabsContent value="billing" className="mt-4">
@@ -863,9 +1067,88 @@ export default function PatientsPage() {
 
                 <fieldset className="border-t pt-4">
                   <legend className="text-lg font-medium mb-4">Patient Files</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label htmlFor="photos">Patient Photos (Optional)</Label><Input id="photos" name="photos" type="file" multiple onChange={handleFileChange} disabled={isSubmitting} accept="image/*" /></div>
-                    <div className="space-y-2"><Label htmlFor="videos">Patient Videos (Optional)</Label><Input id="videos" name="videos" type="file" multiple onChange={handleFileChange} disabled={isSubmitting} accept="video/*" /></div>
+                  <div className="space-y-6">
+                    {[
+                      { type: 'photos', label: 'Patient Photos', desc: 'Max 5 MB per image. JPG, PNG, WebP supported.' },
+                      { type: 'xrays', label: 'X-Rays / Radiographs', desc: 'Max 5 MB per image. JPG, PNG, DICOM supported.' },
+                      { type: 'scans', label: 'Intraoral Scans', desc: 'Max 20 MB per file. PLY, OBJ, STL supported.' }
+                    ].map(({ type, label, desc }) => {
+                      const fileType = type as 'photos' | 'xrays' | 'scans';
+                      const existingUrls = (formData[fileType] as unknown as string[]) || [];
+                      const pendingTypeUrls = pendingUrls[fileType] || [];
+                      
+                      return (
+                        <div key={fileType} className="space-y-4">
+                          <h4 className="text-sm font-semibold">{label}</h4>
+                          {/* Existing files */}
+                          {existingUrls.length > 0 && (
+                              <div className="space-y-2">
+                                  <Label className="text-xs text-muted-foreground font-semibold uppercase">Saved files</Label>
+                                  <div className="flex flex-wrap gap-2">
+                                      {existingUrls.map((url, i) => (
+                                          <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted">
+                                              <img src={url} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" />
+                                              <button
+                                                  type="button"
+                                                  onClick={() => removeExistingFile(i, fileType)}
+                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                              >
+                                                  <X className="h-3 w-3" />
+                                              </button>
+                                          </div>
+                                      ))}
+                                  </div>
+                              </div>
+                          )}
+                          {/* Pending files */}
+                          {pendingTypeUrls.length > 0 && (
+                              <div className="space-y-2">
+                                  <Label className="text-xs text-muted-foreground font-semibold uppercase">New files (unsaved)</Label>
+                                  <div className="flex flex-wrap gap-2">
+                                      {pendingTypeUrls.map((url, i) => (
+                                          <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border-2 border-dashed border-primary/40 bg-muted">
+                                              <img src={url} alt={`New ${label} ${i + 1}`} className="w-full h-full object-cover" />
+                                              <button
+                                                  type="button"
+                                                  onClick={() => removePendingFile(i, fileType)}
+                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                              >
+                                                  <X className="h-3 w-3" />
+                                              </button>
+                                          </div>
+                                      ))}
+                                  </div>
+                              </div>
+                          )}
+                          {/* Upload button */}
+                          <input
+                              id={`${fileType}-upload-input`}
+                              type="file"
+                              accept={fileType === 'scans' ? '.ply,.obj,.stl' : 'image/*,.dicom'}
+                              multiple
+                              className="hidden"
+                              onChange={(e) => handleFileSelect(e, fileType)}
+                          />
+                          <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                  if (Capacitor.isNativePlatform() && fileType !== 'scans') {
+                                      handleNativeFilePicker('form', fileType);
+                                  } else {
+                                      document.getElementById(`${fileType}-upload-input`)?.click();
+                                  }
+                              }}
+                              className="gap-2"
+                          >
+                              <ImagePlus className="h-4 w-4" />
+                              Add {fileType}
+                          </Button>
+                          <p className="text-xs text-muted-foreground">{desc}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </fieldset>
               </div>

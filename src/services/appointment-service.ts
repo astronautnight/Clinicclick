@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import type { Appointment } from "@/types";
 import { initializeFirebase } from "@/firebase";
+import { recordActiveDay } from "./clinic-service";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -34,6 +35,7 @@ export async function addAppointment(clinicId: string, appointmentData: Creatabl
 
   try {
     const docRef = await addDoc(appointmentsColRef, payload);
+    await recordActiveDay(clinicId);
     return docRef.id;
   } catch (error: any) {
     if (error.code === 'permission-denied') {

@@ -12,13 +12,87 @@ import {
 } from "firebase/firestore";
 import type { Patient } from "@/types";
 import { initializeFirebase } from "@/firebase";
+import { recordActiveDay } from "./clinic-service";
 import { errorEmitter } from "@/firebase/error-emitter";
 import {
   FirestorePermissionError,
   type SecurityRuleContext,
 } from "@/firebase/errors";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import imageCompression from 'browser-image-compression';
 
-const { firestore: db } = initializeFirebase();
+const { firestore: db, storage } = initializeFirebase();
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
+/**
+ * Upload a single patient photo to Firebase Storage with automatic compression.
+ */
+export async function uploadPatientFile(
+  clinicId: string,
+  patientId: string,
+  file: File,
+  uid: string,
+  folderType: 'photos' | 'xrays' | 'scans' = 'photos'
+): Promise<string> {
+  if (!clinicId || !patientId) {
+    throw new Error('clinicId and patientId are required');
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File "${file.name}" exceeds the 20 MB limit.`);
+  }
+
+  let fileToUpload = file;
+  try {
+    const options = {
+      maxSizeMB: 0.75, // 750 KB
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+    };
+    fileToUpload = await imageCompression(file as any, options);
+  } catch (error: any) {
+    console.warn(`Image compression failed: ${error.message}`);
+  }
+
+  const safeName = fileToUpload.name ? fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_') : `photo_${Date.now()}.jpg`;
+  const storagePath = `clinics/${clinicId}/patients/${patientId}/${folderType}/${Date.now()}_${safeName}`;
+  const storageRef = ref(storage, storagePath);
+
+  try {
+    await uploadBytes(storageRef, fileToUpload as Blob, {
+      contentType: fileToUpload.type || file.type,
+      customMetadata: { uploadedBy: uid },
+    });
+    const url = await getDownloadURL(storageRef);
+    return url;
+  } catch (error: any) {
+    throw new Error(`Upload failed: ${error.message || 'Unknown error'}`);
+  }
+}
+
+/**
+ * Delete a patient photo from Firebase Storage.
+ */
+export async function deletePatientPhoto(photoUrl: string): Promise<boolean> {
+  if (!photoUrl) return false;
+  try {
+    const storageRef = ref(storage, photoUrl);
+    await deleteObject(storageRef);
+    return true;
+  } catch (error: any) {
+    if (error?.code === 'storage/object-not-found') {
+      return true;
+    }
+    console.error('Error deleting patient photo:', error);
+    return false;
+  }
+}
 
 /**
  * Data allowed to be updated (no id / timestamps)
@@ -65,6 +139,7 @@ export async function addPatient(
 
   try {
     await setDoc(newPatientRef, payload);
+    await recordActiveDay(clinicId);
     return newPatientRef.id;
   } catch (error: any) {
     if (error.code === "permission-denied") {
@@ -105,15 +180,14 @@ export async function updatePatient(
     patientId
   );
 
-  const { photos, videos, ...dataToSave } = patientData as any;
-
   const payload = {
-    ...dataToSave,
+    ...patientData,
     updatedAt: serverTimestamp(),
   };
 
   try {
     await updateDoc(patientDocRef, payload);
+    await recordActiveDay(clinicId);
     return true;
   } catch (error: any) {
     if (error.code === "permission-denied") {

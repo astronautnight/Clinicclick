@@ -74,6 +74,17 @@ async function ensureUserProfile(user: User): Promise<void> {
       createdAt: serverTimestamp(),
       read: false,
     });
+
+    // Create a notification for the Founder Program
+    const founderNotifRef = doc(collection(db, 'users', user.uid, 'notifications'));
+    await setDoc(founderNotifRef, {
+      type: 'system',
+      title: 'Founder Program',
+      body: 'Add your clinic to receive discounts on founder program',
+      createdAt: serverTimestamp(),
+      read: false,
+      actionUrl: '/clinic',
+    });
   }
 }
 

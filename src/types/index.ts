@@ -74,6 +74,8 @@ export interface Patient {
   markedTeeth?: MarkedTooth[];
   photos?: File[] | string[]; 
   videos?: File[] | string[];
+  xrays?: File[] | string[];
+  scans?: File[] | string[];
   linkedProcedures?: LinkedProcedure[];
   createdAt: Date;
   updatedAt: Date;
@@ -281,6 +283,7 @@ export interface Doctor {
   createdAt: Date;
   updatedAt: Date;
   color?:string;
+  doctorType?: 'doctor' | 'activedoctor';
 }
 
 export type AttendanceStatus = 'Present' | 'Absent';
