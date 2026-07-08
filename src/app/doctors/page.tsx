@@ -20,29 +20,29 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { Alert, AlertTitle, AlertDescription as ShadAlertDescription } from "@/components/ui/alert";
 
 const PALETTE = [
-  "#001219",
-  "#005f73",
-  "#0a9396",
-  "#94d2bd",
-  "#e9d8a6",
-  "#ee9b00",
-  "#ca6702",
-  "#bb3e03",
-  "#ae2012",
-  "#9b2226"
+  "#1E3A8A",
+  "#7C3AED",
+  "#EC4899",
+  "#F59E0B",
+  "#14B8A6",
+  "#DC2626",
+  "#4F46E5",
+  "#84CC16",
+  "#0EA5E9",
+  "#475569"
 ];
 
 const colorNames = [
-  "Ink",
-  "Deep Teal",
-  "Teal",
-  "Mint",
-  "Sand",
+  "Deep Blue",
+  "Vibrant Purple",
+  "Soft Pink",
   "Amber",
-  "Copper",
-  "Burnt Orange",
+  "Teal",
   "Crimson",
-  "Brick"
+  "Indigo",
+  "Lime Green",
+  "Sky Blue",
+  "Slate"
 ];
 
 const initialDoctorData: Omit<Doctor, 'id' | 'assignedPatients' | 'assignedProcedures' | 'createdAt' | 'updatedAt' | 'color'> & { color?: string } = {
