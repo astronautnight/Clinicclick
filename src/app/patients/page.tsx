@@ -114,6 +114,7 @@ export default function PatientsPage() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [uploadingForPatientId, setUploadingForPatientId] = useState<string | null>(null);
   const [uploadingFileType, setUploadingFileType] = useState<'photos' | 'xrays' | 'scans' | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ url: string, type: 'photos' | 'xrays' | 'scans', index: number, patientId: string } | null>(null);
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>, fileType: 'photos' | 'xrays' | 'scans') => {
     const files = Array.from(e.target.files || []);
@@ -140,6 +141,28 @@ export default function PatientsPage() {
     URL.revokeObjectURL(pendingUrls[fileType][index]);
     setPendingFiles(prev => ({ ...prev, [fileType]: prev[fileType].filter((_, i) => i !== index) }));
     setPendingUrls(prev => ({ ...prev, [fileType]: prev[fileType].filter((_, i) => i !== index) }));
+  };
+
+  const handleDeleteExistingFile = async () => {
+    if (!user || !clinicId || !previewFile) return;
+    
+    const { url, type, index, patientId } = previewFile;
+    const patient = patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    const existingFiles = (patient[type] as string[] || []);
+    const updatedFiles = existingFiles.filter((_, i) => i !== index);
+
+    // Call service to delete from storage
+    await deletePatientPhoto(url); 
+
+    const success = await updatePatient(clinicId, patientId, { [type]: updatedFiles });
+    if (success) {
+        toast({ title: 'Photo Deleted', description: 'The photo has been removed.' });
+        setPreviewFile(null); // Close the dialog
+    } else {
+        toast({ title: 'Delete Failed', variant: 'destructive' });
+    }
   };
 
   const removeExistingFile = (index: number, fileType: 'photos' | 'xrays' | 'scans') => {
@@ -787,14 +810,9 @@ export default function PatientsPage() {
                             <div className="flex flex-wrap items-center gap-2">
                                 {existingFiles.map((url, i) => (
                                     <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors bg-muted">
-                                        <a
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block w-full h-full focus:outline-none focus:ring-2 focus:ring-primary"
-                                        >
+                                        <button type="button" onClick={() => setPreviewFile({ url, type: fileType, index: i, patientId: patient.id })} className="block w-full h-full focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer">
                                             <img src={url} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" />
-                                        </a>
+                                        </button>
                                     </div>
                                 ))}
                                 {/* Add file button */}
@@ -1303,6 +1321,23 @@ export default function PatientsPage() {
               Apply Discount
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black/90 border-none no-print">
+          <DialogTitle className="sr-only">Photo Preview</DialogTitle>
+          <div className="relative w-full h-[80vh] flex items-center justify-center">
+            {previewFile && (
+              <img src={previewFile.url} alt="Preview" className="max-w-full max-h-full object-contain" />
+            )}
+            <Button
+              variant="destructive"
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 w-64 shadow-xl"
+              onClick={handleDeleteExistingFile}
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Delete Photo
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
