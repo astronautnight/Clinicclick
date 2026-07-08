@@ -70,7 +70,7 @@ async function ensureUserProfile(user: User): Promise<void> {
     await setDoc(notifRef, {
       type: 'survey_source',
       title: 'Welcome! How did you hear about us?',
-      body: 'Tap here to let us know where you heard about ClinicClick.',
+      body: 'Tap here to let us know where you heard about Clinic@Click.',
       createdAt: serverTimestamp(),
       read: false,
     });

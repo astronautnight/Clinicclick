@@ -130,6 +130,7 @@ export default function AcademicsPage() {
     const [isAttendanceFormOpen, setIsAttendanceFormOpen] = useState(false);
     const [attendanceDate, setAttendanceDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [attendanceDepartmentId, setAttendanceDepartmentId] = useState('');
+    const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>('Present');
     const [summaryMonth, setSummaryMonth] = useState(new Date());
     const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
@@ -538,8 +539,8 @@ export default function AcademicsPage() {
         }
         
         try {
-            await setPersonalAttendance(user.uid, attendanceDate, 'Present', { departmentId: dept.id, departmentName: dept.name });
-            toast({ title: "Attendance Marked", description: `Marked present for ${format(new Date(attendanceDate), 'dd/MM/yyyy')}.`});
+            await setPersonalAttendance(user.uid, attendanceDate, attendanceStatus, { departmentId: dept.id, departmentName: dept.name });
+            toast({ title: "Attendance Marked", description: `Marked ${attendanceStatus.toLowerCase()} for ${format(new Date(attendanceDate), 'dd/MM/yyyy')}.`});
             setIsAttendanceFormOpen(false);
         } catch(error) {
              console.error("Error marking attendance", error);
@@ -579,23 +580,24 @@ export default function AcademicsPage() {
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayAttendance = attendance[dateStr];
         const isSelected = selectedCalendarDate === dateStr;
+        const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
     
         return (
-          <button
-            type="button"
-            onClick={() => setSelectedCalendarDate(prev => prev === dateStr ? null : dateStr)}
+          <div
             className={cn(
-              "relative w-full h-full flex items-center justify-center rounded-md transition-all",
-              isSelected && "ring-2 ring-primary ring-offset-1",
-              dayAttendance && "cursor-pointer",
-              !dayAttendance && "cursor-default"
+              "relative w-full h-full flex flex-col items-center justify-center rounded-md transition-all min-h-[2.5rem]",
+              isSelected && "bg-primary text-primary-foreground font-semibold shadow",
+              !isSelected && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+              isToday && !isSelected && "bg-accent text-accent-foreground"
             )}
           >
-            {format(date, 'd')}
-            {dayAttendance && (
-              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-current" />
-            )}
-          </button>
+            <span>{format(date, 'd')}</span>
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center justify-center">
+              {dayAttendance?.status === 'Present' && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+              {dayAttendance?.status === 'Absent' && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+              {!dayAttendance && isToday && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+            </div>
+          </div>
         );
     };
 
@@ -614,7 +616,11 @@ export default function AcademicsPage() {
             if (attendance[dateStr]?.status === 'Present') present++;
             else if (attendance[dateStr]?.status === 'Absent') absent++;
         }
-        return { present, absent };
+        
+        const latestAttendanceDate = Object.keys(attendance).sort().reverse()[0];
+        const currentPostingName = latestAttendanceDate ? attendance[latestAttendanceDate].departmentName : (allDepartments.length > 0 ? allDepartments[0].name : "No Department");
+        
+        return { present, absent, total: present + absent, currentPostingName };
     })();
 
     const financeSummary = (() => {
@@ -1018,97 +1024,112 @@ export default function AcademicsPage() {
                     )}
                 </TabsContent>
                 <TabsContent value="attendance" className="mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Manage Postings & Attendance</CardTitle>
-                            <CardDescription>Log your daily department posting and view your monthly attendance.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                             <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
-                                 <DialogTrigger asChild>
-                                     <Button variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Mark New Attendance</Button>
-                                 </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
-                                     <form onSubmit={handleAttendanceSubmit} className="space-y-4">
-                                        <div className="space-y-2"><Label>Date</Label><Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} required/></div>
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <Label>Department Posting</Label>
-                                                <Button type="button" variant="outline" size="sm" onClick={() => openAddDeptDialog('attendance')} title="Add Department">
-                                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                                    Add
-                                                </Button>
-                                            </div>
-                                            <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
-                                                <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
-                                                <SelectContent>
-                                                    {allDepartments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
-                                                    {allDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
+                    <div className="space-y-6">
+                        {/* Stats Top Row */}
+                        <Card className="bg-card text-card-foreground border-border overflow-hidden">
+                            <CardContent className="p-0">
+                                <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x border-b p-4 items-center justify-between bg-muted/30">
+                                    <div className="flex flex-col md:items-start items-center">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Current Posting</p>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium rounded-full px-3">
+                                                {attendanceStats.currentPostingName}
+                                            </Badge>
+                                            <span className="text-sm text-muted-foreground font-medium">Block 1</span>
                                         </div>
-                                        <DialogFooter>
-                                            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                                            <Button type="submit">Mark as Present</Button>
-                                        </DialogFooter>
-                                     </form>
-                                </DialogContent>
-                             </Dialog>
-                             
-                            <div className="overflow-x-auto">
-                                 <Card>
-                                     <CardContent className="flex justify-center pt-6">
-                                          <Calendar
+                                    </div>
+                                    <div className="flex flex-col md:items-end items-center mt-4 md:mt-0 pt-4 md:pt-0">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1">Posting Period</p>
+                                        <p className="text-sm font-semibold">{format(new Date(summaryMonth.getFullYear(), summaryMonth.getMonth(), 1), 'dd MMM')} - {format(new Date(summaryMonth.getFullYear(), summaryMonth.getMonth() + 1, 0), 'dd MMM yyyy')}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 divide-x p-6">
+                                    <div className="text-center flex flex-col items-center justify-center">
+                                        <span className="text-4xl font-light text-green-500">{attendanceStats.present}</span>
+                                        <span className="text-xs text-muted-foreground mt-2 font-medium">Days present</span>
+                                    </div>
+                                    <div className="text-center flex flex-col items-center justify-center">
+                                        <span className="text-4xl font-light text-red-500">{attendanceStats.absent}</span>
+                                        <span className="text-xs text-muted-foreground mt-2 font-medium">Days absent</span>
+                                    </div>
+                                    <div className="text-center flex flex-col items-center justify-center">
+                                        <span className="text-4xl font-semibold">
+                                            {attendanceStats.total > 0 ? Math.round((attendanceStats.present / attendanceStats.total) * 100) : 0}%
+                                        </span>
+                                        <span className="text-xs text-muted-foreground mt-2 font-medium">Attendance</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Calendar View */}
+                        <Card className="bg-card">
+                            <CardContent className="p-6">
+                                <div className="w-full flex justify-between items-center mb-6">
+                                    <h3 className="font-semibold text-lg hidden md:block">Monthly View</h3>
+                                    <Dialog open={isAttendanceFormOpen} onOpenChange={setIsAttendanceFormOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" className="ml-auto rounded-full"><PlusCircle className="mr-2 h-4 w-4"/>Mark Attendance</Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader><DialogTitle>Mark Attendance</DialogTitle></DialogHeader>
+                                            <form onSubmit={handleAttendanceSubmit} className="space-y-4">
+                                                <div className="space-y-2"><Label>Date</Label><Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} required/></div>
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label>Department Posting</Label>
+                                                        <Button type="button" variant="outline" size="sm" onClick={() => openAddDeptDialog('attendance')} title="Add Department">
+                                                            <PlusCircle className="mr-2 h-4 w-4" />
+                                                            Add
+                                                        </Button>
+                                                    </div>
+                                                    <Select value={attendanceDepartmentId} onValueChange={setAttendanceDepartmentId} required>
+                                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select department..."/></SelectTrigger>
+                                                        <SelectContent>
+                                                            {allDepartments.length === 0 && <p className="p-2 text-sm text-muted-foreground text-center">No departments yet</p>}
+                                                            {allDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Status</Label>
+                                                    <Select value={attendanceStatus} onValueChange={(val: AttendanceStatus) => setAttendanceStatus(val)} required>
+                                                        <SelectTrigger className="w-full"><SelectValue placeholder="Select status..."/></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Present">Present</SelectItem>
+                                                            <SelectItem value="Absent">Absent</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <DialogFooter>
+                                                    <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                                                    <Button type="submit">Save Attendance</Button>
+                                                </DialogFooter>
+                                            </form>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                                <div className="flex justify-center w-full">
+                                    <div className="w-full max-w-xl border rounded-xl overflow-hidden shadow-sm">
+                                        <Calendar
                                             mode="single"
+                                            selected={selectedCalendarDate ? new Date(selectedCalendarDate + 'T00:00:00') : undefined}
+                                            onSelect={(date) => setSelectedCalendarDate(date ? format(date, 'yyyy-MM-dd') : null)}
                                             month={summaryMonth}
                                             onMonthChange={setSummaryMonth}
                                             components={{ DayContent: DayWithAttendance }}
-                                            modifiers={{
-                                                present: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Present',
-                                                absent: (date) => attendance[format(date, 'yyyy-MM-dd')]?.status === 'Absent',
-                                            }}
-                                            modifiersClassNames={{
-                                                present: cn('bg-green-100 dark:bg-green-800/50 text-green-800 dark:text-green-200 rounded-md'),
-                                                absent: cn('bg-red-100 dark:bg-red-800/50 text-red-800 dark:text-red-200 rounded-md'),
-                                            }}
-                                            className="p-0"
+                                            className="p-4 w-full [&_.rdp-cell]:w-full [&_.rdp-table]:w-full [&_.rdp-head_th]:w-full [&_.rdp-head_th]:font-normal [&_.rdp-head_th]:text-muted-foreground [&_.rdp-button]:h-auto [&_.rdp-button]:w-full [&_.rdp-button]:p-0"
                                         />
-                                     </CardContent>
-                                     <CardFooter className="flex flex-col gap-4">
-                                        <div className="flex justify-around text-sm w-full">
-                                            <div className="text-center">
-                                                <p className="font-bold text-green-600">{attendanceStats.present}</p>
-                                                <p>Present</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="font-bold text-red-600">{attendanceStats.absent}</p>
-                                                <p>Absent</p>
-                                            </div>
-                                        </div>
-                                        {selectedCalendarDate && attendance[selectedCalendarDate] && (
-                                            <div className="w-full rounded-lg border bg-muted/50 p-4 space-y-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-                                                <p className="text-sm font-semibold text-muted-foreground">
-                                                    {format(new Date(selectedCalendarDate + 'T00:00:00'), 'EEEE, dd MMMM yyyy')}
-                                                </p>
-                                                <div className="flex items-center gap-3">
-                                                    <Badge variant={attendance[selectedCalendarDate].status === 'Present' ? 'secondary' : 'destructive'} className={attendance[selectedCalendarDate].status === 'Present' ? 'bg-green-100 text-green-800 dark:bg-green-800/50 dark:text-green-200' : ''}>
-                                                        {attendance[selectedCalendarDate].status}
-                                                    </Badge>
-                                                    <span className="text-sm">Department: <strong>{attendance[selectedCalendarDate].departmentName}</strong></span>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {selectedCalendarDate && !attendance[selectedCalendarDate] && (
-                                            <div className="w-full rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground animate-in fade-in-0 slide-in-from-top-2 duration-200">
-                                                <p>No attendance recorded for {format(new Date(selectedCalendarDate + 'T00:00:00'), 'dd MMMM yyyy')}.</p>
-                                            </div>
-                                        )}
-                                     </CardFooter>
-                                 </Card>
-                             </div>
-                        </CardContent>
-                    </Card>
+                                    </div>
+                                </div>
+                                <div className="flex gap-4 mt-8 pt-4 border-t w-full max-w-xl mx-auto justify-start">
+                                    <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-green-500"></div><span className="text-xs font-medium">Present</span></div>
+                                    <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-red-500"></div><span className="text-xs font-medium">Absent</span></div>
+                                    <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div><span className="text-xs font-medium">Today</span></div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </TabsContent>
                  <TabsContent value="finance" className="mt-4">
                     <Card>
