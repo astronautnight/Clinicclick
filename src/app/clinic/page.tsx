@@ -44,7 +44,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 
-import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -650,6 +650,9 @@ export default function ClinicPage() {
   const patientsCount = patients.length;
   const doctorsCount = doctors.filter(d => d.doctorType === 'activedoctor').length;
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isTodayActive = activeDates.includes(todayStr);
+
   let founderTier: 'None' | 'Bronze' | 'Silver' | 'Gold' = 'None';
   let nextTier: 'Bronze' | 'Silver' | 'Gold' | 'None' = 'Bronze';
   
@@ -749,10 +752,49 @@ export default function ClinicPage() {
                   ) : (
                     <>
                       <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{clinicName}</h1>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-[#E8F5E9] dark:hover:bg-[#E8F5E9] dark:text-[#2E7D32] font-medium border-green-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Active
-                      </Badge>
+                       {isTodayActive ? (
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-[#E8F5E9] dark:hover:bg-[#E8F5E9] dark:text-[#2E7D32] font-medium border-green-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Active
+                        </Badge>
+                      ) : (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100 dark:bg-[#3D3D3D] dark:hover:bg-[#3D3D3D] dark:text-[#E0E0E0] font-medium border-slate-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 transition-all">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 animate-bounce" />
+                              Inactive
+                            </Badge>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[480px] w-[95vw] p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-slate-200 dark:border-[#333] shadow-xl">
+                            <DialogHeader>
+                              <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                Clinic is Inactive Today
+                              </DialogTitle>
+                              <DialogDescription className="text-sm text-slate-500 dark:text-[#A0A0A0] mt-1">
+                                Your clinic is currently marked as inactive for today. Follow these instructions to record active days and qualify for the Founder Program.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="mt-4 space-y-4 text-sm text-slate-600 dark:text-[#D0D0D0]">
+                              <p className="font-semibold text-slate-800 dark:text-white">How to maintain an active clinic:</p>
+                              <ul className="list-disc pl-5 space-y-2">
+                                <li>
+                                  <strong className="text-slate-800 dark:text-white">Schedule appointments:</strong> Add a patient appointment to your calendar.
+                                </li>
+                                <li>
+                                  <strong className="text-slate-800 dark:text-white">Add patient records:</strong> Register a new patient in the system.
+                                </li>
+                                <li>
+                                  <strong className="text-slate-800 dark:text-white">Generate invoices:</strong> Record a transaction or issue a billing invoice.
+                                </li>
+                              </ul>
+                              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3 rounded-lg text-amber-800 dark:text-amber-300 text-xs">
+                                💡 Completing any of these daily operations automatically registers the current day as active under the Founder Program progress.
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      )}
 
                       <Dialog>
                         <DialogTrigger asChild>
