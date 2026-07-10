@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
-import type { Patient, Appointment, Transaction, Operatory } from '@/types';
+import type { Patient, Appointment, Transaction, Operatory, Doctor } from '@/types';
 import {
     Users,
     Calendar,
@@ -33,10 +33,14 @@ import {
     Loader2,
     GraduationCap,
     UsersRound,
+    Medal,
+    Tag,
+    UserCheck,
+    CheckCircle2,
 } from 'lucide-react';
 import { useEffect, useState, useMemo, type FormEvent } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, where, getCountFromServer } from 'firebase/firestore';
 import { isSameDay, startOfMonth, isSameMonth, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +48,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { updateAppointment } from '@/services/appointment-service';
 
 
@@ -169,6 +174,13 @@ export default function DashboardPage() {
     const [labs, setLabs] = useState<{ id: string, name: string, email: string }[]>([]);
     const [greeting, setGreeting] = useState('');
 
+    // Founder Program logic state
+    const [doctors, setDoctors] = useState<Doctor[]>([]);
+    const [activeDates, setActiveDates] = useState<string[]>([]);
+    const [isFounder, setIsFounder] = useState<boolean>(false);
+    const [founderCount, setFounderCount] = useState<number>(0);
+    const [isFounderDialogOpen, setIsFounderDialogOpen] = useState(false);
+
     useEffect(() => {
         const getGreeting = () => {
             const hour = new Date().getHours();
@@ -201,6 +213,18 @@ export default function DashboardPage() {
         const operatoriesCol = collection(db, 'clinics', clinicId, 'operatories');
         const unsubOperatories = onSnapshot(operatoriesCol, (snap) => setOperatories(snap.docs.map(d => ({ ...d.data(), id: d.id } as Operatory))));
 
+        const doctorsCol = collection(db, 'clinics', clinicId, 'doctors');
+        const unsubDoctors = onSnapshot(doctorsCol, (snap) => setDoctors(snap.docs.map(d => ({ ...d.data(), id: d.id } as Doctor))));
+
+        const clinicDoc = doc(db, 'clinics', clinicId);
+        const unsubClinic = onSnapshot(clinicDoc, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                setActiveDates(data.activeDates || []);
+                setIsFounder(data.isFounder || false);
+            }
+        });
+
         // Mock lab data for now, can be fetched from firestore later if needed
         setLabs([
             { id: "lab1", name: "Precision Dental Lab", email: "orders@precisionlab.com" },
@@ -213,8 +237,19 @@ export default function DashboardPage() {
             unsubAppointments();
             unsubTransactions();
             unsubOperatories();
+            unsubDoctors();
+            unsubClinic();
         }
     }, [user, db, clinicId]);
+
+    // Fetch founder count to display spots left
+    useEffect(() => {
+        if (!db) return;
+        const q = query(collection(db, 'clinics'), where('isFounder', '==', true));
+        getCountFromServer(q).then(snap => {
+            setFounderCount(snap.data().count);
+        }).catch(console.error);
+    }, [db, isFounder]);
 
     const stats = useMemo(() => {
         const todaysAppointments = appointments.filter(app => isSameDay(new Date(app.date), new Date()));
@@ -528,8 +563,225 @@ export default function DashboardPage() {
         );
     }
 
+    const activeDaysCount = activeDates.length;
+    const patientsCount = patients.length;
+    const doctorsCount = doctors.filter(d => d.doctorType === 'activedoctor').length;
+
+    let founderTier: 'None' | 'Bronze' | 'Silver' | 'Gold' = 'None';
+    let nextTier: 'Bronze' | 'Silver' | 'Gold' | 'None' = 'Bronze';
+    
+    const qualifiesGold = activeDaysCount >= 60 && patientsCount >= 30 && doctorsCount >= 2;
+    const qualifiesSilver = activeDaysCount >= 30 && patientsCount >= 20 && doctorsCount >= 2;
+    const qualifiesBronze = activeDaysCount >= 10 && patientsCount >= 10 && doctorsCount >= 1;
+
+    if (isFounder) {
+        if (qualifiesGold) {
+            founderTier = 'Gold';
+            nextTier = 'None';
+        } else if (qualifiesSilver) {
+            founderTier = 'Silver';
+            nextTier = 'Gold';
+        } else {
+            founderTier = 'Bronze';
+            nextTier = 'Silver';
+        }
+    } else {
+        founderTier = 'None';
+        nextTier = founderCount < 100 ? 'Bronze' : 'None';
+    }
+
+    const getTierDetails = (tier: string) => {
+        switch (tier) {
+            case 'Bronze': return { days: 10, patients: 10, doctors: 1, discount: 25, color: 'text-amber-700 bg-amber-100', iconColor: '#b45309', label: 'Bronze Founder' };
+            case 'Silver': return { days: 30, patients: 20, doctors: 2, discount: 50, color: 'text-slate-700 bg-slate-200', iconColor: '#94a3b8', label: 'Silver Founder' };
+            case 'Gold': return { days: 60, patients: 30, doctors: 2, discount: 75, color: 'text-yellow-700 bg-yellow-100', iconColor: '#eab308', label: 'Gold Founder' };
+            default: return { days: 10, patients: 10, doctors: 1, discount: 0, color: 'text-slate-500 bg-slate-100', iconColor: '#94a3b8', label: 'Founder Program' };
+        }
+    };
+
+    const currentTierInfo = getTierDetails(founderTier);
+    const nextTierInfo = getTierDetails(nextTier);
+
     return (
         <div className="space-y-6">
+
+            {/* FOUNDER PROGRAM BANNER / HEADLINE */}
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/5 px-3.5 py-2 rounded-full border border-emerald-500/25 w-fit cursor-pointer transition-all hover:scale-[1.01]" onClick={() => setIsFounderDialogOpen(true)}>
+                <Medal className="h-4 w-4 text-emerald-500 animate-pulse" />
+                <span>Learn more about the founder program.</span>
+            </div>
+
+            <Dialog open={isFounderDialogOpen} onOpenChange={setIsFounderDialogOpen}>
+                <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col bg-[#FAFAFA] dark:bg-[#1A1A1A] border-0 rounded-2xl shadow-xl">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Founder Program</DialogTitle>
+                        <DialogDescription>Founder program tier and benefits</DialogDescription>
+                    </DialogHeader>
+                    <div className="p-6 bg-white dark:bg-[#252525] flex items-center gap-4 border-b border-slate-100 dark:border-[#333] shrink-0">
+                        <div className="h-12 w-12 rounded-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30">
+                            <Medal className="h-6 w-6 text-indigo-500" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                {founderTier !== 'None' ? currentTierInfo.label : 'Founder Program'}
+                            </h2>
+                            <p className="text-sm text-slate-500 dark:text-[#A0A0A0]">
+                                {founderTier !== 'None' ? "You're among the earliest clinics on Clinic@Click." : "Complete requirements to unlock premium benefits."}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="p-6 space-y-8 overflow-y-auto flex-1">
+                        {/* Description */}
+                        <div className="text-sm text-slate-600 dark:text-[#B0B0B0] space-y-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                            <p className="font-bold text-slate-900 dark:text-white">Founder Program</p>
+                            <p>Clinic@Click is currently free while we continue building the platform.</p>
+                            <p>As premium plans are introduced in the future, Founder Clinics will receive exclusive discounts based on their Founder Tier.</p>
+                            <p>Clinic@Click will always offer a free plan with essential clinic management features. Premium plans will focus on advanced automation, AI tools, analytics, reporting, and productivity features.</p>
+                        </div>
+
+                        {/* Current Benefit */}
+                        <div>
+                            <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-3">Current Benefit</h3>
+                            <div className="bg-[#FFF4E5] dark:bg-[#3D2C1D] border border-[#FDE0B6] dark:border-[#5C4328] rounded-xl p-4 flex items-start gap-4">
+                                <Tag className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5" />
+                                <div>
+                                    <div className="font-bold text-amber-900 dark:text-amber-100 text-base">
+                                        {founderTier !== 'None' ? `${currentTierInfo.discount}% off future premium plans` : 'No benefits unlocked yet'}
+                                    </div>
+                                    <div className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                        {founderTier !== 'None' ? 'Locked in for as long as you stay a founder.' : 'Reach Bronze tier to get 25% off.'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Progress to Next Tier */}
+                        {nextTier !== 'None' && (
+                            <div>
+                                <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">Progress to {nextTier}</h3>
+                                <div className="space-y-5">
+                                    {/* Active Days */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                                <Calendar className="h-4 w-4 text-slate-400" /> Maintain an active clinic
+                                            </div>
+                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                                {activeDaysCount} / {nextTierInfo.days} days
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (activeDaysCount / nextTierInfo.days) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
+                                            {Math.max(0, nextTierInfo.days - activeDaysCount)} days left
+                                        </div>
+                                    </div>
+
+                                    {/* Patients */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                                <Users className="h-4 w-4 text-slate-400" /> Grow patient records
+                                            </div>
+                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                                {patientsCount} / {nextTierInfo.patients}
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (patientsCount / nextTierInfo.patients) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
+                                            {Math.max(0, nextTierInfo.patients - patientsCount)} more
+                                        </div>
+                                    </div>
+
+                                    {/* Doctors */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                                <UserCheck className="h-4 w-4 text-slate-400" /> Collaborate with doctors
+                                            </div>
+                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                                {doctorsCount} / {nextTierInfo.doctors}
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (doctorsCount / nextTierInfo.doctors) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="flex justify-between items-start mt-1">
+                                            <details className="text-xs group">
+                                                <summary className="text-blue-500 cursor-pointer font-medium hover:underline list-none flex items-center">
+                                                    <svg className="w-3 h-3 mr-1 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                                    How to add a doctor?
+                                                </summary>
+                                                <div className="mt-2 bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 leading-relaxed text-left">
+                                                    <ol className="list-decimal pl-4 space-y-1">
+                                                        <li>Share your clinic's invite code with your associate doctor.</li>
+                                                        <li>Ask them to visit <strong>clinicatclick.com</strong> or download the app.</li>
+                                                        <li>They should sign up, go to "Join Clinic", enter your code, and select the <strong>Doctor</strong> role.</li>
+                                                        <li>Approve their request in the pending requests section.</li>
+                                                    </ol>
+                                                </div>
+                                            </details>
+                                            <div className="text-xs text-right text-slate-400 dark:text-[#888] whitespace-nowrap ml-4">
+                                                {Math.max(0, nextTierInfo.doctors - doctorsCount)} more
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* All Founder Tiers */}
+                        <div>
+                            <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">All Founder Tiers</h3>
+                            <div className="grid grid-cols-3 gap-3">
+                                {[
+                                    { name: 'Bronze', days: 10, patients: 10, doctors: 1, discount: 25, achieved: founderTier === 'Bronze' || founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Bronze' },
+                                    { name: 'Silver', days: 30, patients: 20, doctors: 2, discount: 50, achieved: founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Silver' },
+                                    { name: 'Gold', days: 60, patients: 30, doctors: 2, discount: 75, achieved: founderTier === 'Gold', current: founderTier === 'Gold' }
+                                ].map(t => (
+                                    <div key={t.name} className={`rounded-xl p-4 border ${t.current ? 'bg-[#FFF9F0] border-amber-400 dark:bg-[#332A1F] dark:border-amber-600' : 'bg-white border-slate-200 dark:bg-[#252525] dark:border-[#333]'} relative overflow-hidden flex flex-col justify-between h-full`}>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Medal className={`h-5 w-5 ${t.name === 'Bronze' ? 'text-amber-700' : t.name === 'Silver' ? 'text-slate-400' : 'text-yellow-500'}`} />
+                                                <span className="font-bold text-sm text-slate-900 dark:text-white">{t.name}</span>
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 dark:text-[#A0A0A0] space-y-1 mb-4">
+                                                <div>{t.days} days active</div>
+                                                <div>{t.patients} patient records</div>
+                                                <div>{t.doctors} doctors</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${t.current ? 'bg-amber-500 text-white' : t.achieved ? 'bg-slate-100 text-slate-600 dark:bg-[#333] dark:text-[#C0C0C0]' : 'bg-slate-50 text-slate-400 border border-slate-200 dark:bg-[#1A1A1A] dark:border-[#333]'}`}>
+                                                {t.discount}% off
+                                            </span>
+                                            <div className="mt-2 text-[10px] font-bold">
+                                                {t.current ? <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">← Current</span> : t.achieved ? <span className="text-slate-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Achieved</span> : <span className="text-slate-300 dark:text-[#666]">In progress</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 p-3 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-[#333] rounded-lg text-center text-xs text-slate-500 dark:text-[#A0A0A0]">
+                                {(() => {
+                                    const displayFounderCount = Math.min(100, Math.round(25 + founderCount * 0.75));
+                                    if (founderCount >= 100 && !isFounder) {
+                                        return "100 clinics have already joined the Founder Program. New founder spots are currently closed.";
+                                    }
+                                    if (isFounder) {
+                                        return "You are part of the exclusive first 100 Founder Clinics!";
+                                    }
+                                    return `Only the first 100 clinics to reach Bronze will be a part of the Founder Program. (${displayFounderCount}/100 spots claimed)`;
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* GREETING & STATS */}
             <div>
