@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Playfair_Display } from 'next/font/google';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,10 @@ import { AppUpdateHandler } from '@/components/layout/app-update-handler';
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+});
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-playfair-display',
 });
 const geistMono = GeistMono;
 
@@ -84,6 +88,7 @@ export default function RootLayout({
         className={cn(
           "h-full bg-background font-sans antialiased",
           inter.variable,
+          playfair.variable,
           geistMono.variable
         )}
       >

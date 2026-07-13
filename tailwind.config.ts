@@ -13,6 +13,7 @@ export default {
       fontFamily: {
         sans: ["var(--font-inter)", "sans-serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
+        playfair: ["var(--font-playfair-display)", "serif"],
       },
   		colors: {
   			background: 'hsl(var(--background))',

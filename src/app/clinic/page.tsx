@@ -736,7 +736,7 @@ export default function ClinicPage() {
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-1">
+                <div className="mb-1">
                   {isEditingName ? (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
@@ -750,8 +750,9 @@ export default function ClinicPage() {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{clinicName}</h1>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                      <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">{clinicName}</h1>
+                      <div className="flex flex-wrap items-center gap-2">
                        {isTodayActive ? (
                         <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-[#E8F5E9] dark:hover:bg-[#E8F5E9] dark:text-[#2E7D32] font-medium border-green-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -973,7 +974,8 @@ export default function ClinicPage() {
                           </div>
                         </DialogContent>
                       </Dialog>
-                    </>
+                      </div>
+                    </div>
                   )}
                 </div>
                 {!isEditingName && (
@@ -986,16 +988,6 @@ export default function ClinicPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {clinicRole === 'admin' && !isEditingName && (
-                <Button variant="outline" size="icon" onClick={() => {
-                  setEditingClinicName(clinicName);
-                  setEditingClinicAddress(clinicAddress);
-                  setEditingClinicPhone(clinicPhone);
-                  setIsEditingName(true);
-                }} className="h-9 w-9 text-slate-500 rounded-lg dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:bg-[#3A3A3A]">
-                  <Edit className="h-4 w-4" />
-                </Button>
-              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="icon" className="h-9 w-9 text-slate-500 rounded-lg dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:bg-[#3A3A3A]">
