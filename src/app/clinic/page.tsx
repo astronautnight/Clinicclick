@@ -374,20 +374,51 @@ export default function ClinicPage() {
     }
   };
 
+  const compressImage = (file: File, maxSizeBytes: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+
+        // Scale down if dimensions are large
+        const MAX_DIM = 512;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const scale = MAX_DIM / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Iteratively reduce JPEG quality until under maxSizeBytes
+        let quality = 0.8;
+        let dataUrl = canvas.toDataURL("image/jpeg", quality);
+        while (dataUrl.length > maxSizeBytes * 1.37 && quality > 0.1) {
+          // 1.37 factor accounts for base64 overhead (~37%)
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image"));
+      };
+      img.src = url;
+    });
+  };
+
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !clinicId) return;
-
-    // Validate size (200 KB)
-    const maxSize = 200 * 1024; // 200 KB in bytes
-    if (file.size > maxSize) {
-      toast({
-        title: "File too large",
-        description: "Clinic logo must be smaller than 200 KB.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     // Validate is image
     if (!file.type.startsWith("image/")) {
@@ -400,31 +431,34 @@ export default function ClinicPage() {
     }
 
     setIsUploadingLogo(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      try {
-        const base64String = reader.result as string;
-        await updateClinic(clinicId, { logoUrl: base64String });
-        toast({ title: "Logo uploaded successfully" });
-      } catch (err: any) {
-        toast({
-          title: "Upload failed",
-          description: err.message || "Could not save logo",
-          variant: "destructive",
+    try {
+      let base64String: string;
+      const maxSize = 200 * 1024; // 200 KB
+
+      if (file.size > maxSize) {
+        // Compress the image to fit under 200 KB
+        base64String = await compressImage(file, maxSize);
+      } else {
+        // Small enough — read as-is
+        base64String = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Could not read image file"));
+          reader.readAsDataURL(file);
         });
-      } finally {
-        setIsUploadingLogo(false);
       }
-    };
-    reader.onerror = () => {
+
+      await updateClinic(clinicId, { logoUrl: base64String });
+      toast({ title: "Logo uploaded successfully" });
+    } catch (err: any) {
       toast({
-        title: "Read error",
-        description: "Could not read image file",
+        title: "Upload failed",
+        description: err.message || "Could not save logo",
         variant: "destructive",
       });
+    } finally {
       setIsUploadingLogo(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleRemoveLogo = async () => {
