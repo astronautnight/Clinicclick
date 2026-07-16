@@ -585,7 +585,7 @@ export default function AcademicsPage() {
         return (
           <div
             className={cn(
-              "relative w-full h-full flex flex-col items-center justify-center rounded-md transition-all min-h-[2.5rem]",
+              "relative w-9 h-9 flex flex-col items-center justify-center rounded-md transition-all",
               isSelected && "bg-primary text-primary-foreground font-semibold shadow",
               !isSelected && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
               isToday && !isSelected && "bg-accent text-accent-foreground"
@@ -1110,7 +1110,7 @@ export default function AcademicsPage() {
                                     </Dialog>
                                 </div>
                                 <div className="flex justify-center w-full">
-                                    <div className="w-full max-w-xl border rounded-xl overflow-hidden shadow-sm">
+                                    <div className="w-fit border rounded-xl overflow-hidden shadow-sm">
                                         <Calendar
                                             mode="single"
                                             selected={selectedCalendarDate ? new Date(selectedCalendarDate + 'T00:00:00') : undefined}
@@ -1118,11 +1118,11 @@ export default function AcademicsPage() {
                                             month={summaryMonth}
                                             onMonthChange={setSummaryMonth}
                                             components={{ DayContent: DayWithAttendance }}
-                                            className="p-4 w-full [&_.rdp-cell]:w-full [&_.rdp-table]:w-full [&_.rdp-head_th]:w-full [&_.rdp-head_th]:font-normal [&_.rdp-head_th]:text-muted-foreground [&_.rdp-button]:h-auto [&_.rdp-button]:w-full [&_.rdp-button]:p-0"
+                                            className="p-4"
                                         />
                                     </div>
                                 </div>
-                                <div className="flex gap-4 mt-8 pt-4 border-t w-full max-w-xl mx-auto justify-start">
+                                <div className="flex gap-4 mt-6 pt-4 border-t w-fit mx-auto justify-center">
                                     <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-green-500"></div><span className="text-xs font-medium">Present</span></div>
                                     <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-red-500"></div><span className="text-xs font-medium">Absent</span></div>
                                     <div className="flex items-center gap-2 bg-muted/50 px-3 py-1 rounded-full"><div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div><span className="text-xs font-medium">Today</span></div>
