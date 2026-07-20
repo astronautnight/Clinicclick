@@ -36,7 +36,7 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center space-x-2">
           {isMobile && <SidebarTrigger />}
-          <Link href="/" className="flex items-center space-x-2">
+          <Link href="/dashboard" className="flex items-center space-x-2">
             <LogoCC className="h-8 w-8 text-primary" />
             <span className="font-bold text-xl tracking-tight whitespace-nowrap">
               Clinic<span className="text-primary">@</span>Click

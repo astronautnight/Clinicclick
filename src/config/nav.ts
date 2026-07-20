@@ -7,7 +7,7 @@ import type { NavItem, DashboardCardItem, LucideIconName } from '@/types';
 export const sidebarNavItems: NavItem[] = [
   {
     title: 'Dashboard',
-    href: '/',
+    href: '/dashboard',
     iconName: 'LayoutDashboard',
     description: 'Overview of your clinic activities.',
     color: 'bg-primary',

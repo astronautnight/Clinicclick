@@ -8,6 +8,11 @@ body {
 }
 
 @layer utilities {
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-12px); }
+  }
+
   @media (max-aspect-ratio: 3/4) {
     .ar-mobile\:flex {
       display: flex;

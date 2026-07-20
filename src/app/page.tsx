@@ -1,1039 +1,619 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-    CardFooter
-} from '@/components/ui/card';
+import { LogoCC } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from '@/components/ui/badge';
-import type { Patient, Appointment, Transaction, Operatory, Doctor } from '@/types';
+import HeroAnimation from '@/components/landing/HeroAnimation';
+import FeatureShowcase from '@/components/landing/FeatureShowcase';
 import {
-    Users,
-    Calendar,
-    DollarSign,
-    CreditCard,
-    Plus,
-    AlertTriangle,
-    MessageSquare,
-    ArrowRight,
-    ClipboardList,
-    UserPlus,
-    Stethoscope,
-    IndianRupee,
-    FileText,
-    Image as ImageIcon,
-    Wallet,
-    Beaker,
-    Loader2,
-    GraduationCap,
-    UsersRound,
-    Medal,
-    Tag,
-    UserCheck,
-    CheckCircle2,
+  Users,
+  CalendarDays,
+  ClipboardList,
+  Stethoscope,
+  PersonStanding,
+  Pill,
+  DollarSign,
+  X,
+  ArrowRight,
+  Syringe,
+  Microscope,
+  Calendar,
+  GraduationCap,
+  Sparkles,
+  MessageSquare,
+  Building2,
+  LayoutDashboard,
+  Check,
+  Clock,
+  Plus,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useState, useMemo, type FormEvent } from 'react';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, onSnapshot, doc, query, where, getCountFromServer } from 'firebase/firestore';
-import { isSameDay, startOfMonth, isSameMonth, format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { useToast } from "@/hooks/use-toast";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { updateAppointment } from '@/services/appointment-service';
 
-
-// Reusable components from user's example, adapted to TSX and project styles
-
-function StatCard({ title, value, icon, highlight, success, danger }: { title: string, value: string, icon: React.ReactNode, highlight?: boolean, success?: boolean, danger?: boolean }) {
-    return (
-        <Card className={cn(
-            "shadow-sm",
-            success && "bg-green-50 dark:bg-green-500/10",
-            danger && "bg-red-50 dark:bg-red-500/10",
-            highlight && "ring-2 ring-primary"
-        )}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-                {icon}
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-semibold">{value}</div>
-            </CardContent>
-        </Card>
-    );
+/* ────────────────────────────────────────────────────────
+   7 FEATURE ICONS
+   ──────────────────────────────────────────────────────── */
+interface Feature {
+  title: string;
+  icon: LucideIcon;
+  color: string;       // icon stroke color
+  border: string;      // border color matching icon
+  bgHover: string;     // hover background
+  bgActive: string;    // active background
+  tagline: string;
+  description: string;
 }
 
-const STATUS_COLORS: Record<Appointment['status'], string> = {
-    Scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-    Confirmed: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200',
-    Completed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-    Cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-800/50 dark:text-gray-200',
-    Missed: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
-    Postponed: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
-};
+const features: Feature[] = [
+  {
+    title: 'Patients',
+    icon: Users,
+    color: 'text-violet-500',
+    border: 'border-violet-300',
+    bgHover: 'hover:bg-violet-50',
+    bgActive: 'bg-violet-50 ring-violet-300',
+    tagline: 'Smart patient records',
+    description:
+      'Maintain demographics, treatment histories, clinical notes, dental charts, and medical alerts — all in one place.',
+  },
+  {
+    title: 'Appointments',
+    icon: CalendarDays,
+    color: 'text-orange-500',
+    border: 'border-orange-300',
+    bgHover: 'hover:bg-orange-50',
+    bgActive: 'bg-orange-50 ring-orange-300',
+    tagline: 'Schedule with ease',
+    description:
+      'Visual calendar with walk-ins, online booking, queue management, and automated reminders.',
+  },
+  {
+    title: 'Procedures',
+    icon: ClipboardList,
+    color: 'text-rose-500',
+    border: 'border-rose-300',
+    bgHover: 'hover:bg-rose-50',
+    bgActive: 'bg-rose-50 ring-rose-300',
+    tagline: 'Clinical workflows',
+    description:
+      'Define treatment plans, track completed and ongoing procedures, and manage clinical protocols.',
+  },
+  {
+    title: 'Doctors',
+    icon: Stethoscope,
+    color: 'text-blue-500',
+    border: 'border-blue-300',
+    bgHover: 'hover:bg-blue-50',
+    bgActive: 'bg-blue-50 ring-blue-300',
+    tagline: 'Team management',
+    description:
+      'Add doctors, assign schedules, track performance, and manage professional profiles.',
+  },
+  {
+    title: 'Staff',
+    icon: PersonStanding,
+    color: 'text-cyan-500',
+    border: 'border-cyan-300',
+    bgHover: 'hover:bg-cyan-50',
+    bgActive: 'bg-cyan-50 ring-cyan-300',
+    tagline: 'Your support crew',
+    description:
+      'Manage receptionists, hygienists, and assistants with role-based access and shift scheduling.',
+  },
+  {
+    title: 'Pharmacy',
+    icon: Pill,
+    color: 'text-emerald-500',
+    border: 'border-emerald-300',
+    bgHover: 'hover:bg-emerald-50',
+    bgActive: 'bg-emerald-50 ring-emerald-300',
+    tagline: 'Prescriptions & drugs',
+    description:
+      'Drug formulary, digital prescriptions, dispensing tracking, and stock-level monitoring.',
+  },
+  {
+    title: 'Financials',
+    icon: DollarSign,
+    color: 'text-amber-500',
+    border: 'border-amber-300',
+    bgHover: 'hover:bg-amber-50',
+    bgActive: 'bg-amber-50 ring-amber-300',
+    tagline: 'Revenue & expenses',
+    description:
+      'Invoices, payments, pending balances, monthly trends, and exportable financial reports.',
+  },
+];
 
-function QueueItem({ 
-    time, 
-    name, 
-    procedure, 
-    status, 
-    onStatusChange 
-}: { 
-    time: string, 
-    name: string, 
-    procedure?: string, 
-    status: Appointment['status'], 
-    onStatusChange?: (newStatus: Appointment['status']) => void 
-}) {
-    return (
-        <div className="flex justify-between items-center py-3 border-b text-sm gap-4">
-            <div className="flex items-center gap-4 min-w-0 flex-1">
-                <strong className="w-12 text-muted-foreground shrink-0">{time}</strong>
-                <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{name}</p>
-                    {procedure && <div className="text-muted-foreground text-xs truncate">{procedure}</div>}
-                </div>
-            </div>
-            <div className="shrink-0">
-                <Select value={status} onValueChange={(val) => onStatusChange?.(val as Appointment['status'])}>
-                    <SelectTrigger className={cn(
-                        "w-[125px] h-7 text-xs border-none font-semibold rounded-full px-2.5 focus:ring-0 focus:ring-offset-0 justify-between items-center flex cursor-pointer transition-colors duration-200",
-                        STATUS_COLORS[status] || "bg-slate-100 text-slate-800 dark:bg-slate-900/50 dark:text-slate-200"
-                    )}>
-                        <SelectValue placeholder={status} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {(Object.keys(STATUS_COLORS) as Appointment['status'][]).map((s) => (
-                            <SelectItem key={s} value={s} className="text-xs cursor-pointer">
-                                <span className={cn(
-                                    "inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle",
-                                    s === 'Scheduled' && 'bg-blue-500',
-                                    s === 'Confirmed' && 'bg-indigo-500',
-                                    s === 'Completed' && 'bg-green-500',
-                                    s === 'Cancelled' && 'bg-gray-500',
-                                    s === 'Missed' && 'bg-yellow-500',
-                                    s === 'Postponed' && 'bg-red-500'
-                                )}></span>
-                                <span className="align-middle">{s}</span>
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
+/* ────────────────────────────────────────────────────────
+   DYNAMIC WORDS
+   ──────────────────────────────────────────────────────── */
+const dynamicWords = [
+  { word: 'Care',        dot: 'bg-blue-500',    bg: 'bg-blue-100 text-blue-900' },
+  { word: 'Treat',       dot: 'bg-emerald-500', bg: 'bg-emerald-100 text-emerald-900' },
+  { word: 'Chart',       dot: 'bg-violet-500',  bg: 'bg-violet-100 text-violet-900' },
+  { word: 'Schedule',    dot: 'bg-orange-500',  bg: 'bg-orange-100 text-orange-900' },
+  { word: 'Manage',      dot: 'bg-rose-500',    bg: 'bg-rose-100 text-rose-900' },
+  { word: 'Track',       dot: 'bg-amber-500',   bg: 'bg-amber-100 text-amber-900' },
+  { word: 'Collaborate', dot: 'bg-indigo-500',  bg: 'bg-indigo-100 text-indigo-900' },
+  { word: 'Grow',        dot: 'bg-teal-500',    bg: 'bg-teal-100 text-teal-900' },
+  { word: 'Smile',       dot: 'bg-pink-500',    bg: 'bg-pink-100 text-pink-900' },
+];
+
+/* ────────────────────────────────────────────────────────
+   COMPONENT
+   ──────────────────────────────────────────────────────── */
+export default function LandingPage() {
+  const [activeFeature, setActiveFeature] = useState<number | null>(null);
+  const [wordIndex, setWordIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsAnimating(true);
+      setTimeout(() => {
+        setWordIndex((prev) => (prev + 1) % dynamicWords.length);
+        setIsAnimating(false);
+      }, 350);
+    }, 2400);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleFeatureClick = useCallback((index: number) => {
+    setActiveFeature((prev) => (prev === index ? null : index));
+  }, []);
+
+  const activeData = activeFeature !== null ? features[activeFeature] : null;
+  const currentWord = dynamicWords[wordIndex];
+
+  return (
+    <div className="landing-page min-h-screen bg-white text-[#1a1a1a] flex flex-col overflow-x-hidden font-[var(--font-inter)]">
+
+      {/* ── NAVBAR ── */}
+      <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[52px] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <LogoCC className="h-7 w-7 text-[#1a1a1a]" />
+          <span className="font-bold text-[17px] tracking-tight text-[#1a1a1a]">
+            Clinic<span className="text-[#256AF3]">@</span>Click
+          </span>
         </div>
-    );
-}
 
-
-function ActionButton({ icon, label, primary, danger, href }: { icon: React.ReactNode, label: string, primary?: boolean, danger?: boolean, href: string }) {
-    return (
-        <Button asChild variant="outline" className={cn(
-            "w-full justify-start gap-3 py-6 text-sm font-medium",
-            primary && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
-            danger && "bg-destructive/10 text-destructive hover:bg-destructive/20",
-            !primary && !danger && "bg-slate-100 dark:bg-muted"
-        )}>
-            <Link href={href}>
-                {icon}
-                {label}
-            </Link>
-        </Button>
-    );
-}
-
-function FinancialRow({ label, value }: { label: string, value: string }) {
-    return (
-        <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{label}</span>
-            <strong className="font-medium">{value}</strong>
+        <div className="flex items-center gap-3">
+          <Button
+            asChild
+            variant="ghost"
+            className="text-[#1a1a1a]/70 hover:text-[#1a1a1a] hover:bg-gray-100 text-sm font-medium h-8 px-3 rounded-lg"
+          >
+            <Link href="/login">Log in</Link>
+          </Button>
+          <Button
+            asChild
+            className="bg-[#2383e2] text-white hover:bg-[#1b6ec2] text-sm font-medium h-8 px-4 rounded-lg"
+          >
+            <Link href="/login">Get Clinic@Click free</Link>
+          </Button>
         </div>
-    );
-}
+      </header>
 
-
-export default function DashboardPage() {
-    const { user, clinicId, clinicLoading } = useUser();
-    const db = useFirestore();
-    const { toast } = useToast();
-
-    const [patients, setPatients] = useState<Patient[]>([]);
-    const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [operatories, setOperatories] = useState<Operatory[]>([]);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [labs, setLabs] = useState<{ id: string, name: string, email: string }[]>([]);
-    const [greeting, setGreeting] = useState('');
-
-    // Founder Program logic state
-    const [doctors, setDoctors] = useState<Doctor[]>([]);
-    const [activeDates, setActiveDates] = useState<string[]>([]);
-    const [isFounder, setIsFounder] = useState<boolean>(false);
-    const [founderCount, setFounderCount] = useState<number>(0);
-    const [isFounderDialogOpen, setIsFounderDialogOpen] = useState(false);
-
-    useEffect(() => {
-        const getGreeting = () => {
-            const hour = new Date().getHours();
-            if (hour < 12) return "Good morning";
-            if (hour < 18) return "Good afternoon";
-            return "Good evening";
-        };
-
-        if (user?.displayName) {
-            const firstName = user.displayName.split(' ')[0];
-            setGreeting(`${getGreeting()}, ${firstName}!`);
-        } else if (!clinicLoading) {
-            setGreeting(`${getGreeting()}!`);
-        }
-    }, [user, clinicLoading]);
-
-
-    useEffect(() => {
-        if (!user || !db || !clinicId) return;
-
-        const patientsCol = collection(db, 'clinics', clinicId, 'patients');
-        const unsubPatients = onSnapshot(patientsCol, (snap) => setPatients(snap.docs.map(d => ({ ...d.data(), id: d.id } as Patient))));
-
-        const appointmentsCol = collection(db, 'clinics', clinicId, 'appointments');
-        const unsubAppointments = onSnapshot(appointmentsCol, (snap) => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id } as Appointment))));
-
-        const transactionsCol = collection(db, 'clinics', clinicId, 'transactions');
-        const unsubTransactions = onSnapshot(transactionsCol, (snap) => setTransactions(snap.docs.map(d => ({ ...d.data(), id: d.id } as Transaction))));
-
-        const operatoriesCol = collection(db, 'clinics', clinicId, 'operatories');
-        const unsubOperatories = onSnapshot(operatoriesCol, (snap) => setOperatories(snap.docs.map(d => ({ ...d.data(), id: d.id } as Operatory))));
-
-        const doctorsCol = collection(db, 'clinics', clinicId, 'doctors');
-        const unsubDoctors = onSnapshot(doctorsCol, (snap) => setDoctors(snap.docs.map(d => ({ ...d.data(), id: d.id } as Doctor))));
-
-        const clinicDoc = doc(db, 'clinics', clinicId);
-        const unsubClinic = onSnapshot(clinicDoc, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                setActiveDates(data.activeDates || []);
-                setIsFounder(data.isFounder || false);
-            }
-        });
-
-        // Mock lab data for now, can be fetched from firestore later if needed
-        setLabs([
-            { id: "lab1", name: "Precision Dental Lab", email: "orders@precisionlab.com" },
-            { id: "lab2", name: "Aesthetic Creations", email: "contact@aestheticcreations.com" },
-            { id: "d1", name: "Modern Dental Supplies", email: "sales@moderndental.com" },
-        ]);
-
-        return () => {
-            unsubPatients();
-            unsubAppointments();
-            unsubTransactions();
-            unsubOperatories();
-            unsubDoctors();
-            unsubClinic();
-        }
-    }, [user, db, clinicId]);
-
-    // Fetch founder count to display spots left
-    useEffect(() => {
-        if (!db) return;
-        const q = query(collection(db, 'clinics'), where('isFounder', '==', true));
-        getCountFromServer(q).then(snap => {
-            setFounderCount(snap.data().count);
-        }).catch(console.error);
-    }, [db, isFounder]);
-
-    const stats = useMemo(() => {
-        const todaysAppointments = appointments.filter(app => isSameDay(new Date(app.date), new Date()));
-
-        const revenueToday = transactions
-            .filter(t => t.type === 'Earning' && t.date && isSameDay(new Date(t.date), new Date()))
-            .reduce((acc, t) => acc + t.amount, 0);
-
-        const revenueThisMonth = transactions
-            .filter(t => t.type === 'Earning' && t.date && isSameMonth(new Date(t.date), new Date()))
-            .reduce((acc, t) => acc + t.amount, 0);
-
-        const patientFinancials = patients.map(patient => {
-            const baseBillable = patient.linkedProcedures?.reduce((acc, proc) => acc + (proc.cost * (proc.quantity || 1)), 0) || 0;
-            let discount = 0;
-            if (patient.discountType === 'percentage' && patient.discountValue) {
-                discount = (baseBillable * patient.discountValue) / 100;
-            } else if (patient.discountType === 'fixed' && patient.discountValue) {
-                discount = patient.discountValue;
-            }
-            const totalBillable = Math.max(0, baseBillable - discount);
-            const totalPaid = transactions
-                .filter(t => t.patientId === patient.id && t.type === 'Earning')
-                .reduce((acc, t) => acc + t.amount, 0);
-            return totalBillable - totalPaid;
-        });
-
-        const pendingPayments = patientFinancials.reduce((acc, balance) => acc + (balance > 0 ? balance : 0), 0);
-
-        const inChairCount = operatories.filter(op => op.status === 'Occupied').length;
-
-        return {
-            inChairCount,
-            todaysAppointmentsCount: todaysAppointments.length,
-            revenueToday,
-            revenueThisMonth,
-            pendingPayments
-        };
-    }, [patients, appointments, transactions, operatories]);
-
-    const patientQueue = useMemo(() => {
-        return appointments
-            .filter(app => isSameDay(new Date(app.date), new Date()))
-            .sort((a, b) => a.startTime.localeCompare(b.startTime));
-    }, [appointments]);
-
-    const handleStatusChange = async (appointmentId: string, newStatus: Appointment['status']) => {
-        if (!clinicId) return;
-        try {
-            await updateAppointment(clinicId, appointmentId, { status: newStatus });
-            toast({
-                title: "Status Updated",
-                description: `Appointment status is now ${newStatus}.`,
-            });
-        } catch (error) {
-            console.error("Failed to update status", error);
-            toast({
-                title: "Error",
-                description: "Failed to update appointment status. Please try again.",
-                variant: "destructive",
-            });
-        }
-    };
-
-
-    const handleLabSubmit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-
-        setIsSubmitting(true);
-        const formData = new FormData(e.currentTarget);
-        const contactEmail = formData.get('contactEmail');
-        const subject = formData.get('subject');
-
-        if (!contactEmail || !subject) {
-            toast({
-                title: "Missing fields",
-                description: "Please select a lab and enter a subject.",
-                variant: "destructive"
-            });
-            setIsSubmitting(false);
-            return;
-        }
-
-        toast({
-            title: `Message to Lab Sent (Mock)`,
-            description: `Your message to ${contactEmail} has been processed.`
-        });
-        (e.target as HTMLFormElement).reset();
-        setTimeout(() => setIsSubmitting(false), 1000);
-    }
-
-    if (clinicLoading) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      {/* ── HERO ── */}
+      <section className="mt-[52px] flex-1 flex flex-col items-center text-center px-6 pt-12 md:pt-16 relative w-full max-w-[1200px] mx-auto">
+        
+        {/* Floating Decorative Icons (Notion Style) */}
+        <div className="absolute inset-0 z-0 pointer-events-none hidden lg:block">
+          
+          {/* Yellow Tooth (Top Left) */}
+          <div className="absolute top-10 left-12 flex items-center gap-2 animate-[float_4s_ease-in-out_infinite]">
+            <svg width="40" height="30" viewBox="0 0 40 30" fill="none" className="text-gray-800 -rotate-12 mt-4">
+              <path d="M5 25 Q 20 5 40 15" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+            <div className="relative">
+              <div className="w-14 h-14 bg-[#FFC843] rounded-full border-2 border-gray-900 flex items-center justify-center shadow-sm -rotate-12">
+                <svg className="w-7 h-7 text-gray-900" viewBox="0 0 24 24" fill="white" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 4C15.5 4 14 5 12 5C10 5 8.5 4 6.5 4C4 4 3 6.5 3 9.5C3 12.5 5 15 6 19C6.5 21 8.5 21 9 19C9.5 17 10 15 12 15C14 15 14.5 17 15 19C15.5 21 17.5 21 18 19C19 15 21 12.5 21 9.5C21 6.5 20 4 17.5 4Z"/></svg>
+              </div>
+              <div className="absolute -bottom-1 -right-2 w-5 h-5 bg-gray-300 rounded-full border border-white flex items-center justify-center">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
             </div>
-        );
-    }
+          </div>
 
-    if (!clinicId) {
-        return (
-            <div className="min-h-[80vh]">
-                {/* Hero Section */}
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-white dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-background mb-8">
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-100/40 via-transparent to-transparent dark:from-blue-900/20" />
-                    <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-8 p-8 lg:p-12">
-                        {/* Left Content */}
-                        <div className="flex flex-col justify-center space-y-6 z-10">
-                            <div>
-                                <h1 className="leading-tight text-gray-900 dark:text-white">
-                                    <span className="block text-lg lg:text-xl font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Welcome to</span>
-                                    <span className="text-5xl lg:text-6xl font-extrabold tracking-tight inline-block">
-                                        <span style={{ color: '#256AF3' }}>Clinic</span>
-                                        <span style={{ color: '#F53D99' }}>@</span>
-                                        <span style={{ color: '#256AF3' }}>Click!</span>
-                                    </span>
-                                </h1>
-                                <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-md leading-relaxed">
-                                    Let&apos;s set up your clinic so you can start managing patients, appointments, and more – all in one place.
-                                </p>
-                            </div>
-
-                            <div className="flex flex-col gap-3">
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    <Button asChild size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
-                                        <Link href="/clinic" className="flex items-center gap-3">
-                                            <ClipboardList className="h-5 w-5" />
-                                            Add Your Clinic
-                                            <ArrowRight className="h-5 w-5" />
-                                        </Link>
-                                    </Button>
-                                    <Button asChild size="lg" variant="outline" className="border-2 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5">
-                                        <Link href="/clinic" className="flex items-center gap-3">
-                                            <UserPlus className="h-5 w-5" />
-                                            Join Your Clinic
-                                            <ArrowRight className="h-5 w-5" />
-                                        </Link>
-                                    </Button>
-                                </div>
-
-                                <div className="flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                    </svg>
-                                    You can always update details later
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Illustration */}
-                        <div className="hidden lg:flex items-start justify-end">
-                            <svg viewBox="0 0 340 260" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="w-full max-w-xs h-auto drop-shadow-2xl">
-                                <rect x="0" y="0" width="340" height="260" rx="16" fill="#F4F3FB"/>
-
-                                <rect x="0" y="0" width="80" height="260" rx="16" fill="#EEEDFE"/>
-                                <rect x="64" y="0" width="16" height="260" fill="#EEEDFE"/>
-
-                                <rect x="12" y="20" width="56" height="20" rx="6" fill="#534AB7" opacity="0.12"/>
-                                <circle cx="23" cy="30" r="3" fill="#534AB7" opacity="0.5"/>
-                                <rect x="30" y="28" width="28" height="4" rx="2" fill="#534AB7" opacity="0.35"/>
-
-                                <rect x="12" y="48" width="56" height="16" rx="5" fill="none"/>
-                                <circle cx="23" cy="56" r="3" fill="#7F77DD" opacity="0.5"/>
-                                <rect x="30" y="54" width="24" height="3" rx="1.5" fill="#7F77DD" opacity="0.35"/>
-
-                                <rect x="12" y="70" width="56" height="16" rx="5" fill="none"/>
-                                <circle cx="23" cy="78" r="3" fill="#7F77DD" opacity="0.4"/>
-                                <rect x="30" y="76" width="20" height="3" rx="1.5" fill="#7F77DD" opacity="0.3"/>
-
-                                <rect x="12" y="92" width="56" height="16" rx="5" fill="none"/>
-                                <circle cx="23" cy="100" r="3" fill="#7F77DD" opacity="0.4"/>
-                                <rect x="30" y="98" width="26" height="3" rx="1.5" fill="#7F77DD" opacity="0.3"/>
-
-                                <rect x="12" y="114" width="56" height="16" rx="5" fill="none"/>
-                                <circle cx="23" cy="122" r="3" fill="#7F77DD" opacity="0.4"/>
-                                <rect x="30" y="120" width="22" height="3" rx="1.5" fill="#7F77DD" opacity="0.3"/>
-
-                                <rect x="12" y="136" width="56" height="16" rx="5" fill="none"/>
-                                <circle cx="23" cy="144" r="3" fill="#7F77DD" opacity="0.4"/>
-                                <rect x="30" y="142" width="18" height="3" rx="1.5" fill="#7F77DD" opacity="0.3"/>
-
-                                <rect x="12" y="220" width="56" height="26" rx="8" fill="#E6F1FB" stroke="#B5D4F4" strokeWidth={0.8}/>
-                                <circle cx="28" cy="233" r="7" fill="#B5D4F4"/>
-                                <rect x="38" y="229" width="22" height="3" rx="1.5" fill="#185FA5" opacity="0.4"/>
-                                <rect x="38" y="235" width="16" height="2.5" rx="1.25" fill="#185FA5" opacity="0.25"/>
-
-                                <rect x="88" y="12" width="244" height="236" rx="12" fill="#fff" stroke="#E0DEFA" strokeWidth={0.8}/>
-
-                                <rect x="96" y="20" width="100" height="10" rx="3" fill="#534AB7" opacity="0.15"/>
-                                <rect x="96" y="20" width="40" height="10" rx="3" fill="#534AB7" opacity="0.3"/>
-                                <rect x="300" y="18" width="24" height="14" rx="5" fill="#378ADD"/>
-                                <circle cx="305" cy="25" r="2.5" fill="#fff" opacity="0.9"/>
-                                <rect x="311" y="23" width="9" height="2" rx="1" fill="#fff" opacity="0.7"/>
-                                <rect x="311" y="27" width="7" height="2" rx="1" fill="#fff" opacity="0.5"/>
-
-                                <rect x="88" y="36" width="244" height="0.5" fill="#E0DEFA"/>
-
-                                <rect x="96" y="44" width="228" height="20" rx="6" fill="#F4F3FB"/>
-                                <circle cx="107" cy="54" r="3" fill="#7F77DD" opacity="0.4"/>
-                                <rect x="114" y="50" width="50" height="4" rx="2" fill="#2C2C2A" opacity="0.2"/>
-                                <circle cx="283" cy="54" r="3" fill="#7F77DD" opacity="0.3"/>
-                                <circle cx="293" cy="54" r="3" fill="#7F77DD" opacity="0.3"/>
-                                <circle cx="303" cy="54" r="3" fill="#7F77DD" opacity="0.3"/>
-                                <rect x="310" y="49" width="10" height="6" rx="3" fill="#E24B4A" opacity="0.4"/>
-
-                                <rect x="88" y="70" width="244" height="0.5" fill="#E0DEFA"/>
-
-                                <rect x="96" y="78" width="70" height="56" rx="8" fill="#E1F5EE" stroke="#9FE1CB" strokeWidth={0.8}/>
-                                <rect x="102" y="84" width="30" height="3" rx="1.5" fill="#0F6E56" opacity="0.6"/>
-                                <rect x="102" y="90" width="22" height="2.5" rx="1.25" fill="#0F6E56" opacity="0.35"/>
-                                <rect x="102" y="95" width="26" height="2.5" rx="1.25" fill="#0F6E56" opacity="0.25"/>
-                                <circle cx="155" cy="89" r="7" fill="#1D9E75" opacity="0.2"/>
-                                <rect x="151" y="86" width="8" height="6" rx="1.5" fill="#0F6E56" opacity="0.5"/>
-                                <rect x="102" y="108" width="58" height="20" rx="5" fill="#fff" stroke="#9FE1CB" strokeWidth={0.8}/>
-                                <rect x="108" y="114" width="28" height="3" rx="1.5" fill="#0F6E56" opacity="0.4"/>
-                                <rect x="138" y="114" width="14" height="3" rx="1.5" fill="#0F6E56" opacity="0.3"/>
-
-                                <rect x="174" y="78" width="70" height="56" rx="8" fill="#FBEAF0" stroke="#ED93B1" strokeWidth={0.8}/>
-                                <rect x="180" y="84" width="30" height="3" rx="1.5" fill="#993556" opacity="0.6"/>
-                                <rect x="180" y="90" width="22" height="2.5" rx="1.25" fill="#993556" opacity="0.35"/>
-                                <rect x="180" y="95" width="26" height="2.5" rx="1.25" fill="#993556" opacity="0.25"/>
-                                <circle cx="233" cy="89" r="7" fill="#D4537E" opacity="0.2"/>
-                                <rect x="229" y="86" width="8" height="6" rx="1.5" fill="#993556" opacity="0.5"/>
-                                <rect x="180" y="108" width="58" height="20" rx="5" fill="#fff" stroke="#ED93B1" strokeWidth={0.8}/>
-                                <rect x="186" y="114" width="28" height="3" rx="1.5" fill="#993556" opacity="0.4"/>
-                                <rect x="216" y="114" width="14" height="3" rx="1.5" fill="#993556" opacity="0.3"/>
-
-                                <rect x="252" y="78" width="70" height="56" rx="8" fill="#FAEEDA" stroke="#FAC775" strokeWidth={0.8}/>
-                                <rect x="258" y="84" width="30" height="3" rx="1.5" fill="#633806" opacity="0.6"/>
-                                <rect x="258" y="90" width="22" height="2.5" rx="1.25" fill="#633806" opacity="0.35"/>
-                                <rect x="258" y="95" width="26" height="2.5" rx="1.25" fill="#633806" opacity="0.25"/>
-                                <circle cx="311" cy="89" r="7" fill="#EF9F27" opacity="0.2"/>
-                                <rect x="307" y="86" width="8" height="6" rx="1.5" fill="#633806" opacity="0.5"/>
-                                <rect x="258" y="108" width="58" height="20" rx="5" fill="#fff" stroke="#FAC775" strokeWidth={0.8}/>
-                                <rect x="264" y="114" width="28" height="3" rx="1.5" fill="#633806" opacity="0.4"/>
-                                <rect x="294" y="114" width="14" height="3" rx="1.5" fill="#633806" opacity="0.3"/>
-
-                                <rect x="88" y="142" width="244" height="0.5" fill="#E0DEFA"/>
-
-                                <rect x="96" y="150" width="228" height="90" rx="8" fill="#F8F8FC"/>
-
-                                <rect x="96" y="150" width="228" height="14" rx="8" fill="#EEEDFE"/>
-                                <rect x="96" y="156" width="228" height="8" fill="#EEEDFE"/>
-
-                                <rect x="108" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.5"/>
-                                <rect x="135" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="162" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="189" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="216" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="243" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="270" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-                                <rect x="297" y="153" width="22" height="8" rx="2" fill="#534AB7" opacity="0.2"/>
-
-                                <line x1="96" y1="178" x2="324" y2="178" stroke="#E0DEFA" strokeWidth={0.5}/>
-                                <line x1="96" y1="192" x2="324" y2="192" stroke="#E0DEFA" strokeWidth={0.5}/>
-                                <line x1="96" y1="206" x2="324" y2="206" stroke="#E0DEFA" strokeWidth={0.5}/>
-                                <line x1="96" y1="220" x2="324" y2="220" stroke="#E0DEFA" strokeWidth={0.5}/>
-
-                                <rect x="114" y="168" width="44" height="36" rx="4" fill="#E1F5EE" stroke="#9FE1CB" strokeWidth={0.8}/>
-                                <rect x="117" y="172" width="26" height="2.5" rx="1.25" fill="#0F6E56" opacity="0.7"/>
-                                <rect x="117" y="177" width="18" height="2" rx="1" fill="#0F6E56" opacity="0.4"/>
-                                <rect x="117" y="181" width="22" height="2" rx="1" fill="#0F6E56" opacity="0.3"/>
-
-                                <rect x="163" y="168" width="44" height="24" rx="4" fill="#FBEAF0" stroke="#ED93B1" strokeWidth={0.8}/>
-                                <rect x="166" y="172" width="26" height="2.5" rx="1.25" fill="#993556" opacity="0.7"/>
-                                <rect x="166" y="177" width="18" height="2" rx="1" fill="#993556" opacity="0.4"/>
-                                <rect x="166" y="181" width="22" height="2" rx="1" fill="#993556" opacity="0.3"/>
-
-                                <rect x="212" y="175" width="44" height="36" rx="4" fill="#FAEEDA" stroke="#FAC775" strokeWidth={0.8}/>
-                                <rect x="215" y="179" width="26" height="2.5" rx="1.25" fill="#633806" opacity="0.7"/>
-                                <rect x="215" y="184" width="18" height="2" rx="1" fill="#633806" opacity="0.4"/>
-                                <rect x="215" y="188" width="22" height="2" rx="1" fill="#633806" opacity="0.3"/>
-
-                                <rect x="261" y="168" width="44" height="28" rx="4" fill="#E6F1FB" stroke="#85B7EB" strokeWidth={0.8}/>
-                                <rect x="264" y="172" width="26" height="2.5" rx="1.25" fill="#0C447C" opacity="0.7"/>
-                                <rect x="264" y="177" width="18" height="2" rx="1" fill="#0C447C" opacity="0.4"/>
-                                <rect x="264" y="181" width="22" height="2" rx="1" fill="#0C447C" opacity="0.3"/>
-
-                                <rect x="114" y="210" width="44" height="20" rx="4" fill="#FBEAF0" stroke="#ED93B1" strokeWidth={0.8}/>
-                                <rect x="117" y="214" width="26" height="2.5" rx="1.25" fill="#993556" opacity="0.7"/>
-                                <rect x="117" y="219" width="18" height="2" rx="1" fill="#993556" opacity="0.4"/>
-
-                                <rect x="212" y="200" width="44" height="20" rx="4" fill="#E1F5EE" stroke="#9FE1CB" strokeWidth={0.8}/>
-                                <rect x="215" y="204" width="26" height="2.5" rx="1.25" fill="#0F6E56" opacity="0.7"/>
-                                <rect x="215" y="209" width="18" height="2" rx="1" fill="#0F6E56" opacity="0.4"/>
-
-                                <rect x="261" y="206" width="44" height="24" rx="4" fill="#FAEEDA" stroke="#FAC775" strokeWidth={0.8}/>
-                                <rect x="264" y="210" width="26" height="2.5" rx="1.25" fill="#633806" opacity="0.7"/>
-                                <rect x="264" y="215" width="18" height="2" rx="1" fill="#633806" opacity="0.4"/>
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── Continue As Section ── */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-center gap-4 mb-6">
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700" />
-                        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Or continue without a clinic</h2>
-                        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
-
-                        {/* Consultant Doctor → pink */}
-                        <Link
-                            href="/consultation-dashboard"
-                            className="group relative flex flex-col p-6 rounded-2xl bg-white dark:bg-card border-2 border-pink-200 dark:border-pink-800/60 shadow-sm hover:shadow-lg hover:shadow-pink-100 dark:hover:shadow-pink-950/30 hover:border-pink-400 dark:hover:border-pink-600 transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:ring-offset-2"
-                        >
-                            {/* glow blob */}
-                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-pink-50/60 to-transparent dark:from-pink-950/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-                            <div className="relative flex items-start gap-4">
-                                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-pink-50 dark:bg-pink-950/50 border border-pink-100 dark:border-pink-800/40 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                                    <Stethoscope className="h-7 w-7 text-pink-500 dark:text-pink-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-pink-500 dark:text-pink-400 uppercase tracking-wider mb-0.5">Continue as</p>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">Consultant Doctor</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                                        Track consult patients, appointments &amp; earnings — privately in your own account.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="relative mt-5 flex items-center gap-1.5 text-sm font-semibold text-pink-500 dark:text-pink-400 group-hover:gap-3 transition-all duration-200">
-                                Go to Consultation Dashboard
-                                <ArrowRight className="h-4 w-4" />
-                            </div>
-                        </Link>
-
-                        {/* Student → purple */}
-                        <Link
-                            href="/academics"
-                            className="group relative flex flex-col p-6 rounded-2xl bg-white dark:bg-card border-2 border-purple-200 dark:border-purple-800/60 shadow-sm hover:shadow-lg hover:shadow-purple-100 dark:hover:shadow-purple-950/30 hover:border-purple-400 dark:hover:border-purple-600 transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2"
-                        >
-                            {/* glow blob */}
-                            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-50/60 to-transparent dark:from-purple-950/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-                            <div className="relative flex items-start gap-4">
-                                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-100 dark:border-purple-800/40 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                                    <GraduationCap className="h-7 w-7 text-purple-500 dark:text-purple-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-purple-500 dark:text-purple-400 uppercase tracking-wider mb-0.5">Continue as</p>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">Student</h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                                        Log case histories, track attendance &amp; manage your academic finances.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="relative mt-5 flex items-center gap-1.5 text-sm font-semibold text-purple-500 dark:text-purple-400 group-hover:gap-3 transition-all duration-200">
-                                Go to Academics
-                                <ArrowRight className="h-4 w-4" />
-                            </div>
-                        </Link>
-
-                    </div>
-                </div>
-
-                {/* What you can do - Feature Cards */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-center gap-4 mb-6">
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-gray-700" />
-                        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">What you can do</h2>
-                        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-gray-700" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
-                        {/* Manage Patients */}
-                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                            <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Manage Patients</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Keep all patient records organized and secure</p>
-                        </div>
-
-                        {/* Billing & Payments */}
-                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                            <div className="w-16 h-16 rounded-2xl bg-green-50 dark:bg-green-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                <CreditCard className="h-8 w-8 text-green-600 dark:text-green-400" />
-                            </div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Billing & Payments</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Create invoices and track payments easily</p>
-                        </div>
-
-                        {/* Team Collaboration */}
-                        <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white dark:bg-card border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-                            <div className="w-16 h-16 rounded-2xl bg-orange-50 dark:bg-orange-950/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                <UserPlus className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-                            </div>
-                            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Team Collaboration</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Add your team and work together seamlessly</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Trust Badges */}
-                <div className="rounded-2xl bg-gray-50/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center flex-shrink-0">
-                                <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                </svg>
-                            </div>
-                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Your data is safe with us</span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-950/50 flex items-center justify-center flex-shrink-0">
-                                <svg className="h-5 w-5 text-green-600 dark:text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                </svg>
-                            </div>
-                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Secure & Encrypted</span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center flex-shrink-0">
-                                <svg className="h-5 w-5 text-purple-600 dark:text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                </svg>
-                            </div>
-                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Always Backed Up</span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-950/50 flex items-center justify-center flex-shrink-0">
-                                <svg className="h-5 w-5 text-teal-600 dark:text-teal-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                    <polyline points="22 4 12 14.01 9 11.01" />
-                                </svg>
-                            </div>
-                            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">Privacy First</span>
-                        </div>
-                    </div>
-                </div>
+          {/* Purple Stethoscope (Top Right) */}
+          <div className="absolute top-16 right-12 flex items-center gap-2 animate-[float_5s_ease-in-out_infinite_1.5s]">
+            <div className="relative">
+              <div className="w-12 h-12 bg-[#B372F7] rounded-full border-2 border-gray-900 flex items-center justify-center shadow-sm rotate-12">
+                <Stethoscope className="w-6 h-6 text-gray-900" strokeWidth={2.5} />
+              </div>
+              <div className="absolute -top-1 -right-2 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.699-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+              </div>
             </div>
-        );
-    }
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gray-900 -mt-8 -ml-2">
+              <path d="M12 2L13 9L20 10L13 11L12 18L11 11L4 10L11 9L12 2Z" fill="currentColor" />
+            </svg>
+          </div>
 
-    const activeDaysCount = activeDates.length;
-    const patientsCount = patients.length;
-    const doctorsCount = doctors.filter(d => d.doctorType === 'activedoctor').length;
-
-    let founderTier: 'None' | 'Bronze' | 'Silver' | 'Gold' = 'None';
-    let nextTier: 'Bronze' | 'Silver' | 'Gold' | 'None' = 'Bronze';
-    
-    const qualifiesGold = activeDaysCount >= 60 && patientsCount >= 30 && doctorsCount >= 2;
-    const qualifiesSilver = activeDaysCount >= 30 && patientsCount >= 20 && doctorsCount >= 2;
-    const qualifiesBronze = activeDaysCount >= 10 && patientsCount >= 10 && doctorsCount >= 1;
-
-    if (isFounder) {
-        if (qualifiesGold) {
-            founderTier = 'Gold';
-            nextTier = 'None';
-        } else if (qualifiesSilver) {
-            founderTier = 'Silver';
-            nextTier = 'Gold';
-        } else {
-            founderTier = 'Bronze';
-            nextTier = 'Silver';
-        }
-    } else {
-        founderTier = 'None';
-        nextTier = founderCount < 100 ? 'Bronze' : 'None';
-    }
-
-    const getTierDetails = (tier: string) => {
-        switch (tier) {
-            case 'Bronze': return { days: 10, patients: 10, doctors: 1, discount: 25, color: 'text-amber-700 bg-amber-100', iconColor: '#b45309', label: 'Bronze Founder' };
-            case 'Silver': return { days: 30, patients: 20, doctors: 2, discount: 50, color: 'text-slate-700 bg-slate-200', iconColor: '#94a3b8', label: 'Silver Founder' };
-            case 'Gold': return { days: 60, patients: 30, doctors: 2, discount: 75, color: 'text-yellow-700 bg-yellow-100', iconColor: '#eab308', label: 'Gold Founder' };
-            default: return { days: 10, patients: 10, doctors: 1, discount: 0, color: 'text-slate-500 bg-slate-100', iconColor: '#94a3b8', label: 'Founder Program' };
-        }
-    };
-
-    const currentTierInfo = getTierDetails(founderTier);
-    const nextTierInfo = getTierDetails(nextTier);
-
-    return (
-        <div className="space-y-6">
-
-            {/* FOUNDER PROGRAM BANNER / HEADLINE */}
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/5 px-3.5 py-2 rounded-full border border-emerald-500/25 w-fit cursor-pointer transition-all hover:scale-[1.01]" onClick={() => setIsFounderDialogOpen(true)}>
-                <Medal className="h-4 w-4 text-emerald-500 animate-pulse" />
-                <span>Learn more about the founder program.</span>
+          {/* Orange Syringe (Middle Right) */}
+          <div className="absolute top-56 right-20 flex items-center gap-2 animate-[float_4s_ease-in-out_infinite_2s]">
+            <div className="relative">
+              <div className="w-14 h-14 bg-[#F87C41] rounded-full border-2 border-gray-900 flex items-center justify-center shadow-sm -rotate-6">
+                <Syringe className="w-7 h-7 text-gray-900" strokeWidth={2.5} />
+              </div>
+              <div className="absolute -bottom-2 -left-2 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] text-white font-bold">
+                8
+              </div>
             </div>
+          </div>
 
-            <Dialog open={isFounderDialogOpen} onOpenChange={setIsFounderDialogOpen}>
-                <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col bg-[#FAFAFA] dark:bg-[#1A1A1A] border-0 rounded-2xl shadow-xl">
-                    <DialogHeader className="sr-only">
-                        <DialogTitle>Founder Program</DialogTitle>
-                        <DialogDescription>Founder program tier and benefits</DialogDescription>
-                    </DialogHeader>
-                    <div className="p-6 bg-white dark:bg-[#252525] flex items-center gap-4 border-b border-slate-100 dark:border-[#333] shrink-0">
-                        <div className="h-12 w-12 rounded-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30">
-                            <Medal className="h-6 w-6 text-indigo-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                {founderTier !== 'None' ? currentTierInfo.label : 'Founder Program'}
-                            </h2>
-                            <p className="text-sm text-slate-500 dark:text-[#A0A0A0]">
-                                {founderTier !== 'None' ? "You're among the earliest clinics on Clinic@Click." : "Complete requirements to unlock premium benefits."}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="p-6 space-y-8 overflow-y-auto flex-1">
-                        {/* Description */}
-                        <div className="text-sm text-slate-600 dark:text-[#B0B0B0] space-y-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                            <p className="font-bold text-slate-900 dark:text-white">Founder Program</p>
-                            <p>Clinic@Click is currently free while we continue building the platform.</p>
-                            <p>As premium plans are introduced in the future, Founder Clinics will receive exclusive discounts based on their Founder Tier.</p>
-                            <p>Clinic@Click will always offer a free plan with essential clinic management features. Premium plans will focus on advanced automation, AI tools, analytics, reporting, and productivity features.</p>
-                        </div>
-
-                        {/* Current Benefit */}
-                        <div>
-                            <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-3">Current Benefit</h3>
-                            <div className="bg-[#FFF4E5] dark:bg-[#3D2C1D] border border-[#FDE0B6] dark:border-[#5C4328] rounded-xl p-4 flex items-start gap-4">
-                                <Tag className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5" />
-                                <div>
-                                    <div className="font-bold text-amber-900 dark:text-amber-100 text-base">
-                                        {founderTier !== 'None' ? `${currentTierInfo.discount}% off future premium plans` : 'No benefits unlocked yet'}
-                                    </div>
-                                    <div className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                                        {founderTier !== 'None' ? 'Locked in for as long as you stay a founder.' : 'Reach Bronze tier to get 25% off.'}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Progress to Next Tier */}
-                        {nextTier !== 'None' && (
-                            <div>
-                                <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">Progress to {nextTier}</h3>
-                                <div className="space-y-5">
-                                    {/* Active Days */}
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                                <Calendar className="h-4 w-4 text-slate-400" /> Maintain an active clinic
-                                            </div>
-                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                                {activeDaysCount} / {nextTierInfo.days} days
-                                            </div>
-                                        </div>
-                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (activeDaysCount / nextTierInfo.days) * 100)}%` }}></div>
-                                        </div>
-                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
-                                            {Math.max(0, nextTierInfo.days - activeDaysCount)} days left
-                                        </div>
-                                    </div>
-
-                                    {/* Patients */}
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                                <Users className="h-4 w-4 text-slate-400" /> Grow patient records
-                                            </div>
-                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                                {patientsCount} / {nextTierInfo.patients}
-                                            </div>
-                                        </div>
-                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (patientsCount / nextTierInfo.patients) * 100)}%` }}></div>
-                                        </div>
-                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
-                                            {Math.max(0, nextTierInfo.patients - patientsCount)} more
-                                        </div>
-                                    </div>
-
-                                    {/* Doctors */}
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                                <UserCheck className="h-4 w-4 text-slate-400" /> Collaborate with doctors
-                                            </div>
-                                            <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                                {doctorsCount} / {nextTierInfo.doctors}
-                                            </div>
-                                        </div>
-                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                            <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (doctorsCount / nextTierInfo.doctors) * 100)}%` }}></div>
-                                        </div>
-                                        <div className="flex justify-between items-start mt-1">
-                                            <details className="text-xs group">
-                                                <summary className="text-blue-500 cursor-pointer font-medium hover:underline list-none flex items-center">
-                                                    <svg className="w-3 h-3 mr-1 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                                                    How to add a doctor?
-                                                </summary>
-                                                <div className="mt-2 bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 leading-relaxed text-left">
-                                                    <ol className="list-decimal pl-4 space-y-1">
-                                                        <li>Share your clinic's invite code with your associate doctor.</li>
-                                                        <li>Ask them to visit <strong>clinicatclick.com</strong> or download the app.</li>
-                                                        <li>They should sign up, go to "Join Clinic", enter your code, and select the <strong>Doctor</strong> role.</li>
-                                                        <li>Approve their request in the pending requests section.</li>
-                                                    </ol>
-                                                </div>
-                                            </details>
-                                            <div className="text-xs text-right text-slate-400 dark:text-[#888] whitespace-nowrap ml-4">
-                                                {Math.max(0, nextTierInfo.doctors - doctorsCount)} more
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* All Founder Tiers */}
-                        <div>
-                            <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">All Founder Tiers</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                {[
-                                    { name: 'Bronze', days: 10, patients: 10, doctors: 1, discount: 25, achieved: founderTier === 'Bronze' || founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Bronze' },
-                                    { name: 'Silver', days: 30, patients: 20, doctors: 2, discount: 50, achieved: founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Silver' },
-                                    { name: 'Gold', days: 60, patients: 30, doctors: 2, discount: 75, achieved: founderTier === 'Gold', current: founderTier === 'Gold' }
-                                ].map(t => (
-                                    <div key={t.name} className={`rounded-xl p-4 border ${t.current ? 'bg-[#FFF9F0] border-amber-400 dark:bg-[#332A1F] dark:border-amber-600' : 'bg-white border-slate-200 dark:bg-[#252525] dark:border-[#333]'} relative overflow-hidden flex flex-col justify-between h-full`}>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Medal className={`h-5 w-5 ${t.name === 'Bronze' ? 'text-amber-700' : t.name === 'Silver' ? 'text-slate-400' : 'text-yellow-500'}`} />
-                                                <span className="font-bold text-sm text-slate-900 dark:text-white">{t.name}</span>
-                                            </div>
-                                            <div className="text-[11px] text-slate-500 dark:text-[#A0A0A0] space-y-1 mb-4">
-                                                <div>{t.days} days active</div>
-                                                <div>{t.patients} patient records</div>
-                                                <div>{t.doctors} doctors</div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${t.current ? 'bg-amber-500 text-white' : t.achieved ? 'bg-slate-100 text-slate-600 dark:bg-[#333] dark:text-[#C0C0C0]' : 'bg-slate-50 text-slate-400 border border-slate-200 dark:bg-[#1A1A1A] dark:border-[#333]'}`}>
-                                                {t.discount}% off
-                                            </span>
-                                            <div className="mt-2 text-[10px] font-bold">
-                                                {t.current ? <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">← Current</span> : t.achieved ? <span className="text-slate-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Achieved</span> : <span className="text-slate-300 dark:text-[#666]">In progress</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-4 p-3 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-[#333] rounded-lg text-center text-xs text-slate-500 dark:text-[#A0A0A0]">
-                                {(() => {
-                                    const displayFounderCount = Math.min(100, Math.round(25 + founderCount * 0.75));
-                                    if (founderCount >= 100 && !isFounder) {
-                                        return "100 clinics have already joined the Founder Program. New founder spots are currently closed.";
-                                    }
-                                    if (isFounder) {
-                                        return "You are part of the exclusive first 100 Founder Clinics!";
-                                    }
-                                    return `Only the first 100 clinics to reach Bronze will be a part of the Founder Program. (${displayFounderCount}/100 spots claimed)`;
-                                })()}
-                            </div>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* GREETING & STATS */}
-            <div>
-                <h1 className="text-2xl font-semibold">{greeting || 'Welcome!'}</h1>
-                <p className="text-gray-500">{format(new Date(), "dd/MM/yyyy")}</p>
-
-                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                    <StatCard title="In Chair" value={String(stats.inChairCount)} icon={<Stethoscope className="text-blue-500" />} highlight />
-                    <StatCard title="Today's Appointments" value={String(stats.todaysAppointmentsCount)} icon={<Calendar className="text-purple-500" />} />
-                    <StatCard title="Revenue Today" value={`₹${stats.revenueToday.toLocaleString()}`} icon={<IndianRupee className="text-green-500" />} success />
-                    <StatCard title="Pending Payments" value={`₹${stats.pendingPayments.toLocaleString()}`} icon={<Wallet className="text-red-500" />} danger />
-                </div>
-            </div>
-
-            {/* MAIN GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* PATIENT QUEUE */}
-                <div className="lg:col-span-2 bg-white dark:bg-card rounded-xl shadow-sm p-5">
-                    <h2 className="text-lg font-semibold mb-4">Patient Queue</h2>
-
-                    {patientQueue.length > 0 ? (
-                        patientQueue.map(app => (
-                            <QueueItem
-                                key={app.id}
-                                time={app.startTime}
-                                name={app.patientName || "Unknown"}
-                                procedure={app.notes || (app.procedureIds && app.procedureIds.length > 0 ? `${app.procedureIds.length} procedure(s)` : 'General Consultation')}
-                                status={app.status}
-                                onStatusChange={(newStatus) => handleStatusChange(app.id, newStatus)}
-                            />
-                        ))
-                    ) : (
-                        <p className="text-muted-foreground text-center py-4">No appointments scheduled for today.</p>
-                    )}
-
-                    <Button variant="link" asChild className="text-blue-600 dark:text-primary text-sm mt-4 p-0 h-auto">
-                        <Link href="/appointments">View Calendar →</Link>
-                    </Button>
-                </div>
-
-                {/* QUICK ACTIONS */}
-                <div className="bg-white dark:bg-card rounded-xl shadow-sm p-5 space-y-3">
-                    <h2 className="text-lg font-semibold">Quick Actions</h2>
-
-                    <ActionButton href="/patients" icon={<UserPlus />} label="New Patient" />
-                    <ActionButton href="/patients" icon={<Stethoscope />} label="Open Dental Chart" />
-                    <ActionButton href="/financials" icon={<FileText />} label="Generate Invoice" primary />
-                    <ActionButton href="/patients" icon={<ImageIcon />} label="Create Appointment" />
-                    <ActionButton href="/pharmacy" icon={<FileText />} label="Write Prescription" danger />
-                </div>
-            </div>
-
-            {/* BOTTOM GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* DENTAL LAB COMMUNICATION */}
-                <div className="bg-white dark:bg-card rounded-xl shadow-sm p-5">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                        <Beaker className="text-cyan-500" />
-                        Dental Lab Communication
-                    </h2>
-                    <form onSubmit={handleLabSubmit} className="mt-4 space-y-3 text-sm">
-                        <div>
-                            <Label htmlFor="labSelect">Select Lab</Label>
-                            <Select name="contactEmail" required disabled={isSubmitting}>
-                                <SelectTrigger id="labSelect"><SelectValue placeholder="Select a lab..." /></SelectTrigger>
-                                <SelectContent>{labs.map(l => <SelectItem key={l.id} value={l.email}>{l.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <div>
-                            <Label htmlFor="labSubject">Subject</Label>
-                            <Input id="labSubject" name="subject" placeholder="e.g., Case #1234 - PFM Crown" required disabled={isSubmitting} />
-                        </div>
-                        <div>
-                            <Label htmlFor="labMessage">Message</Label>
-                            <Textarea id="labMessage" name="message" placeholder="Shade, delivery date, instructions..." className="min-h-[80px]" required disabled={isSubmitting} />
-                        </div>
-                        <Button type="submit" disabled={isSubmitting} className="w-full">
-                            {isSubmitting ? 'Sending...' : 'Send Message to Lab'}
-                        </Button>
-                    </form>
-                </div>
-
-                {/* FINANCIAL OVERVIEW */}
-                <div className="bg-white dark:bg-card rounded-xl shadow-sm p-5">
-                    <h2 className="text-lg font-semibold">Financial Overview</h2>
-
-                    <div className="mt-4 space-y-3 text-sm">
-                        <FinancialRow label="Today" value={`₹${stats.revenueToday.toLocaleString()}`} />
-                        <FinancialRow label="This Month" value={`₹${stats.revenueThisMonth.toLocaleString()}`} />
-                        <FinancialRow label="Pending" value={`₹${stats.pendingPayments.toLocaleString()}`} />
-                    </div>
-                </div>
-
-                {/* COMMUNICATION */}
-                <div className="bg-white dark:bg-card rounded-xl shadow-sm p-5">
-                    <h2 className="text-lg font-semibold">Communication</h2>
-
-                    <Accordion type="single" collapsible className="w-full mt-4 space-y-2">
-                        <AccordionItem value="automated" className="border-none">
-                            <AccordionTrigger className="p-3 rounded-lg bg-slate-100 dark:bg-muted/50 hover:no-underline">Automated</AccordionTrigger>
-                            <AccordionContent className="space-y-2 pt-2">
-                                <Button variant="outline" className="w-full justify-start">Send Appointment Reminders</Button>
-                                <Button variant="outline" className="w-full justify-start">Send Birthday Wishes</Button>
-                            </AccordionContent>
-                        </AccordionItem>
-                        <AccordionItem value="manual" className="border-none">
-                            <AccordionTrigger className="p-3 rounded-lg bg-slate-100 dark:bg-muted/50 hover:no-underline">Manual</AccordionTrigger>
-                            <AccordionContent className="pt-2">
-                                <Link href="/communication" className="text-blue-600 dark:text-primary text-sm">Go to Communication Center →</Link>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                </div>
-            </div>
         </div>
-    );
+
+        {/* ── Colorful icon row (overlapping, wiggle on hover) ── */}
+        <div className="flex items-center justify-center mb-10 md:mb-12 mt-2">
+          {features.map((f, i) => {
+            const Icon = f.icon;
+            const isActive = activeFeature === i;
+            return (
+              <button
+                key={f.title}
+                onClick={() => handleFeatureClick(i)}
+                className="group relative -ml-2 first:ml-0 hover:z-10 transition-all duration-200"
+                title={f.title}
+                style={{ zIndex: isActive ? 10 : features.length - i }}
+              >
+                <div
+                  className={`
+                    w-[64px] h-[64px] md:w-[76px] md:h-[76px] rounded-full flex items-center justify-center
+                    transition-all duration-200 cursor-pointer
+                    border-[2.5px] shadow-sm
+                    group-hover:landing-wiggle
+                    ${isActive
+                      ? `${f.bgActive} ${f.border} ring-2 scale-110 shadow-md`
+                      : `bg-white ${f.border} ${f.bgHover}`
+                    }
+                  `}
+                >
+                  <Icon
+                    className={`h-7 w-7 md:h-8 md:w-8 ${f.color}`}
+                    strokeWidth={1.8}
+                  />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Feature card ── */}
+        {activeData && (
+          <div className="w-full max-w-lg mb-10 landing-fade-in">
+            <div className="relative rounded-2xl border border-gray-200 bg-white shadow-xl shadow-gray-200/60 p-6 text-left">
+              <button
+                onClick={() => setActiveFeature(null)}
+                className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-start gap-4">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${features[activeFeature!].bgActive.split(' ')[0]}`}>
+                  <activeData.icon className={`h-5 w-5 ${features[activeFeature!].color}`} strokeWidth={1.8} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-[#1a1a1a] mb-0.5">{activeData.title}</h3>
+                  <p className="text-sm text-gray-400 mb-2">{activeData.tagline}</p>
+                  <p className="text-sm leading-relaxed text-gray-600">{activeData.description}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Heading ── */}
+        <h1 className="font-bold leading-[1.2] mb-5 max-w-[1000px] tracking-[-0.03em] text-[clamp(2.2rem,5vw,3.8rem)] text-[#1a1a1a]">
+          Where Clinics and Practitioners<br className="hidden md:block" />
+          <span className={`inline-flex items-center gap-2.5 align-middle px-5 py-1 rounded-full border-0 mt-1 mx-2 transition-colors duration-300 ${currentWord.bg}`}>
+            <span className={`w-3 h-3 rounded-full ${currentWord.dot} shrink-0 transition-colors duration-300`} />
+            <span
+              className={`transition-all duration-300 ${
+                isAnimating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
+              }`}
+            >
+              {currentWord.word}
+            </span>
+          </span>{' '}
+          together.
+        </h1>
+
+        {/* ── Subtitle ── */}
+        <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10">
+          Manage patients, track finances, and automate workflows with AI built for your dental practice.
+        </p>
+
+        {/* ── Buttons ── */}
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-center relative z-10">
+          <Button size="lg" className="bg-[#2383e2] hover:bg-blue-600 text-white rounded-lg px-8 h-12 text-base font-semibold whitespace-nowrap">
+            Get Clinic@Click for free
+          </Button>
+        </div>
+
+        {/* ── Stats ── */}
+        <div className="w-full border-t border-gray-100 pt-5 pb-4">
+          <div className="flex items-center justify-center gap-8 md:gap-12 flex-wrap text-gray-400">
+            {[
+              ['11+', 'Modules'],
+              ['AI', 'Powered'],
+              ['256-bit', 'Encrypted'],
+              ['Multi', 'Doctor'],
+              ['Student', 'Ready'],
+            ].map(([value, label]) => (
+              <div key={label} className="flex flex-col items-center">
+                <span className="text-lg font-bold text-gray-800 leading-tight">{value}</span>
+                <span className="text-[10px] uppercase tracking-wider font-medium text-gray-400 mt-0.5">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HERO ANIMATION ── */}
+      <HeroAnimation />
+
+      {/* ── FEATURE SHOWCASE (NOTION-STYLE) ── */}
+      <FeatureShowcase />
+
+
+
+      {/* ── ROADMAP / PRODUCT RELEASES (NOTION STYLE) ── */}
+      <section className="px-6 py-20 bg-[#fafafa] border-t border-gray-100">
+        <div className="max-w-[1024px] mx-auto flex flex-col gap-12">
+          
+          {/* Section 1: Recently Released */}
+          <div>
+            <div className="mb-5 flex items-center gap-2">
+              <div className="h-[1px] w-4 bg-gray-300"></div>
+              <span className="text-[12px] font-bold text-gray-500 tracking-wider uppercase">Recently Released</span>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Card 1: Student Module */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#c4b5fd] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <GraduationCap className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Check className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  Student Module
+                </h4>
+              </div>
+
+              {/* Card 2: Staff Attendance */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#fde047] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <PersonStanding className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Clock className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  Staff Attendance
+                </h4>
+              </div>
+
+              {/* Card 3: Dental Chart */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#fca5a5] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <ClipboardList className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Check className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  Dental Chart
+                </h4>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Coming Soon */}
+          <div>
+            <div className="mb-5 flex items-center gap-2">
+              <div className="h-[1px] w-4 bg-gray-300"></div>
+              <span className="text-[12px] font-bold text-gray-500 tracking-wider uppercase">Coming Soon</span>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Card 1: SMS Reminders */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#93c5fd] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <MessageSquare className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Zap className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  SMS Reminders
+                </h4>
+              </div>
+
+              {/* Card 2: AI Assistant */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#c084fc] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Plus className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  AI Assistant
+                </h4>
+              </div>
+
+              {/* Card 3: WhatsApp Integration */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#86efac] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <MessageSquare className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Check className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  WhatsApp
+                </h4>
+              </div>
+
+              {/* Card 4: Multi-Clinic Dashboard */}
+              <div className="group bg-white border border-gray-200/80 rounded-2xl p-6 flex flex-col justify-between hover:shadow-md transition-all cursor-pointer aspect-square sm:aspect-auto sm:min-h-[180px]">
+                <div className="relative w-12 h-12">
+                  <div className="w-12 h-12 rounded-full bg-[#fdba74] border-[2.5px] border-[#1a1a1a] flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                    <Plus className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                  </div>
+                </div>
+                <h4 className="font-bold text-[15px] sm:text-[16px] text-gray-900 leading-tight">
+                  Multi-Clinic
+                </h4>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── VIDEO DEMO ── */}
+      <section className="px-6 py-20 bg-[#0d0d0d] relative overflow-hidden">
+        {/* Ambient glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#2383e2] opacity-10 rounded-full blur-[120px]" />
+        </div>
+
+        <div className="max-w-[900px] mx-auto relative z-10">
+          {/* Label */}
+          <div className="flex justify-center mb-5">
+            <span className="inline-flex items-center gap-2 bg-white/10 border border-white/10 text-white/80 text-xs font-semibold px-4 py-1.5 rounded-full tracking-wide uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
+              Live Demo
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h2 className="text-3xl md:text-4xl font-extrabold text-white text-center tracking-tight leading-tight mb-3">
+            Watch Clinic@Click in Action
+          </h2>
+          <p className="text-center text-white/50 text-sm md:text-base mb-10">
+            People buy software after seeing it. See everything in under 90 seconds.
+          </p>
+
+          {/* Video embed */}
+          <div className="relative rounded-2xl overflow-hidden shadow-[0_0_80px_rgba(35,131,226,0.25)] border border-white/10 group">
+            {/* Aspect ratio wrapper 16:9 */}
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src="https://www.youtube.com/embed/tiizwKGoP5c?rel=0&modestbranding=1&color=white"
+                title="Clinic@Click Demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="absolute inset-0 w-full h-full rounded-2xl"
+              />
+            </div>
+          </div>
+
+          {/* Sub-label */}
+          <p className="text-center text-white/30 text-xs mt-5">
+            No sign-up required to watch · 90 seconds · HD
+          </p>
+        </div>
+      </section>
+
+      {/* ── CTA ── */}
+      <section className="px-6 py-16 bg-white">
+        <div className="max-w-[500px] mx-auto text-center">
+          <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a1a] tracking-tight mb-3">
+            Get started for free
+          </h3>
+          <p className="text-gray-500 mb-7 text-sm">
+            Play around with it first. Pay and add your team later.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              asChild
+              className="bg-[#2383e2] text-white hover:bg-[#1b6ec2] px-5 h-10 rounded-lg text-sm font-medium shadow-md"
+            >
+              <Link href="/login" className="flex items-center gap-2">
+                Get Clinic@Click free <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="border-[#2383e2] text-[#2383e2] hover:bg-blue-50 px-5 h-10 rounded-lg text-sm font-medium"
+            >
+              <Link href="/login">Request a demo</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ── FOOTER ── */}
+      <footer className="border-t border-gray-100 py-6 px-6 bg-white">
+        <div className="max-w-[960px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-2">
+            <LogoCC className="h-4 w-4 text-gray-400" />
+            <span className="font-semibold text-xs text-gray-500">Clinic@Click</span>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            &copy; {new Date().getFullYear()} Clinic@Click. All rights reserved.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-5 text-[11px] text-gray-400">
+            <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Contact Us:</span>
+            <a href="https://wa.me/919137769195" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 transition-colors">
+              +91 91377 69195
+            </a>
+            <span className="hidden sm:inline text-gray-300">•</span>
+            <a href="mailto:clickatclick@gmail.com" className="hover:text-gray-600 transition-colors">
+              clickatclick@gmail.com
+            </a>
+          </div>
+        </div>
+      </footer>
+
+      <style jsx global>{`
+        .landing-page {
+          background: #ffffff !important;
+          background-image: none !important;
+        }
+        @keyframes landing-fade-slide {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .landing-fade-in {
+          animation: landing-fade-slide 0.25s ease-out forwards;
+        }
+        @keyframes wiggle {
+          0%, 100% { transform: rotate(0deg); }
+          20% { transform: rotate(-12deg); }
+          40% { transform: rotate(10deg); }
+          60% { transform: rotate(-6deg); }
+          80% { transform: rotate(4deg); }
+        }
+        .group:hover .group-hover\:landing-wiggle,
+        button.group:hover > .landing-wiggle,
+        button:hover > div {
+          animation: wiggle 0.5s ease-in-out;
+        }
+      `}</style>
+    </div>
+  );
 }

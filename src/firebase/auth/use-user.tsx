@@ -84,6 +84,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         unsubscribeUserDoc = null;
       }
 
+      const isPublicPage =
+        pathname === '/' ||
+        pathname.startsWith('/login') ||
+        pathname.startsWith('/signup') ||
+        pathname.startsWith('/forgot-password') ||
+        pathname.startsWith('/reset-password');
+
       const isAuthPage =
         pathname.startsWith('/login') ||
         pathname.startsWith('/signup') ||
@@ -96,7 +103,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         setClinicRole(null);
         setClinicLoading(false);
 
-        if (!isAuthPage) {
+        if (!isPublicPage) {
           router.replace('/login');
         }
         return;
@@ -104,7 +111,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
       /* -------------------- LOGGED IN -------------------- */
       if (isAuthPage) {
-        router.replace('/');
+        router.replace('/dashboard');
+      }
+
+      if (pathname === '/') {
+        router.replace('/dashboard');
       }
 
       /* -------------------- LOAD CLINIC CONTEXT -------------------- */

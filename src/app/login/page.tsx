@@ -64,7 +64,7 @@ export default function LoginPage() {
   try {
     await signInWithGoogleNative();
     toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-    router.push('/');
+    router.push('/dashboard');
   } catch (error) {
     const err = error as AuthError;
     toast({
@@ -82,7 +82,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       toast({ title: 'Sign- Successful', description: 'Welcome back!' });
-      router.push('/');
+      router.push('/dashboard');
     } catch (error) {
       const err = error as AuthError;
       let errorMessage = err.message || 'An unexpected error occurred.';
@@ -116,7 +116,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmail(email, password);
-      router.push('/');
+      router.push('/dashboard');
     } catch (error) {
       const err = error as AuthError;
       toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
@@ -162,7 +162,7 @@ export default function LoginPage() {
       const newUser = await signUpWithEmail(email, password);
       await updateUserProfile(newUser.uid, { displayName: fullName });
       toast({ title: 'Account created successfully' });
-      router.push('/');
+      router.push('/dashboard');
     } catch (error: any) {
       toast({
         title: 'Sign Up Failed',
@@ -285,8 +285,15 @@ export default function LoginPage() {
                 </Button>
               </form>
             </TabsContent>
-          </Tabs>
-        </CardContent>
+            </Tabs>
+
+            {/* GO HOME LINK */}
+            <div className="mt-6 text-center">
+              <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1">
+                ← Go back to Clinic@Click
+              </Link>
+            </div>
+          </CardContent>
       </Card>
     </div>
   );

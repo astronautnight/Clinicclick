@@ -94,7 +94,7 @@ export default function SignupPage() {
       }
 
       toast({ title: 'Account created successfully' });
-      router.push('/');
+      router.push('/dashboard');
     } catch (err: any) {
       console.error(err);
       toast({
