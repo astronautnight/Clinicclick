@@ -327,8 +327,8 @@ export default function LandingPage() {
 
         {/* ── Buttons ── */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center relative z-10">
-          <Button size="lg" className="bg-[#2383e2] hover:bg-blue-600 text-white rounded-lg px-8 h-12 text-base font-semibold whitespace-nowrap">
-            Get Clinic@Click for free
+          <Button asChild size="lg" className="bg-[#2383e2] hover:bg-blue-600 text-white rounded-lg px-8 h-12 text-base font-semibold whitespace-nowrap">
+            <Link href="/login">Get Clinic@Click for free</Link>
           </Button>
         </div>
 
