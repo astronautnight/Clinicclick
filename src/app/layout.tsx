@@ -26,7 +26,7 @@ const APP_NAME = 'Clinic@Click - Clinic Management Software for Dentists';
 const APP_DEFAULT_TITLE = 'Clinic@Click';
 const APP_TITLE_TEMPLATE = '%s - Clinic@Click';
 const APP_DESCRIPTION =
-  'Elevate your dental practice with Clinic@Click, the all-in-one management solution.';
+  'Clinic@Click is a modern dental clinic management software for appointments, patient records, billing, dental charts, inventory, and practice growth.';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
 export const metadata: Metadata = {

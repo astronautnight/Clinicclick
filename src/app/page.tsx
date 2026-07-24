@@ -330,6 +330,14 @@ export default function LandingPage() {
           <Button asChild size="lg" className="bg-[#2383e2] hover:bg-blue-600 text-white rounded-lg px-8 h-12 text-base font-semibold whitespace-nowrap">
             <Link href="/login">Get Clinic@Click for free</Link>
           </Button>
+          <Button asChild variant="outline" size="lg" className="border-[#2383e2] text-[#2383e2] hover:bg-blue-50 rounded-lg px-8 h-12 text-base font-semibold whitespace-nowrap">
+            <a href="https://play.google.com/store/apps/details?id=com.clinicclick.app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.523 15.3414C17.0709 15.3414 16.7027 15.7095 16.7027 16.1616C16.7027 16.6138 17.0709 16.9819 17.523 16.9819C17.9752 16.9819 18.3433 16.6138 18.3433 16.1616C18.3433 15.7095 17.9752 15.3414 17.523 15.3414ZM6.47702 15.3414C6.02488 15.3414 5.65674 15.7095 5.65674 16.1616C5.65674 16.6138 6.02488 16.9819 6.47702 16.9819C6.92917 16.9819 7.29731 16.6138 7.29731 16.1616C7.29731 15.7095 6.92917 15.3414 6.47702 15.3414ZM17.9625 10.6074L19.6806 7.62535C19.8251 7.37521 19.7397 7.05436 19.4895 6.9099C19.2394 6.76543 18.9185 6.85084 18.7741 7.10099L17.0371 10.1166C15.6178 9.4715 13.9161 9.09631 12 9.09631C10.0839 9.09631 8.38217 9.4715 6.96288 10.1166L5.22591 7.10099C5.08145 6.85084 4.7606 6.76543 4.51046 6.9099C4.26031 7.05436 4.1749 7.37521 4.31936 7.62535L6.03749 10.6074C2.92383 12.2858 0.77124 15.421 0.505005 19.1673H23.495C23.2288 15.421 21.0762 12.2858 17.9625 10.6074Z" />
+              </svg>
+              Download on Android
+            </a>
+          </Button>
         </div>
 
         {/* ── Stats ── */}
@@ -558,6 +566,18 @@ export default function LandingPage() {
               asChild
               variant="outline"
               className="border-[#2383e2] text-[#2383e2] hover:bg-blue-50 px-5 h-10 rounded-lg text-sm font-medium"
+            >
+              <a href="https://play.google.com/store/apps/details?id=com.clinicclick.app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.523 15.3414C17.0709 15.3414 16.7027 15.7095 16.7027 16.1616C16.7027 16.6138 17.0709 16.9819 17.523 16.9819C17.9752 16.9819 18.3433 16.6138 18.3433 16.1616C18.3433 15.7095 17.9752 15.3414 17.523 15.3414ZM6.47702 15.3414C6.02488 15.3414 5.65674 15.7095 5.65674 16.1616C5.65674 16.6138 6.02488 16.9819 6.47702 16.9819C6.92917 16.9819 7.29731 16.6138 7.29731 16.1616C7.29731 15.7095 6.92917 15.3414 6.47702 15.3414ZM17.9625 10.6074L19.6806 7.62535C19.8251 7.37521 19.7397 7.05436 19.4895 6.9099C19.2394 6.76543 18.9185 6.85084 18.7741 7.10099L17.0371 10.1166C15.6178 9.4715 13.9161 9.09631 12 9.09631C10.0839 9.09631 8.38217 9.4715 6.96288 10.1166L5.22591 7.10099C5.08145 6.85084 4.7606 6.76543 4.51046 6.9099C4.26031 7.05436 4.1749 7.37521 4.31936 7.62535L6.03749 10.6074C2.92383 12.2858 0.77124 15.421 0.505005 19.1673H23.495C23.2288 15.421 21.0762 12.2858 17.9625 10.6074Z" />
+                </svg>
+                Download on Android
+              </a>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              className="text-gray-500 hover:text-gray-900 px-5 h-10 rounded-lg text-sm font-medium"
             >
               <Link href="/login">Request a demo</Link>
             </Button>
