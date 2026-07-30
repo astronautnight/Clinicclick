@@ -147,7 +147,7 @@ function computeColumnsForDay(appts: Appointment[]) {
   return result;
 }
 
-const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onEdit }: { appointments: Appointment[]; title: string; searchQuery: string; onSearchChange: (q: string) => void; onEdit: (app: Appointment) => void; }) => {
+const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onEdit, onDelete }: { appointments: Appointment[]; title: string; searchQuery: string; onSearchChange: (q: string) => void; onEdit: (app: Appointment) => void; onDelete: (app: Appointment) => void; }) => {
   if (appointments.length === 0 && !searchQuery) {
     return (
       <Card className="mt-4">
@@ -205,9 +205,12 @@ const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onE
                             'outline'
                     }>{app.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right flex justify-end gap-1">
                     <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
                       <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onDelete(app)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -322,24 +325,32 @@ export default function AppointmentsPage() {
           return dateA.getTime() - dateB.getTime();
         });
       setAppointments(appointmentsData);
+    }, (error) => {
+      console.error("Appointments subscription error:", error);
     });
 
     const patientsColRef = collection(db, 'clinics', clinicId, 'patients');
     const unsubscribePatients = onSnapshot(patientsColRef, (snapshot) => {
       const patientsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Patient));
       setPatients(patientsData);
+    }, (error) => {
+      console.error("Patients subscription error:", error);
     });
 
     const doctorsColRef = collection(db, 'clinics', clinicId, 'doctors');
     const unsubscribeDoctors = onSnapshot(doctorsColRef, (snapshot) => {
       const doctorsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Doctor));
       setDoctors(doctorsData);
+    }, (error) => {
+      console.error("Doctors subscription error:", error);
     });
 
     const proceduresColRef = collection(db, 'clinics', clinicId, 'procedures');
     const unsubscribeProcedures = onSnapshot(proceduresColRef, (snapshot) => {
       const proceduresData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Procedure));
       setProcedures(proceduresData);
+    }, (error) => {
+      console.error("Procedures subscription error:", error);
     });
 
     return () => {
@@ -435,6 +446,16 @@ export default function AppointmentsPage() {
         toast({ title: "Error", description: "Could not delete appointment.", variant: "destructive" });
       } finally {
         setAppointmentToDelete(null);
+      }
+    }
+  };
+
+  const handleEditDelete = () => {
+    if (editingAppointmentId) {
+      const app = appointments.find(a => a.id === editingAppointmentId);
+      if (app) {
+        setAppointmentToDelete(app);
+        setIsFormOpen(false);
       }
     }
   };
@@ -651,7 +672,19 @@ export default function AppointmentsPage() {
                 </div>
                 <div><Label htmlFor="notes">Additional Notes (Optional)</Label><Textarea id="notes" name="notes" value={currentAppointment.notes || ''} onChange={handleInputChange} placeholder="Any specific instructions or details for the appointment." /></div>
               </div>
-              <DialogFooter className="pt-4 border-t"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit">{editingAppointmentId ? 'Save Changes' : 'Schedule Appointment'}</Button></DialogFooter>
+              <DialogFooter className="pt-4 border-t flex flex-row justify-between items-center w-full">
+                <div>
+                  {editingAppointmentId && (
+                    <Button type="button" variant="destructive" onClick={handleEditDelete}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                  <Button type="submit">{editingAppointmentId ? 'Save Changes' : 'Schedule Appointment'}</Button>
+                </div>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
@@ -859,7 +892,22 @@ export default function AppointmentsPage() {
           </TabsContent>
         </Tabs>
 
-        <AppointmentList appointments={visibleAppointments} title={listTitle} searchQuery={searchQuery} onSearchChange={setSearchQuery} onEdit={handleEdit} />
+        <AppointmentList appointments={visibleAppointments} title={listTitle} searchQuery={searchQuery} onSearchChange={setSearchQuery} onEdit={handleEdit} onDelete={setAppointmentToDelete} />
+
+        <AlertDialog open={appointmentToDelete !== null} onOpenChange={(open) => { if (!open) setAppointmentToDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeaderCustom>
+              <AlertDialogTitleCustom>Are you sure you want to cancel/delete this appointment?</AlertDialogTitleCustom>
+              <div className="text-sm text-muted-foreground">
+                This will permanently delete the appointment for <strong>{appointmentToDelete?.patientName}</strong> scheduled with <strong>{appointmentToDelete?.doctorName}</strong> on {appointmentToDelete?.date} at {appointmentToDelete?.startTime}.
+              </div>
+            </AlertDialogHeaderCustom>
+            <AlertDialogFooterCustom>
+              <AlertDialogCancel onClick={() => setAppointmentToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+            </AlertDialogFooterCustom>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     </TooltipProvider>
