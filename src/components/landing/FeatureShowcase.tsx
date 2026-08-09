@@ -26,14 +26,50 @@ import {
   CalendarCheck,
   CalendarX,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Printer,
+  Upload,
+  History as HistoryIcon,
+  Check,
+  Clock,
+  Zap
 } from 'lucide-react';
 
 export default function FeatureShowcase() {
+  const [patientStep, setPatientStep] = useState(0);
   const [procStep, setProcStep] = useState(0);
   const [staffStep, setStaffStep] = useState(0);
   const [acadStep, setAcadStep] = useState(0);
   const [attendStep, setAttendStep] = useState(0);
+
+  // Independent cycle for Patient Records animation loop
+  useEffect(() => {
+    let mounted = true;
+    const cycle = async () => {
+      while (mounted) {
+        setPatientStep(0); // Dental Chart view (interactive teeth fill)
+        await new Promise(r => setTimeout(r, 3000)); if (!mounted) break;
+        setPatientStep(1); // Click History tab
+        await new Promise(r => setTimeout(r, 500)); if (!mounted) break;
+        setPatientStep(2); // History active
+        await new Promise(r => setTimeout(r, 2500)); if (!mounted) break;
+        setPatientStep(3); // Click Attachments tab
+        await new Promise(r => setTimeout(r, 500)); if (!mounted) break;
+        setPatientStep(4); // Attachments active
+        await new Promise(r => setTimeout(r, 2500)); if (!mounted) break;
+        setPatientStep(5); // Click Billing tab
+        await new Promise(r => setTimeout(r, 500)); if (!mounted) break;
+        setPatientStep(6); // Billing active
+        await new Promise(r => setTimeout(r, 2500)); if (!mounted) break;
+        setPatientStep(7); // Click Prescriptions tab
+        await new Promise(r => setTimeout(r, 500)); if (!mounted) break;
+        setPatientStep(8); // Prescriptions active
+        await new Promise(r => setTimeout(r, 2500)); if (!mounted) break;
+      }
+    };
+    cycle();
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -83,7 +119,7 @@ export default function FeatureShowcase() {
   }, []);
 
   return (
-    <section className="px-6 py-20 bg-[#f6f5f4] relative overflow-hidden">
+    <section id="features" className="px-6 py-20 bg-[#f6f5f4] relative overflow-hidden scroll-mt-14">
       
       {/* Decorative Floating Icons */}
       <div className="absolute inset-0 max-w-[1200px] mx-auto pointer-events-none hidden lg:block z-0">
@@ -147,8 +183,17 @@ export default function FeatureShowcase() {
         <div className="flex flex-col border-[0.5px] border-gray-200 rounded-3xl overflow-hidden shadow-sm">
           {/* Header Text */}
           <div className="p-8 pb-6 bg-white shrink-0">
-            <div className="flex justify-between items-start mb-2">
-              <span className="text-sm text-gray-500 font-medium tracking-wide uppercase">For Clinics</span>
+            <div className="flex justify-between items-start mb-3">
+              {/* Character Icon (Image 2 style) */}
+              <div className="relative w-12 h-12">
+                <div className="w-12 h-12 rounded-full bg-[#fca5a5] border-[2.5px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                  <ClipboardList className="w-6 h-6 text-[#1a1a1a]" strokeWidth={2.5} />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border-[2px] border-[#1a1a1a] flex items-center justify-center shadow-sm">
+                  <Check className="w-3.5 h-3.5 text-[#1a1a1a]" strokeWidth={3} />
+                </div>
+              </div>
+              <span className="text-sm text-gray-500 font-bold tracking-wide uppercase">For Clinics</span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-extrabold text-[#1a1a1a] tracking-tight leading-tight max-w-[600px]">
               Streamline procedures, materials, and pricing across your clinic.

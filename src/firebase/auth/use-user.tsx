@@ -86,6 +86,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
       const isPublicPage =
         pathname === '/' ||
+        pathname.startsWith('/features') ||
+        pathname.startsWith('/blogs') ||
+        pathname.startsWith('/blog') ||
         pathname.startsWith('/login') ||
         pathname.startsWith('/signup') ||
         pathname.startsWith('/forgot-password') ||

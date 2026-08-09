@@ -44,6 +44,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
         
         const finalIconClassName = cn("h-4 w-4", baseColorClass);
 
+
         return (
           item.href && (
             <SidebarMenuButton

@@ -192,109 +192,112 @@ export default function LoginPage() {
      UI
   ------------------------------------------------- */
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <LogoCC className="mx-auto mb-3 h-12 w-12 text-primary" />
-          <CardTitle className="text-3xl">Clinic@Click</CardTitle>
-          <CardDescription>Dental Practice Management</CardDescription>
-        </CardHeader>
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-gray-50/40">
+      <div className="w-full max-w-md flex flex-col items-center gap-5">
+        <Card className="w-full shadow-lg border-gray-100">
+          <CardHeader className="text-center">
+            <LogoCC className="mx-auto mb-3 h-12 w-12 text-primary" />
+            <CardTitle className="text-3xl font-bold">Clinic@Click</CardTitle>
+            <CardDescription className="text-base">Dental Practice Management</CardDescription>
+          </CardHeader>
 
-        <CardContent>
-          {/* Google button — shown on both web and PWA */}
-          <Button
-            variant="outline"
-            className="w-full mb-4 flex items-center justify-center gap-2"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmitting}
-          >
-            {isGoogleSubmitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M21.35 11.1H12v2.8h5.35c-.45 2.35-2.45 3.8-5.35 3.8a6 6 0 1 1 0-12c1.35 0 2.6.45 3.55 1.3l2.15-2.15A8.9 8.9 0 1 0 21 12c0-.3-.05-.6-.1-.9z"
-                />
-              </svg>
-            )}
-            Continue with Google
-          </Button>
+          <CardContent>
+            {/* Google button — shown on both web and PWA */}
+            <Button
+              variant="outline"
+              className="w-full mb-4 flex items-center justify-center gap-2 h-11 text-base font-medium"
+              onClick={handleGoogleSignIn}
+              disabled={isSubmitting}
+            >
+              {isGoogleSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M21.35 11.1H12v2.8h5.35c-.45 2.35-2.45 3.8-5.35 3.8a6 6 0 1 1 0-12c1.35 0 2.6.45 3.55 1.3l2.15-2.15A8.9 8.9 0 1 0 21 12c0-.3-.05-.6-.1-.9z"
+                  />
+                </svg>
+              )}
+              Continue with Google
+            </Button>
 
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or with email</span>
+              </div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or with email</span>
-            </div>
-          </div>
 
-          <Tabs defaultValue="login">
-            <TabsList className="grid grid-cols-2">
-              <TabsTrigger value="login" disabled={isSubmitting}>Login</TabsTrigger>
-              <TabsTrigger value="signup" disabled={isSubmitting}>Sign Up</TabsTrigger>
-            </TabsList>
+            <Tabs defaultValue="login">
+              <TabsList className="grid grid-cols-2">
+                <TabsTrigger value="login" disabled={isSubmitting}>Login</TabsTrigger>
+                <TabsTrigger value="signup" disabled={isSubmitting}>Sign Up</TabsTrigger>
+              </TabsList>
 
-            {/* LOGIN */}
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4 pt-4">
-                <div>
-                  <Label>Email</Label>
-                  <Input name="email" type="email" required disabled={isSubmitting} />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label>Password</Label>
-                    <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                      Forgot Password?
-                    </Link>
+              {/* LOGIN */}
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-4 pt-4">
+                  <div>
+                    <Label>Email</Label>
+                    <Input name="email" type="email" required disabled={isSubmitting} />
                   </div>
-                  <Input name="password" type="password" required disabled={isSubmitting} />
-                </div>
-                <Button className="w-full" disabled={isSubmitting}>
-                  {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Login'}
-                </Button>
-              </form>
-            </TabsContent>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label>Password</Label>
+                      <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                        Forgot Password?
+                      </Link>
+                    </div>
+                    <Input name="password" type="password" required disabled={isSubmitting} />
+                  </div>
+                  <Button className="w-full h-11 text-base font-semibold" disabled={isSubmitting}>
+                    {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Login'}
+                  </Button>
+                </form>
+              </TabsContent>
 
-            {/* SIGN UP */}
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4 pt-4">
-                <div>
-                  <Label>Full Name</Label>
-                  <Input name="fullName" required disabled={isSubmitting} />
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input name="email" type="email" required disabled={isSubmitting} />
-                </div>
-                <div>
-                  <Label>Password</Label>
-                  <Input name="password" type="password" required disabled={isSubmitting} />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    At least 6 characters, 2 numbers, and a special character (@$!%*#?&).
-                  </p>
-                </div>
-                <div>
-                  <Label>Confirm Password</Label>
-                  <Input name="confirmPassword" type="password" required disabled={isSubmitting} />
-                </div>
-                <Button className="w-full" disabled={isSubmitting}>
-                  {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Create Account'}
-                </Button>
-              </form>
-            </TabsContent>
+              {/* SIGN UP */}
+              <TabsContent value="signup">
+                <form onSubmit={handleSignup} className="space-y-4 pt-4">
+                  <div>
+                    <Label>Full Name</Label>
+                    <Input name="fullName" required disabled={isSubmitting} />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input name="email" type="email" required disabled={isSubmitting} />
+                  </div>
+                  <div>
+                    <Label>Password</Label>
+                    <Input name="password" type="password" required disabled={isSubmitting} />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      At least 6 characters, 2 numbers, and a special character (@$!%*#?&).
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Confirm Password</Label>
+                    <Input name="confirmPassword" type="password" required disabled={isSubmitting} />
+                  </div>
+                  <Button className="w-full h-11 text-base font-semibold" disabled={isSubmitting}>
+                    {isEmailSubmitting ? <Loader2 className="animate-spin" /> : 'Create Account'}
+                  </Button>
+                </form>
+              </TabsContent>
             </Tabs>
-
-            {/* GO HOME LINK */}
-            <div className="mt-6 text-center">
-              <Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1">
-                ← Go back to Clinic@Click
-              </Link>
-            </div>
           </CardContent>
-      </Card>
+        </Card>
+
+        {/* PROMINENT CENTERED GO HOME LINK */}
+        <Link 
+          href="/" 
+          className="text-base font-semibold text-gray-700 hover:text-[#2383e2] transition-colors flex items-center justify-center gap-2 py-2 px-4 rounded-lg hover:bg-white/80"
+        >
+          ← Go Home (clinicatclick.com)
+        </Link>
+      </div>
     </div>
   );
 }

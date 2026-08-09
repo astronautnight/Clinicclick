@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { LogoCC } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetClose,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import HeroAnimation from '@/components/landing/HeroAnimation';
 import FeatureShowcase from '@/components/landing/FeatureShowcase';
 import {
@@ -28,6 +35,7 @@ import {
   Clock,
   Plus,
   Zap,
+  Menu,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -170,7 +178,7 @@ export default function LandingPage() {
     <div className="landing-page min-h-screen bg-white text-[#1a1a1a] flex flex-col overflow-x-hidden font-[var(--font-inter)]">
 
       {/* ── NAVBAR ── */}
-      <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[52px] flex items-center justify-between">
+      <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 h-[52px] flex items-center justify-between relative">
         <div className="flex items-center gap-2.5">
           <LogoCC className="h-7 w-7 text-[#1a1a1a]" />
           <span className="font-bold text-[17px] tracking-tight text-[#1a1a1a]">
@@ -178,11 +186,22 @@ export default function LandingPage() {
           </span>
         </div>
 
+        <nav className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+          <Link href="/features" className="text-sm font-semibold text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors">
+            Features
+          </Link>
+          <Link href="#how-it-works" className="text-sm font-semibold text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors">
+            How It Works
+          </Link>
+          <Link href="/blog" className="text-sm font-semibold text-[#1a1a1a]/70 hover:text-[#1a1a1a] transition-colors">
+            Blog
+          </Link>
+        </nav>
         <div className="flex items-center gap-3">
           <Button
             asChild
             variant="ghost"
-            className="text-[#1a1a1a]/70 hover:text-[#1a1a1a] hover:bg-gray-100 text-sm font-medium h-8 px-3 rounded-lg"
+            className="hidden sm:inline-flex text-[#1a1a1a]/70 hover:text-[#1a1a1a] hover:bg-gray-100 text-sm font-medium h-8 px-3 rounded-lg"
           >
             <Link href="/login">Log in</Link>
           </Button>
@@ -192,6 +211,38 @@ export default function LandingPage() {
           >
             <Link href="/login">Get Clinic@Click free</Link>
           </Button>
+
+          {/* Mobile Menu */}
+          <div className="md:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-[#1a1a1a]">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Toggle menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="top" className="h-screen w-full bg-[#fafafa] flex flex-col pt-20 border-none">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <nav className="flex flex-col gap-6 px-2">
+                  <SheetClose asChild>
+                    <Link href="/features" className="text-[28px] font-semibold text-[#1a1a1a] tracking-tight hover:opacity-70 transition-opacity">
+                      Features
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link href="#how-it-works" className="text-[28px] font-semibold text-[#1a1a1a] tracking-tight hover:opacity-70 transition-opacity">
+                      How It Works
+                    </Link>
+                  </SheetClose>
+                  <SheetClose asChild>
+                    <Link href="/blog" className="text-[28px] font-semibold text-[#1a1a1a] tracking-tight hover:opacity-70 transition-opacity">
+                      Blog
+                    </Link>
+                  </SheetClose>
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </header>
 
@@ -360,15 +411,15 @@ export default function LandingPage() {
       </section>
 
       {/* ── HERO ANIMATION ── */}
-      <HeroAnimation />
+      <div id="how-it-works" className="scroll-mt-14">
+        <HeroAnimation />
+      </div>
 
       {/* ── FEATURE SHOWCASE (NOTION-STYLE) ── */}
       <FeatureShowcase />
 
-
-
       {/* ── ROADMAP / PRODUCT RELEASES (NOTION STYLE) ── */}
-      <section className="px-6 py-20 bg-[#fafafa] border-t border-gray-100">
+      <section id="blog" className="px-6 py-20 bg-[#fafafa] border-t border-gray-100 scroll-mt-14">
         <div className="max-w-[1024px] mx-auto flex flex-col gap-12">
           
           {/* Section 1: Recently Released */}
@@ -587,22 +638,22 @@ export default function LandingPage() {
 
 
       {/* ── FOOTER ── */}
-      <footer className="border-t border-gray-100 py-6 px-6 bg-white">
-        <div className="max-w-[960px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <LogoCC className="h-4 w-4 text-gray-400" />
-            <span className="font-semibold text-xs text-gray-500">Clinic@Click</span>
+      <footer className="border-t border-gray-100 py-8 px-6 bg-white">
+        <div className="max-w-[960px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+          <div className="flex items-center gap-2 justify-center">
+            <LogoCC className="h-5 w-5 text-gray-400" />
+            <span className="font-semibold text-sm text-gray-600">Clinic@Click</span>
           </div>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-xs text-gray-500">
             &copy; {new Date().getFullYear()} Clinic@Click. All rights reserved.
           </p>
-          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-5 text-[11px] text-gray-400">
-            <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px]">Contact Us:</span>
-            <a href="https://wa.me/919137769195" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 transition-colors">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-xs font-medium text-gray-600">
+            <span className="font-semibold text-gray-400 uppercase tracking-wider text-[11px]">Contact Us:</span>
+            <a href="https://wa.me/919137769195" target="_blank" rel="noopener noreferrer" className="hover:text-[#2383e2] transition-colors">
               +91 91377 69195
             </a>
             <span className="hidden sm:inline text-gray-300">•</span>
-            <a href="mailto:clickatclick@gmail.com" className="hover:text-gray-600 transition-colors">
+            <a href="mailto:clickatclick@gmail.com" className="hover:text-[#2383e2] transition-colors">
               clickatclick@gmail.com
             </a>
           </div>
@@ -610,6 +661,9 @@ export default function LandingPage() {
       </footer>
 
       <style jsx global>{`
+        html {
+          scroll-behavior: smooth;
+        }
         .landing-page {
           background: #ffffff !important;
           background-image: none !important;

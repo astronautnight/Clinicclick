@@ -13,6 +13,7 @@ import {
 import { Header } from '@/components/layout/header';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
 import { sidebarNavItems } from '@/config/nav';
+
 import { LogoCC } from '@/components/icons';
 import Link from 'next/link';
 
@@ -21,10 +22,13 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
 
   const isPublicPage =
     pathname === '/' ||
+    pathname.startsWith('/features') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/forgot-password') ||
-    pathname.startsWith('/reset-password');
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/blogs') ||
+    pathname.startsWith('/blog');
 
   if (isPublicPage) {
     return <div className="w-full min-h-screen">{children}</div>;
