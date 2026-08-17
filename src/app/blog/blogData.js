@@ -4,6 +4,7 @@ export const categories = [
   { id: "appointments", label: "Appointments", icon: "calendar", color: "teal" },
   { id: "billing", label: "Billing and finance", icon: "receipt", color: "amber" },
   { id: "clinical", label: "Clinical tools", icon: "tooth", color: "purple" },
+  { id: "clinic-management", label: "Clinic management", icon: "building-2", color: "blue" },
   { id: "students", label: "For students", icon: "school", color: "pink" },
   { id: "updates", label: "Product updates", icon: "rocket", color: "green" },
 ];
@@ -20,4 +21,27 @@ export const featuredPost = {
   slug: "how-to-manage-patient-records-dental-clinic",
 };
 
-export const posts = [];
+export const posts = [
+  {
+    id: "best-dental-clinic-management-software-india",
+    category: "clinic-management",
+    categoryLabel: "Clinic management",
+    title: "Best Dental Clinic Management Software in India (2026)",
+    excerpt:
+      "Compare dental clinic management software options in India, the workflows to look for, and which platform is best suited to different practices.",
+    readTime: "8 min read",
+    date: "18 Aug 2026",
+    slug: "best-dental-clinic-management-software-india-2026",
+  },
+  {
+    id: "reduce-missed-appointments",
+    category: "appointments",
+    categoryLabel: "Appointments",
+    title: "How to Reduce Missed Appointments in a Dental Clinic",
+    excerpt:
+      "Reduce no-shows with clear booking details, timely reminders, easy rescheduling, and a well-organized appointment calendar.",
+    readTime: "5 min read",
+    date: "17 Aug 2026",
+    slug: "how-to-reduce-missed-appointments-dental-clinic",
+  },
+];
