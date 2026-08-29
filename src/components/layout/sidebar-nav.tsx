@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Stethoscope, Pill,
-  DollarSign, MessageSquare, BookOpen, Settings, UserCircle, Share2, HelpCircle, Sparkles, Archive, type LucideIcon, Bell, ChevronRight, UsersRound, TrendingUp, TrendingDown, PersonStanding, CalendarCheck, CalendarX, Edit, Save, History, Printer, Copy, FileText, View, Search, Hospital, Upload, BriefcaseMedical, Wallet
+  DollarSign, MessageSquare, BookOpen, Settings, UserCircle, Share2, HelpCircle, Sparkles, Archive, type LucideIcon, Bell, ChevronRight, UsersRound, TrendingUp, TrendingDown, PersonStanding, CalendarCheck, CalendarX, Edit, Save, History, Printer, Copy, FileText, View, Search, Hospital, Upload, BriefcaseMedical, Wallet,
+  ShieldCheck, Activity, BarChart3
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -17,7 +18,8 @@ interface SidebarNavProps {
 
 const iconMap: Record<LucideIconName, LucideIcon> = {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Stethoscope, Pill,
-  DollarSign, MessageSquare, BookOpen, Settings, UserCircle, Share2, HelpCircle, Sparkles, Archive, Bell, ChevronRight, UsersRound, TrendingUp, TrendingDown, PersonStanding, CalendarCheck, CalendarX, Edit, Save, History, Printer, Copy, FileText, View, Search, Hospital, Upload, BriefcaseMedical, Wallet
+  DollarSign, MessageSquare, BookOpen, Settings, UserCircle, Share2, HelpCircle, Sparkles, Archive, Bell, ChevronRight, UsersRound, TrendingUp, TrendingDown, PersonStanding, CalendarCheck, CalendarX, Edit, Save, History, Printer, Copy, FileText, View, Search, Hospital, Upload, BriefcaseMedical, Wallet,
+  ShieldCheck, Activity, BarChart3
 };
 
 export function SidebarNav({ items }: SidebarNavProps) {

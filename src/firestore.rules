@@ -43,6 +43,11 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
+    /* ================= SURVEY RESPONSES ================= */
+    match /survey_responses/{responseId} {
+      allow read, create, update: if signedIn();
+    }
+
     /* ================= CLINICS ================= */
     match /clinics/{clinicId} {
 

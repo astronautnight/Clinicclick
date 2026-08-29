@@ -37,7 +37,34 @@ export type LucideIconName =
   | 'Hospital'
   | 'Upload'
   | 'BriefcaseMedical'
-  | 'Wallet';
+  | 'Wallet'
+  | 'ShieldCheck'
+  | 'Activity'
+  | 'BarChart3';
+
+export interface AdminClinic {
+  id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  clinicType?: 'General' | 'Specialist' | 'Multi-specialty';
+  inviteCode?: string;
+  createdBy?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  logoUrl?: string;
+  isFounder?: boolean;
+  activeDates?: string[];
+  membersCount?: number;
+}
+
+export interface AdminSurveyResponse {
+  id: string;
+  uid: string;
+  email?: string;
+  source: string;
+  createdAt?: any;
+}
 
 export interface MarkedTooth {
   number: string; // e.g., "36"
