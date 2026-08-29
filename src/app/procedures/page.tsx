@@ -15,6 +15,7 @@ import { ListPlus, Link2, ClipboardList, Trash2, FilePenLine, Loader2, ServerCra
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useFirestore, useUser } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -80,7 +81,8 @@ const renderMaterialsFields = (
 
 
 export default function ProceduresPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
   const db = useFirestore();
   const { toast } = useToast();
 
@@ -274,6 +276,7 @@ export default function ProceduresPage() {
   }, [procedures, searchQuery]);
 
   const renderContent = () => {
+    if (noClinic) return <ClinicSetupAlert sectionName="Procedures" />;
     if (isLoading) return <div className="flex items-center justify-center p-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="ml-4 text-muted-foreground">Loading procedures...</p></div>;
     if (error) return <Alert variant="destructive"><ServerCrash className="h-5 w-5" /><AlertTitle>Database Error</AlertTitle><ShadAlertDescription>{error}</ShadAlertDescription></Alert>;
     

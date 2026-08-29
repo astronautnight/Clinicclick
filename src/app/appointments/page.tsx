@@ -21,6 +21,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, isSameDay, startOfWeek, endOfWeek, addDays, addWeeks, addMonths, eachDayOfInterval, isSameMonth, differenceInMinutes, isToday } from 'date-fns';
 import { useUser, useFirestore } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { addPatient } from '@/services/patient-service';
 import { addAppointment, updateAppointment, deleteAppointment } from '@/services/appointment-service';
@@ -288,7 +289,9 @@ const QuickAddPatientForm = ({ onPatientAdded, user, clinicId }: { onPatientAdde
 }
 
 export default function AppointmentsPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
+
   const db = useFirestore();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -576,10 +579,12 @@ export default function AppointmentsPage() {
             <CalendarDays className="mr-3 h-8 w-8 text-special2" />
             Appointments
           </h1>
-          <Button onClick={openAddForm} disabled={!user}>
+          <Button onClick={openAddForm} disabled={!user || !!noClinic}>
             <PlusCircle className="mr-2 h-4 w-4" /> Add New Appointment
           </Button>
         </div>
+
+        {noClinic && <ClinicSetupAlert sectionName="Appointments" />}
 
         <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
           setIsFormOpen(isOpen);

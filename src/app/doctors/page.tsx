@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Loader2, ServerCrash, Edit, Stethoscope } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter as AlertDialogFooterCustom, AlertDialogHeader as AlertDialogHeaderCustom, AlertDialogTitle as AlertDialogTitleCustom, AlertDialogTrigger as AlertDialogTriggerCustom } from "@/components/ui/alert-dialog";
 import { useUser, useFirestore } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot } from 'firebase/firestore';
 import { addDoctor, deleteDoctor, updateDoctor } from '@/services/doctor-service';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -65,7 +66,9 @@ function hexToRgba(hex: string, alpha = 1) {
 }
 
 export default function DoctorsPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
+
   const db = useFirestore();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -221,6 +224,7 @@ export default function DoctorsPage() {
   };
 
   const renderContent = () => {
+    if (noClinic) return <ClinicSetupAlert sectionName="Doctors" />;
     if (isLoading) {
       return (
         <div className="flex items-center justify-center p-10">

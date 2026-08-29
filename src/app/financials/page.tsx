@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestore, useUser } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { updatePatient } from '@/services/patient-service';
 import { getUserProfile } from '@/services/auth-service';
@@ -76,7 +77,9 @@ interface GeneratedInvoice {
 
 
 export default function FinancialsPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
+
   const db = useFirestore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);

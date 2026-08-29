@@ -16,6 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { PrescriptionPreview } from '@/components/prescription-preview';
 import { useFirestore, useUser } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { addDrug, updateDrug, deleteDrug, seedMissingDrugs } from '@/services/drug-service';
 import { addMedicalEmergency, updateMedicalEmergency, deleteMedicalEmergency, seedInitialEmergencies } from '@/services/medical-emergency-service';
@@ -40,7 +41,9 @@ const initialEmergencyData: Omit<MedicalEmergency, 'id' | 'createdAt' | 'updated
 
 
 export default function PharmacyPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
+
   const db = useFirestore();
   const { toast } = useToast();
   

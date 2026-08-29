@@ -4,10 +4,10 @@ import { useState, useEffect, type ChangeEvent, type FormEvent, useMemo } from "
 import { collection, onSnapshot } from "firebase/firestore";
 import { addPatient, deletePatient, updatePatient, uploadPatientFile, deletePatientPhoto } from "@/services/patient-service";
 import { useUser, useFirestore } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { Capacitor } from '@capacitor/core';
 import { Camera as CapacitorCamera } from '@capacitor/camera';
 import { Filesystem } from '@capacitor/filesystem';
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -79,9 +79,10 @@ function isPatient(docData: any): docData is Omit<Patient, "id"> {
 }
 
 export default function PatientsPage() {
-  const { user, clinicId } = useUser();
+  const { user, clinicId, loading, clinicLoading } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const noClinic = user && !clinicId && !loading && !clinicLoading;
   const [patients, setPatients] = useState<Patient[]>([]);
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -972,6 +973,9 @@ export default function PatientsPage() {
           <p className="ml-4 text-muted-foreground">Loading patients...</p>
         </div>
       );
+
+    if (noClinic)
+      return <ClinicSetupAlert sectionName="Patients" />;
 
     if (error)
       return (

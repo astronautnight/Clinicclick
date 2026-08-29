@@ -4,6 +4,7 @@
 
 import { useState, type FormEvent, useEffect, useRef } from 'react';
 import { useUser, useFirestore } from '@/firebase';
+import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import {
   collection,
   doc,
@@ -52,7 +53,9 @@ const initialFormData: Omit<StaffMember, 'id' | 'createdAt' | 'updatedAt'> = {
 };
 
 export default function StaffPage() {
-    const { user, clinicId } = useUser();
+    const { user, clinicId, loading, clinicLoading } = useUser();
+    const noClinic = user && !clinicId && !loading && !clinicLoading;
+
     const db = useFirestore();
     const { toast } = useToast();
 
