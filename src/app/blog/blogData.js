@@ -44,4 +44,26 @@ export const posts = [
     date: "17 Aug 2026",
     slug: "how-to-reduce-missed-appointments-dental-clinic",
   },
+  {
+    id: "dental-billing-software-guide",
+    category: "billing",
+    categoryLabel: "Billing and finance",
+    title: "Dental Billing Software: Everything You Need to Know",
+    excerpt:
+      "Learn how dental billing software helps clinics manage invoices, patient payments, treatment charges, discounts, and financial tracking.",
+    readTime: "7 min read",
+    date: "19 Aug 2026",
+    slug: "dental-billing-software-everything-you-need-to-know",
+  },
+  {
+    id: "paper-vs-digital-dental-records",
+    category: "patient-management",
+    categoryLabel: "Patient management",
+    title: "Paper Records vs Digital Records for Dental Clinics: Which Is Better?",
+    excerpt:
+      "Compare paper patient files vs digital dental management software. Discover the challenges of paper records, advantages of digital software, and a step-by-step transition guide.",
+    readTime: "7 min read",
+    date: "20 Aug 2026",
+    slug: "paper-records-vs-digital-records-dental-clinics",
+  },
 ];
