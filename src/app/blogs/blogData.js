@@ -22,6 +22,17 @@ export const featuredPost = {
 
 export const posts = [
   {
+    id: "hidden-cost-managing-dental-clinic-manually",
+    category: "clinic-management",
+    categoryLabel: "Clinic management",
+    title: "The Hidden Cost of Managing a Dental Clinic Manually (And How to Fix It)",
+    excerpt:
+      "Discover the hidden costs of managing a dental clinic manually, from lost time and missed appointments to billing errors and scattered patient records. Learn how digital dental clinic management can help.",
+    readTime: "7 min read",
+    date: "17 Sep 2026",
+    slug: "hidden-cost-managing-dental-clinic-manually",
+  },
+  {
     id: "best-dental-clinic-management-software-india",
     category: "clinic-management",
     categoryLabel: "Clinic management",

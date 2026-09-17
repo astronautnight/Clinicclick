@@ -7,7 +7,6 @@ import { categories, featuredPost, posts } from "./blogData";
 import CategoryPill from "./CategoryPill";
 import FeaturedPost from "./FeaturedPost";
 import PostCard from "./PostCard";
-import NewsletterStrip from "./NewsletterStrip";
 
 export default function BlogPage() {
   const [activeCategory, setActiveCategory] = useState("all");
@@ -79,9 +78,6 @@ export default function BlogPage() {
           No articles in this category yet — check back soon.
         </div>
       )}
-
-      {/* ── Newsletter ────────────────────────────────────────── */}
-      <NewsletterStrip />
 
     </main>
   );
