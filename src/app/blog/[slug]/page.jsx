@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { NEW_POSTS } from "./newBlogPosts";
 
 export const POSTS = {
   "how-to-manage-patient-records-dental-clinic": {
@@ -1489,13 +1490,24 @@ export const POSTS = {
   },
 };
 
+Object.assign(POSTS, NEW_POSTS);
+
 export async function generateMetadata({ params }) {
   const post = POSTS[params.slug];
   if (!post) return {};
   return { title: `${post.title} | Clinic@Click`, description: post.excerpt, openGraph: { title: post.title, description: post.excerpt, url: `https://clinicatclick.com/blog/${post.slug}`, siteName: "Clinic@Click", type: "article" } };
 }
 
-const CATEGORY_COLORS = { "patient-management": "bg-[#E1F5EE] text-[#0F6E56]", appointments: "bg-[#E1F5EE] text-[#0F6E56]", "clinic-management": "bg-[#E6F1FB] text-[#185FA5]", updates: "bg-[#EAF3DE] text-[#27500A]" };
+const CATEGORY_COLORS = {
+  "patient-management": "bg-[#E1F5EE] text-[#0F6E56]",
+  appointments: "bg-[#E1F5EE] text-[#0F6E56]",
+  "clinic-management": "bg-[#E6F1FB] text-[#185FA5]",
+  inventory: "bg-[#FAEEDA] text-[#633806]",
+  billing: "bg-[#FAEEDA] text-[#633806]",
+  clinical: "bg-[#EEEDFE] text-[#3C3489]",
+  students: "bg-[#FBEAF0] text-[#72243E]",
+  updates: "bg-[#EAF3DE] text-[#27500A]",
+};
 
 export default async function BlogPostPage({ params }) {
   const post = POSTS[params.slug];

@@ -20,6 +20,16 @@ const CATEGORY_COLORS = {
     tag: "bg-[#FAEEDA] text-[#633806]",
     border: "border-[#FAC775]",
   },
+  "clinic-management": {
+    art: "bg-[#E6F1FB]",
+    tag: "bg-[#E6F1FB] text-[#185FA5]",
+    border: "border-[#B5D4F4]",
+  },
+  inventory: {
+    art: "bg-[#FAEEDA]",
+    tag: "bg-[#FAEEDA] text-[#633806]",
+    border: "border-[#FAC775]",
+  },
   clinical: {
     art: "bg-[#EEEDFE]",
     tag: "bg-[#EEEDFE] text-[#3C3489]",
@@ -51,6 +61,32 @@ const CategoryArt = ({ category }) => {
           <rect x="16" y="37" width="48" height="2.5" rx="1.25" fill="#B4B2A9" fillOpacity="0.5" />
           <rect x="16" y="43" width="40" height="2.5" rx="1.25" fill="#B4B2A9" fillOpacity="0.5" />
           <rect x="16" y="50" width="20" height="6" rx="3" fill="#9FE1CB" />
+        </svg>
+      );
+    case "clinic-management":
+      return (
+        <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">
+          <rect x="12" y="12" width="56" height="46" rx="6" fill="white" stroke="#B5D4F4" strokeWidth="0.8" />
+          <rect x="12" y="12" width="56" height="12" rx="6" fill="#E6F1FB" />
+          <rect x="12" y="18" width="56" height="6" fill="#E6F1FB" />
+          <rect x="18" y="30" width="20" height="18" rx="2" fill="#E6F1FB" stroke="#B5D4F4" strokeWidth="0.8" />
+          <rect x="42" y="30" width="20" height="18" rx="2" fill="#E6F1FB" stroke="#B5D4F4" strokeWidth="0.8" />
+          <circle cx="28" cy="38" r="3" fill="#185FA5" fillOpacity="0.6" />
+          <circle cx="52" cy="38" r="3" fill="#185FA5" fillOpacity="0.6" />
+          <rect x="22" y="43" width="12" height="2" rx="1" fill="#185FA5" fillOpacity="0.4" />
+          <rect x="46" y="43" width="12" height="2" rx="1" fill="#185FA5" fillOpacity="0.4" />
+        </svg>
+      );
+    case "inventory":
+      return (
+        <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">
+          <rect x="14" y="16" width="52" height="40" rx="6" fill="white" stroke="#FAC775" strokeWidth="0.8" />
+          <rect x="20" y="24" width="18" height="14" rx="2" fill="#FAEEDA" stroke="#FAC775" strokeWidth="0.8" />
+          <rect x="42" y="24" width="18" height="14" rx="2" fill="#FAEEDA" stroke="#FAC775" strokeWidth="0.8" />
+          <rect x="20" y="42" width="40" height="8" rx="2" fill="#FAEEDA" stroke="#FAC775" strokeWidth="0.8" />
+          <line x1="29" y1="24" x2="29" y2="38" stroke="#EF9F27" strokeWidth="0.8" />
+          <line x1="51" y1="24" x2="51" y2="38" stroke="#EF9F27" strokeWidth="0.8" />
+          <circle cx="40" cy="46" r="1.5" fill="#633806" />
         </svg>
       );
     case "billing":
