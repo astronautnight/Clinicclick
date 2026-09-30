@@ -1359,7 +1359,7 @@ export default function AdminDashboardPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">
-                          {u.createdAt?.toDate ? format(u.createdAt.toDate(), 'MMM dd, yyyy') : 'N/A'}
+                          {(u.createdAt as any)?.toDate ? format((u.createdAt as any).toDate(), 'MMM dd, yyyy') : (u.createdAt instanceof Date ? format(u.createdAt, 'MMM dd, yyyy') : 'N/A')}
                         </TableCell>
                       </TableRow>
                     );

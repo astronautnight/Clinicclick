@@ -267,6 +267,8 @@ export interface UserProfile {
   seeded_v1_emergencies?: boolean; // Flag to check if initial emergencies list has been seeded
   clinicId?: string | null;
   role?: 'owner' | 'admin' | 'member' | null;
+  heardAboutAppFrom?: string;
+  notificationsEnabled?: boolean;
 }
 
 export interface EducationalVideo {

@@ -134,14 +134,6 @@ export const sidebarNavItems: NavItem[] = [
     color: 'bg-neutral', 
     iconColorClass: 'text-neutral-foreground', 
   },
-  {
-    title: 'Admin Dashboard',
-    href: '/admin',
-    iconName: 'ShieldCheck',
-    description: 'System overview: Clinics, Active Dates, Survey Responses & Users.',
-    color: 'bg-emerald-600',
-    iconColorClass: 'text-emerald-100',
-  },
 ];
 
 export const dashboardCards: DashboardCardItem[] = sidebarNavItems.filter(item => item.title !== 'Dashboard' && item.title !== 'Settings');
