@@ -26,13 +26,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn();
 
-      // User can update self
-      allow update: if signedIn() && request.auth.uid == userId
-
-      // OR clinic admin can update users in their clinic
-      || (
-        request.resource.data.clinicId is string
-        && isClinicAdmin(request.resource.data.clinicId)
+      // User can update self OR clinic admin can update users in their clinic (adding or removing)
+      allow update: if signedIn() && (
+        request.auth.uid == userId ||
+        (resource.data.clinicId != null && isClinicAdmin(resource.data.clinicId)) ||
+        (request.resource.data.clinicId != null && isClinicAdmin(request.resource.data.clinicId))
       );
 
       allow create: if signedIn();
@@ -45,7 +43,8 @@ service cloud.firestore {
 
     /* ================= SURVEY RESPONSES ================= */
     match /survey_responses/{responseId} {
-      allow read, create, update: if signedIn();
+      allow create: if signedIn();
+      allow read: if false; // Only accessible via admin panel/Firebase console
     }
 
     /* ================= CLINICS ================= */
@@ -62,26 +61,23 @@ service cloud.firestore {
       allow update, delete: if signedIn() && isClinicAdmin(clinicId);
     }
 
-
     /* ================= MEMBERS ================= */
     match /clinics/{clinicId}/members/{uid} {
-
       // Anyone in clinic can read members
       allow read: if signedIn() && isClinicMember(clinicId);
 
-      // ✅ FIRST ADMIN (creator) can add themselves
-      allow create: if signedIn()
-        && request.auth.uid == uid;
+      // ONLY clinic admins can add a member, EXCEPT the creator of the clinic can create their own member doc initially.
+      allow create: if signedIn() && (
+        isClinicAdmin(clinicId) ||
+        (request.auth.uid == uid && get(/databases/$(database)/documents/clinics/$(clinicId)).data.createdBy == request.auth.uid)
+      );
 
       // Admin controls members AFTER creation, OR member can remove themselves (leave)
-      allow update: if signedIn()
-        && isClinicAdmin(clinicId);
-      allow delete: if signedIn()
-        && (isClinicAdmin(clinicId) || request.auth.uid == uid);
+      allow update: if signedIn() && isClinicAdmin(clinicId);
+      allow delete: if signedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }
 
-
-    /* ================= Patients ================= */
+    /* ================= PATIENTS ================= */
     match /clinics/{clinicId}/patients/{patientId} {
       allow read, create, update: if signedIn() && isClinicMember(clinicId);
       allow delete: if signedIn() && isClinicAdmin(clinicId);
@@ -103,16 +99,18 @@ service cloud.firestore {
     }
 
     /* ================= INVENTORY ================= */
+    match /clinics/{clinicId}/inventoryCategories/{categoryId} {
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+    }
+
     match /clinics/{clinicId}/inventoryCategories/{categoryId}/items/{itemId} {
-      allow read, create, update, delete: 
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= APPOINTMENTS ================= */
     match /clinics/{clinicId}/appointments/{appointmentId} {
       allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
-
 
     /* ================= PENDING REQUESTS ================= */
     match /clinics/{clinicId}/pendingRequests/{uid} {
@@ -122,66 +120,68 @@ service cloud.firestore {
     
     /* ================= PROCEDURES ================= */
     match /clinics/{clinicId}/procedures/{procedureId} {
-      allow read, create, update, delete: 
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= DOCTORS ================= */
     match /clinics/{clinicId}/doctors/{doctorId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STAFF ================= */
     match /clinics/{clinicId}/staff/{staffId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STAFF ATTENDANCE ================= */
     match /clinics/{clinicId}/staff/{staffId}/attendance/{dateId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
      
     /* ================= TRANSACTIONS ================= */
     match /clinics/{clinicId}/transactions/{transactionId} {
-      allow read, create, update, delete:
-            if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENTS ================= */
     match /clinics/{clinicId}/students/{studentId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT ATTENDANCE ================= */
     match /clinics/{clinicId}/students/{studentId}/attendance/{dateId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT FINANCES ================= */
     match /clinics/{clinicId}/students/{studentId}/finances/{financeId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= DEPARTMENTS ================= */
     match /clinics/{clinicId}/departments/{departmentId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT CASE HISTORIES ================= */
     match /clinics/{clinicId}/studentCaseHistories/{caseId} {
-      allow read, create, update, delete:
-        if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
-    /* ================= CLINIC DATA ================= */
-    match /clinics/{clinicId}/{collection}/{docId} {
+    /* ================= OPERATORIES ================= */
+    match /clinics/{clinicId}/operatories/{operatoryId} {
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+    }
+
+    /* ================= INVOICES ================= */
+    match /clinics/{clinicId}/invoices/{invoiceId} {
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+    }
+
+    /* ================= CLINIC DATA (catch-all) ================= */
+    // Recursive wildcard {document=**} matches any nested documents and subcollections,
+    // and correctly permits collection list/query operations (onSnapshot/getDocs).
+    match /clinics/{clinicId}/{document=**} {
       allow read, create: if signedIn() && isClinicMember(clinicId);
       allow update, delete: if signedIn() && isClinicAdmin(clinicId);
     }
@@ -193,13 +193,13 @@ service cloud.firestore {
     =============================================================== */
 
     /* Personal Consultation: patients, appointments, transactions */
-    match /users/{userId}/personalConsultation/data/{col}/{docId} {
-      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    match /users/{userId}/personalConsultation/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
     /* Personal Academics: departments, studentCaseHistories, attendance, finances */
-    match /users/{userId}/personalAcademics/data/{col}/{docId} {
-      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    match /users/{userId}/personalAcademics/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
     }
   }
 }

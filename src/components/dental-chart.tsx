@@ -246,10 +246,10 @@ export function DentalChart({ markedTeeth, onTeethChange, stagedObservations, on
 
 
   return (
-    <Card className="w-full max-w-full overflow-hidden">
+    <Card className="w-full max-w-full overflow-hidden border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
       <div className="w-0 min-w-full overflow-x-auto">
         <div style={{ minWidth: '480px' }}>
-          <CardHeader className="items-center">
+          <CardHeader className="items-center px-1 sm:px-6">
             <Tabs value={activeDentition} onValueChange={setActiveDentition} className="w-auto">
               <TabsList>
                 <TabsTrigger value="permanent">Permanent Dentition</TabsTrigger>
@@ -257,7 +257,7 @@ export function DentalChart({ markedTeeth, onTeethChange, stagedObservations, on
               </TabsList>
             </Tabs>
           </CardHeader>
-          <CardContent className="p-2 sm:p-4">
+          <CardContent className="p-1 sm:p-4">
             {activeDentition === 'permanent' ? (
               <div className="w-full flex flex-col items-center pb-2">
                 <table className="w-full max-w-3xl">

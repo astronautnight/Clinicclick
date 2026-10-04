@@ -728,32 +728,35 @@ export default function PatientsPage() {
     }
 
     return (
-        <div className="px-4 py-4">
-            <div className="flex flex-col md:flex-row items-start gap-6 mb-6 no-print">
-                <Avatar className="h-20 w-20 ring-2 ring-primary ring-offset-2">
-                    <AvatarImage src={undefined} />
-                    <AvatarFallback className="text-2xl">{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                    <h3 className="text-2xl font-bold">{patient.firstName} {patient.lastName}</h3>
-                    <p className="text-muted-foreground">{patient.isConsult ? `Consult Patient @ ${patient.consultLocation || 'N/A'}` : 'Primary Patient'}</p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 mt-2 text-sm">
-                        <p><strong>DOB:</strong> {patient.dateOfBirth ? format(new Date(patient.dateOfBirth), 'dd/MM/yyyy') : 'N/A'}</p>
-                        <p><strong>Phone:</strong> {patient.contactNumber}</p>
-                        <p><strong>WhatsApp:</strong> {patient.whatsappId || 'N/A'}</p>
-                        <p><strong>Email:</strong> {patient.email || 'N/A'}</p>
-                        <p className="col-span-2"><strong>Address:</strong> {patient.address || 'N/A'}</p>
-                        <p><strong>Gender:</strong> {patient.gender}</p>
+        <div className="px-1 sm:px-4 py-2 sm:py-4">
+            {/* Patient Header */}
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5 sm:mb-6 no-print">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                    <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
+                        <AvatarImage src={undefined} />
+                        <AvatarFallback className="text-xl sm:text-2xl">{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <h3 className="text-xl sm:text-2xl font-bold">{patient.firstName} {patient.lastName}</h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground">{patient.isConsult ? `Consult @ ${patient.consultLocation || 'N/A'}` : 'Primary Patient'}</p>
+                        <div className="text-xs sm:text-sm mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                            <p><strong>DOB:</strong> {patient.dateOfBirth ? format(new Date(patient.dateOfBirth), 'dd/MM/yyyy') : 'N/A'}</p>
+                            <p><strong>Phone:</strong> {patient.contactNumber || 'N/A'}</p>
+                            <p><strong>WhatsApp:</strong> {patient.whatsappId || 'N/A'}</p>
+                            <p><strong>Email:</strong> {patient.email || 'N/A'}</p>
+                            <p className="col-span-2"><strong>Address:</strong> {patient.address || 'N/A'}</p>
+                            <p><strong>Gender:</strong> {patient.gender}</p>
+                        </div>
                     </div>
                 </div>
-                 <div className="flex items-start gap-2">
+                <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openEditForm(patient); }}>
-                        <Pencil className="mr-1 h-4 w-4" /> Edit Record
+                        <Pencil className="mr-1 h-3.5 w-3.5" /> Edit Record
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" onClick={(e) => {e.stopPropagation(); setPatientToDelete(patient);}}>
-                                <Trash2 className="mr-1 h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -765,17 +768,30 @@ export default function PatientsPage() {
             </div>
 
             <Tabs defaultValue="dental-chart">
-                <div className="flex justify-between items-center gap-4 no-print">
-                    <div className="flex-1 overflow-x-auto whitespace-nowrap">
-                        <TabsList>
+                {/* Tabs on full width on mobile with Print below. Side-by-side on laptop */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 no-print mb-4">
+                    <div className="w-full sm:w-auto overflow-x-auto whitespace-nowrap pb-1 sm:pb-0">
+                        <TabsList className="inline-flex w-max sm:w-auto">
                             <TabsTrigger value="dental-chart">Dental Chart</TabsTrigger>
-                            <TabsTrigger value="history"><BriefcaseMedical className="mr-1 h-4 w-4" />History</TabsTrigger>
-                            <TabsTrigger value="attachments"><Upload className="mr-1 h-4 w-4" />Attachments</TabsTrigger>
-                            <TabsTrigger value="billing"><Wallet className="mr-1 h-4 w-4" />Billing</TabsTrigger>
-                            <TabsTrigger value="prescriptions"><FileText className="mr-1 h-4 w-4" />Prescriptions</TabsTrigger>
+                            <TabsTrigger value="history">
+                                <BriefcaseMedical className="mr-1 h-4 w-4" />History
+                            </TabsTrigger>
+                            <TabsTrigger value="attachments">
+                                <Upload className="mr-1 h-4 w-4" />Attachments
+                            </TabsTrigger>
+                            <TabsTrigger value="billing">
+                                <Wallet className="mr-1 h-4 w-4" />Billing
+                            </TabsTrigger>
+                            <TabsTrigger value="prescriptions">
+                                <FileText className="mr-1 h-4 w-4" />Prescriptions
+                            </TabsTrigger>
                         </TabsList>
                     </div>
-                    <Button variant="outline" onClick={handlePrint} className="no-print"><Printer className="mr-2 h-4 w-4"/>Print</Button>
+                    <div className="flex justify-end sm:block">
+                        <Button variant="outline" onClick={handlePrint} className="no-print">
+                            <Printer className="mr-2 h-4 w-4" />Print
+                        </Button>
+                    </div>
                 </div>
                 <TabsContent value="dental-chart" className="mt-4">
                     <DentalChart
@@ -786,12 +802,14 @@ export default function PatientsPage() {
                     />
                 </TabsContent>
                 <TabsContent value="history" className="mt-4">
-                    <Card><CardContent className="p-6 space-y-4">
-                        <div><h4 className="font-semibold">Medical History</h4><p className="text-muted-foreground">{patient.medicalHistory || 'No medical history recorded.'}</p></div>
-                        <div><h4 className="font-semibold">Allergies</h4><p className="text-muted-foreground">{patient.allergies || 'No allergies recorded.'}</p></div>
-                        <Separator/>
-                        <div><h4 className="font-semibold">Dental History</h4><p className="text-muted-foreground">{patient.dentalHistory || 'No dental history recorded.'}</p></div>
-                    </CardContent></Card>
+                    <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+                        <CardContent className="p-0 sm:p-6 space-y-4">
+                            <div><h4 className="font-semibold">Medical History</h4><p className="text-muted-foreground">{patient.medicalHistory || 'No medical history recorded.'}</p></div>
+                            <div><h4 className="font-semibold">Allergies</h4><p className="text-muted-foreground">{patient.allergies || 'No allergies recorded.'}</p></div>
+                            <Separator/>
+                            <div><h4 className="font-semibold">Dental History</h4><p className="text-muted-foreground">{patient.dentalHistory || 'No dental history recorded.'}</p></div>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
                 <TabsContent value="attachments" className="mt-4">
                   <Card className="border-none shadow-none bg-transparent">
@@ -829,7 +847,7 @@ export default function PatientsPage() {
                                     <label
                                         htmlFor={`card-upload-${fileType}-${patient.id}`}
                                         onClick={(e) => {
-                                            if (Capacitor.isNativePlatform() && fileType !== 'scans') {
+                                             if (Capacitor.isNativePlatform() && fileType !== 'scans') {
                                                 e.preventDefault();
                                                 handleNativeFilePicker('card', fileType, patient.id);
                                             }
@@ -857,48 +875,68 @@ export default function PatientsPage() {
                   </Card>
                 </TabsContent>
                 <TabsContent value="billing" className="mt-4">
-                     <Card>
-                        <CardHeader>
+                     <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+                        <CardHeader className="px-0 sm:px-6">
                             <CardTitle>Billing Summary</CardTitle>
-                             <div className="flex flex-wrap justify-around pt-2 text-center gap-4">
+                             {/* Financial summary — 2-col grid on mobile, flex-wrap on larger */}
+                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-around pt-2 text-center gap-3">
                                 {financials.discountAmount > 0 && (
                                     <div>
-                                        <p className="text-2xl font-bold text-muted-foreground line-through">₹{financials.baseBillable.toLocaleString()}</p>
-                                        <p className="text-sm text-muted-foreground">Base Billable</p>
+                                        <p className="text-lg sm:text-2xl font-bold text-muted-foreground line-through">₹{financials.baseBillable.toLocaleString()}</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">Base Billable</p>
                                     </div>
                                 )}
                                 {financials.discountAmount > 0 && (
                                     <div>
-                                        <p className="text-2xl font-bold text-red-600">-₹{financials.discountAmount.toLocaleString()}</p>
-                                        <p className="text-sm text-muted-foreground">Discount ({patient.discountType === 'percentage' ? `${patient.discountValue}%` : 'Fixed'})</p>
+                                        <p className="text-lg sm:text-2xl font-bold text-red-600">-₹{financials.discountAmount.toLocaleString()}</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">Discount ({patient.discountType === 'percentage' ? `${patient.discountValue}%` : 'Fixed'})</p>
                                     </div>
                                 )}
-                                <div><p className="text-2xl font-bold">₹{financials.totalBillable.toLocaleString()}</p><p className="text-sm text-muted-foreground">Total Billable</p></div>
-                                <div><p className="text-2xl font-bold text-green-600">₹{financials.totalPaid.toLocaleString()}</p><p className="text-sm text-muted-foreground">Total Paid</p></div>
-                                <div><p className="text-2xl font-bold text-red-600">₹{financials.balanceDue.toLocaleString()}</p><p className="text-sm text-muted-foreground">Balance Due</p></div>
+                                <div><p className="text-lg sm:text-2xl font-bold">₹{financials.totalBillable.toLocaleString()}</p><p className="text-xs sm:text-sm text-muted-foreground">Billable</p></div>
+                                <div><p className="text-lg sm:text-2xl font-bold text-green-600">₹{financials.totalPaid.toLocaleString()}</p><p className="text-xs sm:text-sm text-muted-foreground">Paid</p></div>
+                                <div className="col-span-2 sm:col-span-1"><p className="text-lg sm:text-2xl font-bold text-red-600">₹{financials.balanceDue.toLocaleString()}</p><p className="text-xs sm:text-sm text-muted-foreground">Balance Due</p></div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                             <div className="flex justify-end gap-2 mb-2">
-                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenDiscountDialog(patient); }}><Percent className="mr-1 h-4 w-4" />Add Discount</Button>
-                                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenLinkDialog(patient); }}><Link2 className="mr-1 h-4 w-4" />Link New Procedure</Button>
+                        <CardContent className="px-0 sm:px-6">
+                            <div className="flex flex-wrap justify-end gap-2 mb-3">
+                                <Button variant="outline" size="sm" className="text-xs h-8" onClick={(e) => { e.stopPropagation(); handleOpenDiscountDialog(patient); }}><Percent className="mr-1 h-3.5 w-3.5" />Discount</Button>
+                                <Button variant="outline" size="sm" className="text-xs h-8" onClick={(e) => { e.stopPropagation(); handleOpenLinkDialog(patient); }}><Link2 className="mr-1 h-3.5 w-3.5" />Link Procedure</Button>
                             </div>
-                            <Table>
-                                <TableHeader><TableRow><TableHead>Procedure</TableHead><TableHead>Qty</TableHead><TableHead className="text-right">Total Cost</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {(patient.linkedProcedures || []).map((proc, index) => (
-                                        <TableRow key={index}><TableCell>{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</TableCell><TableCell>{proc.quantity || 1}</TableCell><TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground pt-4">No procedures billed yet.</p>}
+                            {/* Mobile-friendly procedure list */}
+                            <div className="space-y-2 sm:hidden">
+                                {(patient.linkedProcedures || []).map((proc, index) => (
+                                    <div key={index} className="flex items-center justify-between gap-2 py-2 border-b last:border-0">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{proc.procedureName}</p>
+                                            <p className="text-xs text-muted-foreground">{proc.toothNumber ? `Tooth: ${proc.toothNumber} · ` : ''}Qty: {proc.quantity || 1}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <span className="text-sm font-semibold">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</span>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-3.5 w-3.5 text-destructive" /></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground py-4 text-sm">No procedures billed yet.</p>}
+                            </div>
+                            {/* Desktop table */}
+                            <div className="hidden sm:block">
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Procedure</TableHead><TableHead>Qty</TableHead><TableHead className="text-right">Total Cost</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {(patient.linkedProcedures || []).map((proc, index) => (
+                                            <TableRow key={index}><TableCell>{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</TableCell><TableCell>{proc.quantity || 1}</TableCell><TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                                {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground pt-4">No procedures billed yet.</p>}
+                            </div>
                         </CardContent>
                      </Card>
                 </TabsContent>
                 <TabsContent value="prescriptions" className="mt-4">
-                     <Card>
-                        <CardHeader><CardTitle>Prescription History</CardTitle></CardHeader>
-                        <CardContent>
+                     <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+                        <CardHeader className="px-0 sm:px-6"><CardTitle>Prescription History</CardTitle></CardHeader>
+                        <CardContent className="px-0 sm:px-6">
                             {patientPrescriptions.length > 0 ? (
                                 <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Medications</TableHead></TableRow></TableHeader>
@@ -936,26 +974,29 @@ export default function PatientsPage() {
     return (
       <Accordion type="multiple" className="space-y-2">
         {filteredPatients.map((patient) => (
-            <AccordionItem value={patient.id} key={patient.id} className="border-b-0">
-                <Card className={cn("shadow-sm", patient.isConsult ? "border-accent" : "")}>
-                    <AccordionTrigger className="p-4 hover:no-underline w-full no-print">
+            <AccordionItem value={patient.id} key={patient.id} className="border-b sm:border-b-0 border-border/50">
+                <Card className={cn(
+                    "border-0 sm:border shadow-none sm:shadow-sm rounded-none sm:rounded-lg bg-transparent sm:bg-card",
+                    patient.isConsult ? "sm:border-accent" : ""
+                )}>
+                    <AccordionTrigger className="px-1 py-3 sm:p-4 hover:no-underline w-full no-print">
                       <div className="flex justify-between items-center w-full">
-                          <div className="flex items-center gap-4 text-left">
-                              <Avatar className="h-10 w-10">
+                          <div className="flex items-center gap-3 sm:gap-4 text-left min-w-0">
+                              <Avatar className="h-9 w-9 sm:h-10 sm:w-10 shrink-0">
                                 <AvatarImage src={undefined} />
-                                <AvatarFallback>{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
+                                <AvatarFallback className="text-sm">{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
                               </Avatar>
-                              <div>
-                                <div className="font-semibold">{patient.firstName} {patient.lastName}</div>
-                                <div className="text-sm text-muted-foreground hidden md:block">{patient.contactNumber}</div>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-sm sm:text-base truncate">{patient.firstName} {patient.lastName}</div>
+                                <div className="text-xs sm:text-sm text-muted-foreground truncate">{patient.contactNumber}</div>
                               </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                              {patient.isConsult && <Badge variant="outline" className="border-accent text-accent">Consult</Badge>}
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                              {patient.isConsult && <Badge variant="outline" className="border-accent text-accent text-xs">Consult</Badge>}
                           </div>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent>
+                    <AccordionContent className="px-0 sm:px-0">
                         <PatientDetailView patient={patient} />
                     </AccordionContent>
                 </Card>
@@ -998,10 +1039,10 @@ export default function PatientsPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 no-print">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center">
-          <Users className="mr-3 h-8 w-8 text-special1" />
+    <div className="space-y-4 sm:space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 no-print">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+          <Users className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special1" />
           Patient Management
         </h1>
         <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
@@ -1012,8 +1053,10 @@ export default function PatientsPage() {
           }
         }}>
           <DialogTrigger asChild>
-            <Button onClick={openAddForm} disabled={!user || !clinicId}>
-              <UserPlus className="mr-2 h-4 w-4" /> Add New Patient
+            <Button onClick={openAddForm} disabled={!user || !clinicId} className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4">
+              <UserPlus className="mr-1.5 sm:mr-2 h-4 w-4" />
+              <span className="sm:hidden">Add Patient</span>
+              <span className="hidden sm:inline">Add New Patient</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-4xl">
@@ -1223,25 +1266,25 @@ export default function PatientsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader className="no-print">
-          <CardTitle>Patient List</CardTitle>
-          <CardDescription>Manage all patient records. Click a patient to see more details.</CardDescription>
+      <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+        <CardHeader className="no-print px-1 sm:px-6 pb-2 sm:pb-6">
+          <CardTitle className="text-xl sm:text-2xl">Patient List</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">Manage all patient records. Click a patient to see more details.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0 sm:px-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex justify-center no-print">
-                <TabsList>
-                    <TabsTrigger value="primary">Primary Patients</TabsTrigger>
-                    <TabsTrigger value="consults">Consult Patients</TabsTrigger>
+                <TabsList className="h-9 sm:h-10">
+                    <TabsTrigger value="primary" className="text-xs sm:text-sm px-3 sm:px-4">Primary Patients</TabsTrigger>
+                    <TabsTrigger value="consults" className="text-xs sm:text-sm px-3 sm:px-4">Consult Patients</TabsTrigger>
                 </TabsList>
             </div>
-            <div className="relative pt-4 no-print">
+            <div className="relative pt-3 sm:pt-4 no-print">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search by name or contact number..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+                <Input placeholder="Search by name or contact number..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 sm:pl-10 h-9 sm:h-10 text-sm" />
             </div>
-            <TabsContent value="primary" className="mt-4">{renderContent()}</TabsContent>
-            <TabsContent value="consults" className="mt-4">{renderContent()}</TabsContent>
+            <TabsContent value="primary" className="mt-3 sm:mt-4">{renderContent()}</TabsContent>
+            <TabsContent value="consults" className="mt-3 sm:mt-4">{renderContent()}</TabsContent>
           </Tabs>
         </CardContent>
       </Card>

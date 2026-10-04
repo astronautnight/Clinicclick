@@ -287,41 +287,43 @@ export default function ProceduresPage() {
     return (
       <Accordion type="multiple" className="w-full space-y-2">
         {Object.entries(groupedProcedures).sort(([catA], [catB]) => catA.localeCompare(catB)).map(([category, procs]) => (
-          <AccordionItem value={category} key={category} className="border-b-0">
-            <Card className="shadow-none border">
-              <AccordionTrigger className="p-4 text-lg font-semibold hover:no-underline">{category} ({procs.length})</AccordionTrigger>
+          <AccordionItem value={category} key={category} className="border-b sm:border-b-0 border-border/50">
+            <Card className="border-0 sm:border shadow-none rounded-none sm:rounded-lg bg-transparent sm:bg-card">
+              <AccordionTrigger className="px-1 py-3 sm:p-4 text-base sm:text-lg font-semibold hover:no-underline">{category} ({procs.length})</AccordionTrigger>
               <AccordionContent className="p-0">
-                <div className="space-y-4 p-4 pt-0">
+                <div className="space-y-3 sm:space-y-4 p-1 sm:p-4 pt-0">
                   {procs.map(proc => (
-                    <Card key={proc.id} className="hover:shadow-md transition-shadow">
-                      <CardHeader>
-                        <div className="flex flex-wrap justify-between items-start gap-2">
-                          <div>
-                            <CardTitle>{proc.name}</CardTitle>
-                            <CardDescription className="mt-1">{proc.description || 'No description available.'}</CardDescription>
+                    <Card key={proc.id} className="border border-border/60 shadow-sm rounded-xl sm:rounded-lg hover:shadow-md transition-shadow bg-card">
+                      <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                          <div className="min-w-0">
+                            <CardTitle className="text-base sm:text-lg">{proc.name}</CardTitle>
+                            <CardDescription className="mt-1 text-xs sm:text-sm">{proc.description || 'No description available.'}</CardDescription>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {proc.videoUrl && <a href={proc.videoUrl} target="_blank" rel="noopener noreferrer"><Button variant="outline" size="sm"><Video className="mr-1 h-4 w-4 text-red-500" /> Watch Demo</Button></a>}
-                            <Button variant="outline" size="sm" onClick={() => handleOpenLinkDialog(proc)}><Link2 className="mr-1 h-4 w-4" />Link to Patient</Button>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 sm:mt-0">
+                            {proc.videoUrl && <a href={proc.videoUrl} target="_blank" rel="noopener noreferrer"><Button variant="outline" size="sm" className="h-8 text-xs px-2.5 sm:px-3"><Video className="mr-1 h-3.5 w-3.5 text-red-500" /> Watch Demo</Button></a>}
+                            <Button variant="outline" size="sm" onClick={() => handleOpenLinkDialog(proc)} className="h-8 text-xs px-2.5 sm:px-3"><Link2 className="mr-1 h-3.5 w-3.5" />Link to Patient</Button>
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="text-sm space-y-3">
-                        <p><strong>Cost:</strong> ₹{proc.cost.toLocaleString()}</p>
-                        <p><strong>Est. Duration:</strong> {proc.durationMinutes ? `${proc.durationMinutes} mins` : 'N/A'}</p>
+                      <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0 text-xs sm:text-sm space-y-2 sm:space-y-3">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1">
+                          <p><strong>Cost:</strong> ₹{proc.cost.toLocaleString()}</p>
+                          <p><strong>Est. Duration:</strong> {proc.durationMinutes ? `${proc.durationMinutes} mins` : 'N/A'}</p>
+                        </div>
                         {proc.materials && proc.materials.length > 0 && (
                           <div>
-                            <h4 className="font-semibold">Required Materials:</h4>
+                            <h4 className="font-semibold text-xs sm:text-sm">Required Materials:</h4>
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {proc.materials.map((material, i) => <Badge key={i} variant="secondary">{material}</Badge>)}
+                              {proc.materials.map((material, i) => <Badge key={i} variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0.5">{material}</Badge>)}
                             </div>
                           </div>
                         )}
                       </CardContent>
-                      <CardFooter className="flex justify-end gap-2 border-t pt-4 mt-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(proc)}><FilePenLine className="mr-1 h-4 w-4" /> Edit</Button>
+                      <CardFooter className="flex justify-end gap-2 border-t p-3 sm:p-6 pt-3 sm:pt-4">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(proc)} className="h-8 text-xs px-2.5 sm:px-3"><FilePenLine className="mr-1 h-3.5 w-3.5" /> Edit</Button>
                         <AlertDialog>
-                          <AlertDialogTrigger asChild><Button variant="destructive" size="sm" onClick={() => setProcedureToDelete(proc)}><Trash2 className="mr-1 h-4 w-4" /> Delete</Button></AlertDialogTrigger>
+                          <AlertDialogTrigger asChild><Button variant="destructive" size="sm" onClick={() => setProcedureToDelete(proc)} className="h-8 text-xs px-2.5 sm:px-3"><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button></AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the procedure "{procedureToDelete?.name}".</AlertDialogDescription></AlertDialogHeader>
                             <AlertDialogFooter><AlertDialogCancel onClick={() => setProcedureToDelete(null)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteProcedure}>Delete</AlertDialogAction></AlertDialogFooter>
@@ -340,14 +342,24 @@ export default function ProceduresPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center">
-          <ClipboardList className="mr-3 h-8 w-8 text-special3" />
+    <div className="space-y-4 sm:space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 no-print">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+          <ClipboardList className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special3" />
           Procedure Management
         </h1>
         <Dialog open={isAddFormOpen} onOpenChange={setIsAddFormOpen}>
-          <DialogTrigger asChild><Button onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setIsAddFormOpen(true); }} disabled={!user || !clinicId}><ListPlus className="mr-2 h-4 w-4" /> Add New Procedure</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <Button
+              onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setIsAddFormOpen(true); }}
+              disabled={!user || !clinicId}
+              className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4"
+            >
+              <ListPlus className="mr-1.5 sm:mr-2 h-4 w-4" />
+              <span className="sm:hidden">Add Procedure</span>
+              <span className="hidden sm:inline">Add New Procedure</span>
+            </Button>
+          </DialogTrigger>
           <DialogContent className="sm:max-w-xl">
             <DialogHeader><DialogTitle>Add New Dental Procedure</DialogTitle><CardDescription>Define a new procedure and its required materials.</CardDescription></DialogHeader>
             <form onSubmit={handleSubmit}>
@@ -448,21 +460,21 @@ export default function ProceduresPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-            <CardTitle className="flex items-center"><ClipboardList className="mr-2 h-5 w-5 text-primary" />Available Procedures</CardTitle>
-            <CardDescription>Browse, manage, and link procedures to patients. Procedures are grouped by category.</CardDescription>
-            <div className="relative pt-2">
+      <Card className="border-0 sm:border shadow-none sm:shadow-lg bg-transparent sm:bg-card">
+        <CardHeader className="no-print px-1 sm:px-6 pb-2 sm:pb-6">
+            <CardTitle className="text-xl sm:text-2xl flex items-center"><ClipboardList className="mr-2 h-5 w-5 text-primary" />Available Procedures</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Browse, manage, and link procedures to patients. Procedures are grouped by category.</CardDescription>
+            <div className="relative pt-2 sm:pt-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     placeholder="Search by name or description..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="pl-9 sm:pl-10 h-9 sm:h-10 text-sm"
                 />
             </div>
         </CardHeader>
-        <CardContent>{renderContent()}</CardContent>
+        <CardContent className="px-0 sm:px-6">{renderContent()}</CardContent>
       </Card>
     </div>
   );
