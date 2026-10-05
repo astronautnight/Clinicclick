@@ -75,23 +75,101 @@ import {
   Layers,
   ArrowUpDown,
   RefreshCw,
-  Eye
+  Eye,
+  Lock,
+  Unlock,
+  KeyRound,
+  EyeOff,
+  ShieldAlert,
+  ArrowLeft
 } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, subDays, isAfter, isValid } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { AdminClinic, AdminSurveyResponse, UserProfile } from '@/types';
 
+// The two designated admin passwords (both required)
+const ADMIN_PASSWORD_1 = 'ClinicAdmin#9842';
+const ADMIN_PASSWORD_2 = 'DentalVault$7294';
+
 export default function AdminDashboardPage() {
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+
+  // Authentication gate state (Dual Password Required)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [password1Input, setPassword1Input] = useState<string>('');
+  const [password2Input, setPassword2Input] = useState<string>('');
+  const [showPassword1, setShowPassword1] = useState<boolean>(false);
+  const [showPassword2, setShowPassword2] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string>('');
 
   // Data states
   const [clinics, setClinics] = useState<AdminClinic[]>([]);
   const [surveyResponses, setSurveyResponses] = useState<AdminSurveyResponse[]>([]);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Check saved session on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedAuth = sessionStorage.getItem('clinicclick_admin_auth');
+      if (savedAuth === 'true') {
+        setIsAuthenticated(true);
+      }
+      setAuthChecking(false);
+    }
+  }, []);
+
+  const handlePasswordSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+
+    const p1 = password1Input.trim();
+    const p2 = password2Input.trim();
+
+    if (!p1 || !p2) {
+      setAuthError('Both Security Key 1 and Security Key 2 must be entered.');
+      return;
+    }
+
+    const isValid = (p1 === ADMIN_PASSWORD_1 && p2 === ADMIN_PASSWORD_2) || 
+                    (p1 === ADMIN_PASSWORD_2 && p2 === ADMIN_PASSWORD_1);
+
+    if (isValid) {
+      setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('clinicclick_admin_auth', 'true');
+      }
+      toast({
+        title: "Dual-Key Access Granted",
+        description: "Welcome to the Admin Dashboard.",
+      });
+    } else {
+      setAuthError('Invalid administrator credentials. Both keys must match.');
+      toast({
+        title: "Access Denied",
+        description: "Incorrect administrator keys entered.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setPassword1Input('');
+    setPassword2Input('');
+    setAuthError('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('clinicclick_admin_auth');
+    }
+    toast({
+      title: "Portal Locked",
+      description: "Admin session has been locked.",
+    });
+  };
 
   // Filter & Search states
   const [clinicSearch, setClinicSearch] = useState('');
@@ -115,7 +193,7 @@ export default function AdminDashboardPage() {
      REALTIME FIRESTORE LISTENERS
   ============================================================ */
   useEffect(() => {
-    if (!db) return;
+    if (!db || !isAuthenticated) return;
 
     // 1. Listen to Clinics
     const clinicsCol = collection(db, 'clinics');
@@ -506,6 +584,135 @@ export default function AdminDashboardPage() {
     return arr;
   }, []);
 
+  // If checking session authentication
+  if (authChecking) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 animate-spin text-indigo-500" />
+          <p className="text-xs text-muted-foreground font-medium">Checking authorization...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Password Lock Screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[75vh] px-4">
+        <div className="relative w-full max-w-md">
+          {/* Ambient Glow */}
+          <div className="absolute -top-12 -left-12 w-60 h-60 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -right-12 w-60 h-60 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+
+          <Card className="relative z-10 border border-slate-200/80 dark:border-slate-800 shadow-2xl backdrop-blur-xl bg-white/90 dark:bg-slate-950/90 overflow-hidden">
+            <div className="h-2 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+            
+            <CardHeader className="text-center pb-2 pt-6">
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-3 shadow-inner">
+                <Lock className="h-7 w-7" />
+              </div>
+              <CardTitle className="text-xl font-extrabold tracking-tight">
+                Dual-Key Protected Admin Portal
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Both administrative security keys are required to unlock this dashboard.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-4">
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                {/* Key 1 */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                    <span>Primary Security Key</span>
+                    <span className="text-[10px] text-indigo-500 font-bold">Key 1</span>
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type={showPassword1 ? "text" : "password"}
+                      placeholder="Enter Primary Key..."
+                      value={password1Input}
+                      onChange={(e) => {
+                        setPassword1Input(e.target.value);
+                        if (authError) setAuthError('');
+                      }}
+                      autoFocus
+                      className="pl-9 pr-10 text-sm font-mono h-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword1(!showPassword1)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword1 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Key 2 */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                    <span>Secondary Security Key</span>
+                    <span className="text-[10px] text-emerald-500 font-bold">Key 2</span>
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type={showPassword2 ? "text" : "password"}
+                      placeholder="Enter Secondary Key..."
+                      value={password2Input}
+                      onChange={(e) => {
+                        setPassword2Input(e.target.value);
+                        if (authError) setAuthError('');
+                      }}
+                      className="pl-9 pr-10 text-sm font-mono h-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword2(!showPassword2)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword2 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {authError && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-300 text-xs animate-shake">
+                    <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold h-10 gap-2 shadow-md shadow-indigo-500/20 mt-2"
+                >
+                  <Unlock className="h-4 w-4" />
+                  Authenticate & Unlock Portal
+                </Button>
+              </form>
+            </CardContent>
+
+            <CardFooter className="pt-2 pb-6 border-t flex justify-center bg-slate-50/50 dark:bg-slate-900/30">
+              <Link 
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-medium"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Return to Clinic Dashboard
+              </Link>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
       {/* Header Banner */}
@@ -532,7 +739,7 @@ export default function AdminDashboardPage() {
               className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs gap-1.5 shadow-sm"
             >
               <Download className="h-3.5 w-3.5" />
-              Export Clinics & Active Dates
+              Export CSV
             </Button>
             <Button
               variant="default"
@@ -547,6 +754,15 @@ export default function AdminDashboardPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Live Connected
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-200 border-red-500/30 text-xs gap-1.5 shadow-sm"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Lock Session
             </Button>
           </div>
         </div>
