@@ -43,8 +43,7 @@ service cloud.firestore {
 
     /* ================= SURVEY RESPONSES ================= */
     match /survey_responses/{responseId} {
-      allow create: if signedIn();
-      allow read: if false; // Only accessible via admin panel/Firebase console
+      allow read, create, update: if signedIn();
     }
 
     /* ================= CLINICS ================= */

@@ -189,11 +189,18 @@ export default function AdminDashboardPage() {
   const sevenDaysAgo = useMemo(() => subDays(new Date(), 7), []);
   const thirtyDaysAgo = useMemo(() => subDays(new Date(), 30), []);
 
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   /* ============================================================
-     REALTIME FIRESTORE LISTENERS
+     REALTIME FIRESTORE LISTENERS & DATA FETCH
   ============================================================ */
   useEffect(() => {
     if (!db || !isAuthenticated) return;
+
+    setLoading(true);
+    setErrorMessage(null);
 
     // 1. Listen to Clinics
     const clinicsCol = collection(db, 'clinics');
@@ -216,12 +223,12 @@ export default function AdminDashboardPage() {
           activeDates: Array.isArray(data.activeDates) ? data.activeDates : [],
         });
       });
-      // Sort by activeDates count descending by default
       list.sort((a, b) => (b.activeDates?.length || 0) - (a.activeDates?.length || 0));
       setClinics(list);
       setLoading(false);
-    }, (error) => {
-      console.warn("Could not fetch clinics:", error);
+    }, (error: any) => {
+      console.error("Could not fetch clinics:", error);
+      setErrorMessage((prev) => prev ? `${prev} | Clinics: ${error.message}` : `Clinics: ${error.message}`);
       setLoading(false);
     });
 
@@ -239,15 +246,15 @@ export default function AdminDashboardPage() {
           createdAt: data.createdAt,
         });
       });
-      // Sort newest first
       list.sort((a, b) => {
         const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
         const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
         return timeB - timeA;
       });
       setSurveyResponses(list);
-    }, (error) => {
-      console.warn("Could not fetch survey responses:", error);
+    }, (error: any) => {
+      console.error("Could not fetch survey responses:", error);
+      setErrorMessage((prev) => prev ? `${prev} | Surveys: ${error.message}` : `Surveys: ${error.message}`);
     });
 
     // 3. Listen to Users
@@ -270,8 +277,9 @@ export default function AdminDashboardPage() {
         } as UserProfile);
       });
       setUsersList(list);
-    }, (error) => {
-      console.warn("Could not fetch users:", error);
+    }, (error: any) => {
+      console.error("Could not fetch users:", error);
+      setErrorMessage((prev) => prev ? `${prev} | Users: ${error.message}` : `Users: ${error.message}`);
     });
 
     return () => {
@@ -279,7 +287,86 @@ export default function AdminDashboardPage() {
       unsubSurvey();
       unsubUsers();
     };
-  }, [db]);
+  }, [db, isAuthenticated, refreshCount]);
+
+  const handleManualRefresh = async () => {
+    if (!db || !isAuthenticated) return;
+    setIsRefreshing(true);
+    setErrorMessage(null);
+    try {
+      // Direct getDocs fallback
+      const clinicsSnap = await getDocs(collection(db, 'clinics'));
+      const cList: AdminClinic[] = [];
+      clinicsSnap.forEach((d) => {
+        const data = d.data();
+        cList.push({
+          id: d.id,
+          name: data.name || 'Unnamed Clinic',
+          address: data.address,
+          phone: data.phone,
+          clinicType: data.clinicType || 'General',
+          inviteCode: data.inviteCode,
+          createdBy: data.createdBy,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          logoUrl: data.logoUrl,
+          isFounder: data.isFounder,
+          activeDates: Array.isArray(data.activeDates) ? data.activeDates : [],
+        });
+      });
+      cList.sort((a, b) => (b.activeDates?.length || 0) - (a.activeDates?.length || 0));
+      setClinics(cList);
+
+      const surveySnap = await getDocs(collection(db, 'survey_responses'));
+      const sList: AdminSurveyResponse[] = [];
+      surveySnap.forEach((d) => {
+        const data = d.data();
+        sList.push({
+          id: d.id,
+          uid: data.uid || '',
+          email: data.email || 'No email',
+          source: data.source || 'Unknown',
+          createdAt: data.createdAt,
+        });
+      });
+      setSurveyResponses(sList);
+
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const uList: UserProfile[] = [];
+      usersSnap.forEach((d) => {
+        const data = d.data();
+        uList.push({
+          id: d.id,
+          uid: d.id,
+          displayName: data.displayName || 'Unnamed User',
+          email: data.email || null,
+          photoURL: data.photoURL || null,
+          clinicId: data.clinicId || null,
+          role: data.role || null,
+          heardAboutAppFrom: data.heardAboutAppFrom || undefined,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        } as UserProfile);
+      });
+      setUsersList(uList);
+
+      setRefreshCount((c) => c + 1);
+      toast({
+        title: "Data Synced",
+        description: `Loaded ${cList.length} clinics, ${sList.length} surveys, ${uList.length} users.`,
+      });
+    } catch (err: any) {
+      console.error("Manual fetch error:", err);
+      setErrorMessage(err.message || 'Failed to fetch data from Firestore.');
+      toast({
+        title: "Sync Failed",
+        description: err.message || "Failed to fetch data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   /* ============================================================
      CLINIC MAP FOR EASY USER LOOKUP
@@ -744,16 +831,12 @@ export default function AdminDashboardPage() {
             <Button
               variant="default"
               size="sm"
-              onClick={() => {
-                toast({
-                  title: "Data Synced",
-                  description: "Realtime listeners are actively tracking Firestore changes.",
-                });
-              }}
+              disabled={isRefreshing}
+              onClick={handleManualRefresh}
               className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1.5 shadow-sm"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Live Connected
+              <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+              {isRefreshing ? "Syncing..." : "Sync Live Data"}
             </Button>
             <Button
               variant="outline"
@@ -771,6 +854,45 @@ export default function AdminDashboardPage() {
         <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Diagnostics / Error Alert */}
+      {errorMessage && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 flex items-start justify-between gap-3 text-xs">
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Firestore Sync Notice:</p>
+              <p className="font-mono text-[11px] opacity-90">{errorMessage}</p>
+              <p className="opacity-80 pt-1">
+                If you see <code className="bg-amber-500/20 px-1 py-0.5 rounded">permission-denied</code>, ensure you are signed into your Firebase user account or deploy the Firestore rules.
+              </p>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleManualRefresh}
+            className="text-xs h-7 border-amber-500/40 hover:bg-amber-500/20 flex-shrink-0"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Auth Warning if not signed in to Firebase */}
+      {!user && (
+        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-200 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-blue-500 flex-shrink-0" />
+            <span>
+              You are currently viewing in portal mode without an active Clinic@Click account session. Sign in to your account if your Firestore rules require authentication.
+            </span>
+          </div>
+          <Link href="/login" className="font-semibold underline hover:text-blue-600 flex-shrink-0">
+            Sign In
+          </Link>
+        </div>
+      )}
 
       {/* TOP SUMMARY METRICS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
