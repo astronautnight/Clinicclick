@@ -57,8 +57,8 @@ const renderMaterialsFields = (
   };
 
   return (
-    <div className="space-y-4">
-      <Label>Required Materials / Armamentarium</Label>
+    <div className="space-y-2.5">
+      <Label className="text-xs sm:text-sm font-medium">Required Materials / Armamentarium</Label>
       {materials.map((material, index) => (
         <div key={index} className="flex items-center gap-2">
           <Input
@@ -66,14 +66,15 @@ const renderMaterialsFields = (
             onChange={(e) => handleMaterialChange(index, e.target.value)}
             placeholder={`Material ${index + 1}`}
             disabled={isSubmitting}
+            className="h-8 sm:h-9 text-xs sm:text-sm"
           />
-          <Button type="button" variant="destructive" size="icon" onClick={() => removeMaterial(index)} disabled={isSubmitting}>
-            <X className="h-4 w-4" />
+          <Button type="button" variant="destructive" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeMaterial(index)} disabled={isSubmitting}>
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       ))}
-      <Button type="button" variant="outline" size="sm" onClick={addMaterial} disabled={isSubmitting}>
-        <PlusCircle className="mr-2 h-4 w-4" /> Add Material
+      <Button type="button" variant="outline" size="sm" onClick={addMaterial} disabled={isSubmitting} className="h-8 text-xs gap-1.5">
+        <PlusCircle className="h-3.5 w-3.5" /> Add Material
       </Button>
     </div>
   );
@@ -285,56 +286,83 @@ export default function ProceduresPage() {
     if (!hasResults) return <div className="flex flex-col items-center justify-center text-center p-6 min-h-[150px] border rounded-lg bg-muted/30"><p className="text-lg font-medium text-muted-foreground mb-2">No procedures found.</p><p className="text-sm text-muted-foreground mb-4">{searchQuery ? "Try adjusting your search query." : 'Click "Add New Procedure" to get started.'}</p></div>;
     
     return (
-      <Accordion type="multiple" className="w-full space-y-2">
+      <Accordion type="multiple" className="w-full space-y-3">
         {Object.entries(groupedProcedures).sort(([catA], [catB]) => catA.localeCompare(catB)).map(([category, procs]) => (
-          <AccordionItem value={category} key={category} className="border-b sm:border-b-0 border-border/50">
-            <Card className="border-0 sm:border shadow-none rounded-none sm:rounded-lg bg-transparent sm:bg-card">
-              <AccordionTrigger className="px-1 py-3 sm:p-4 text-base sm:text-lg font-semibold hover:no-underline">{category} ({procs.length})</AccordionTrigger>
-              <AccordionContent className="p-0">
-                <div className="space-y-3 sm:space-y-4 p-1 sm:p-4 pt-0">
-                  {procs.map(proc => (
-                    <Card key={proc.id} className="border border-border/60 shadow-sm rounded-xl sm:rounded-lg hover:shadow-md transition-shadow bg-card">
-                      <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-4">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
-                          <div className="min-w-0">
-                            <CardTitle className="text-base sm:text-lg">{proc.name}</CardTitle>
-                            <CardDescription className="mt-1 text-xs sm:text-sm">{proc.description || 'No description available.'}</CardDescription>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2 mt-1 sm:mt-0">
-                            {proc.videoUrl && <a href={proc.videoUrl} target="_blank" rel="noopener noreferrer"><Button variant="outline" size="sm" className="h-8 text-xs px-2.5 sm:px-3"><Video className="mr-1 h-3.5 w-3.5 text-red-500" /> Watch Demo</Button></a>}
-                            <Button variant="outline" size="sm" onClick={() => handleOpenLinkDialog(proc)} className="h-8 text-xs px-2.5 sm:px-3"><Link2 className="mr-1 h-3.5 w-3.5" />Link to Patient</Button>
-                          </div>
+          <AccordionItem 
+            value={category} 
+            key={category} 
+            className="border border-border/80 dark:border-border/60 rounded-xl bg-card shadow-xs overflow-hidden transition-all data-[state=open]:shadow-md data-[state=open]:border-primary/40 mb-3"
+          >
+            <AccordionTrigger className="px-3.5 py-3 sm:px-4 sm:py-3.5 text-sm sm:text-base font-semibold hover:no-underline hover:bg-muted/30 transition-colors">
+              <div className="flex items-center gap-2">
+                <span>{category}</span>
+                <Badge variant="secondary" className="text-2xs px-1.5 py-0.5">{procs.length}</Badge>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="p-2.5 sm:p-4 bg-muted/20 dark:bg-muted/10 border-t border-border/60">
+              <div className="space-y-3">
+                {procs.map(proc => (
+                  <div key={proc.id} className="border border-border/70 shadow-xs rounded-xl p-3.5 sm:p-4 bg-card transition-all space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-sm sm:text-base text-foreground truncate">{proc.name}</h4>
+                          <Badge variant="outline" className="text-2xs font-semibold text-primary border-primary/30">₹{proc.cost.toLocaleString()}</Badge>
                         </div>
-                      </CardHeader>
-                      <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0 text-xs sm:text-sm space-y-2 sm:space-y-3">
-                        <div className="flex flex-wrap gap-x-4 gap-y-1">
-                          <p><strong>Cost:</strong> ₹{proc.cost.toLocaleString()}</p>
-                          <p><strong>Est. Duration:</strong> {proc.durationMinutes ? `${proc.durationMinutes} mins` : 'N/A'}</p>
-                        </div>
-                        {proc.materials && proc.materials.length > 0 && (
-                          <div>
-                            <h4 className="font-semibold text-xs sm:text-sm">Required Materials:</h4>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {proc.materials.map((material, i) => <Badge key={i} variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0.5">{material}</Badge>)}
-                            </div>
-                          </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{proc.description || 'No description available.'}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto shrink-0">
+                        {proc.videoUrl && (
+                          <a href={proc.videoUrl} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" size="sm" className="h-7 sm:h-8 text-xs px-2 sm:px-2.5">
+                              <Video className="mr-1 h-3.5 w-3.5 text-red-500" /> Demo
+                            </Button>
+                          </a>
                         )}
-                      </CardContent>
-                      <CardFooter className="flex justify-end gap-2 border-t p-3 sm:p-6 pt-3 sm:pt-4">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(proc)} className="h-8 text-xs px-2.5 sm:px-3"><FilePenLine className="mr-1 h-3.5 w-3.5" /> Edit</Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild><Button variant="destructive" size="sm" onClick={() => setProcedureToDelete(proc)} className="h-8 text-xs px-2.5 sm:px-3"><Trash2 className="mr-1 h-3.5 w-3.5" /> Delete</Button></AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the procedure "{procedureToDelete?.name}".</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel onClick={() => setProcedureToDelete(null)}>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteProcedure}>Delete</AlertDialogAction></AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              </AccordionContent>
-            </Card>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenLinkDialog(proc)} className="h-7 sm:h-8 text-xs px-2 sm:px-2.5">
+                          <Link2 className="mr-1 h-3.5 w-3.5" /> Link to Patient
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 border-t border-border/40">
+                      <p><strong>Est. Duration:</strong> {proc.durationMinutes ? `${proc.durationMinutes} mins` : 'N/A'}</p>
+                      {proc.materials && proc.materials.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="font-medium text-foreground">Materials:</span>
+                          {proc.materials.map((material, i) => (
+                            <Badge key={i} variant="secondary" className="text-2xs px-1.5 py-0.5">{material}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-1.5 pt-2 border-t border-border/50">
+                      <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(proc)} className="h-7 sm:h-8 text-xs px-2 sm:px-2.5">
+                        <FilePenLine className="mr-1 h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" onClick={() => setProcedureToDelete(proc)} className="h-7 sm:h-8 text-xs px-2 text-destructive hover:bg-destructive/10">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This action cannot be undone. This will permanently delete the procedure "{procedureToDelete?.name}".</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setProcedureToDelete(null)}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteProcedure}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
           </AccordionItem>
         ))}
       </Accordion>
@@ -360,121 +388,134 @@ export default function ProceduresPage() {
               <span className="hidden sm:inline">Add New Procedure</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader><DialogTitle>Add New Dental Procedure</DialogTitle><CardDescription>Define a new procedure and its required materials.</CardDescription></DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Procedure Name</Label>
-                  <Input id="name" name="name" value={newProcedure.name} onChange={handleInputChange} required disabled={isSubmitting} />
+          <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-xl max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
+            <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
+              <DialogTitle className="text-base sm:text-xl font-bold">Add New Dental Procedure</DialogTitle>
+              <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">Define a new procedure and its required materials.</CardDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3 sm:space-y-3.5">
+                <div className="space-y-1">
+                  <Label htmlFor="name" className="text-xs sm:text-sm font-medium">Procedure Name *</Label>
+                  <Input id="name" name="name" value={newProcedure.name} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea id="description" name="description" value={newProcedure.description || ''} onChange={handleInputChange} disabled={isSubmitting} />
+                <div className="space-y-1">
+                  <Label htmlFor="description" className="text-xs sm:text-sm font-medium">Description (Optional)</Label>
+                  <Textarea id="description" name="description" value={newProcedure.description || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select name="category" value={newProcedure.category} onValueChange={handleSelectChange}><SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="category" className="text-xs sm:text-sm font-medium">Category</Label>
+                    <Select name="category" value={newProcedure.category} onValueChange={handleSelectChange}><SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cost">Cost (₹)</Label>
-                    <Input id="cost" name="cost" type="number" value={newProcedure.cost} onChange={handleInputChange} required min="0" disabled={isSubmitting} />
+                  <div className="space-y-1">
+                    <Label htmlFor="cost" className="text-xs sm:text-sm font-medium">Cost (₹) *</Label>
+                    <Input id="cost" name="cost" type="number" value={newProcedure.cost} onChange={handleInputChange} required min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="durationMinutes">Duration (minutes)</Label>
-                  <Input id="durationMinutes" name="durationMinutes" type="number" value={newProcedure.durationMinutes || 0} onChange={handleInputChange} min="0" disabled={isSubmitting} />
+                <div className="space-y-1">
+                  <Label htmlFor="durationMinutes" className="text-xs sm:text-sm font-medium">Duration (minutes)</Label>
+                  <Input id="durationMinutes" name="durationMinutes" type="number" value={newProcedure.durationMinutes || 0} onChange={handleInputChange} min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="videoUrl">Demo Video Link (Optional)</Label>
-                  <Input id="videoUrl" name="videoUrl" value={newProcedure.videoUrl || ''} onChange={handleInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} />
+                <div className="space-y-1">
+                  <Label htmlFor="videoUrl" className="text-xs sm:text-sm font-medium">Demo Video Link (Optional)</Label>
+                  <Input id="videoUrl" name="videoUrl" value={newProcedure.videoUrl || ''} onChange={handleInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
-                <div className="border-t pt-4">{renderMaterialsFields(newProcedureMaterials, setNewProcedureMaterials, isSubmitting)}</div>
+                <div className="border-t border-border/60 pt-3">{renderMaterialsFields(newProcedureMaterials, setNewProcedureMaterials, isSubmitting)}</div>
               </div>
-              <DialogFooter className="border-t pt-4"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...</> : 'Add Procedure'}</Button></DialogFooter>
+              <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">
+                <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+                <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Adding...</> : 'Add Procedure'}</Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
       <Dialog open={isLinkDialogOpen} onOpenChange={(open) => { if (!open) setSelectedProcedureToLink(null); setIsLinkDialogOpen(open); }}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader><DialogTitle>Link "{selectedProcedureToLink?.name}"</DialogTitle></DialogHeader>
-            <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="patientToLink">Select Patient</Label>
+          <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-3.5 sm:p-6 shadow-2xl border border-border/80">
+            <DialogHeader className="pb-2 border-b"><DialogTitle className="text-base sm:text-lg">Link "{selectedProcedureToLink?.name}"</DialogTitle></DialogHeader>
+            <div className="py-3 space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="patientToLink" className="text-xs sm:text-sm font-medium">Select Patient</Label>
                 <Select value={patientToLink} onValueChange={setPatientToLink}>
-                  <SelectTrigger id="patientToLink"><SelectValue placeholder="Select a patient" /></SelectTrigger>
-                  <SelectContent>{patients.length === 0 ? <div className="p-2 text-center text-sm text-muted-foreground">No patients found</div> : patients.map(p => <SelectItem key={p.id} value={p.id}>{p.firstName} {p.lastName}</SelectItem>)}</SelectContent>
+                  <SelectTrigger id="patientToLink" className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select a patient" /></SelectTrigger>
+                  <SelectContent>{patients.length === 0 ? <div className="p-2 text-center text-xs text-muted-foreground">No patients found</div> : patients.map(p => <SelectItem key={p.id} value={p.id}>{p.firstName} {p.lastName}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="toothNumberToLink">Tooth Number / Notes (Optional)</Label>
-                <Input id="toothNumberToLink" value={toothNumberToLink} onChange={(e) => setToothNumberToLink(e.target.value)} placeholder="e.g., 14, 25 or notes" />
+              <div className="space-y-1">
+                <Label htmlFor="toothNumberToLink" className="text-xs sm:text-sm font-medium">Tooth Number / Notes (Optional)</Label>
+                <Input id="toothNumberToLink" value={toothNumberToLink} onChange={(e) => setToothNumberToLink(e.target.value)} placeholder="e.g., 14, 25 or notes" className="h-8 sm:h-9 text-xs sm:text-sm" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="quantityToLink">Quantity</Label>
-                <Input id="quantityToLink" type="number" value={quantityToLink} onChange={(e) => setQuantityToLink(parseInt(e.target.value) || 1)} min="1" />
+              <div className="space-y-1">
+                <Label htmlFor="quantityToLink" className="text-xs sm:text-sm font-medium">Quantity</Label>
+                <Input id="quantityToLink" type="number" value={quantityToLink} onChange={(e) => setQuantityToLink(parseInt(e.target.value) || 1)} min="1" className="h-8 sm:h-9 text-xs sm:text-sm" />
               </div>
             </div>
-            <DialogFooter><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose><Button onClick={handleLinkToPatient}>Link Procedure</Button></DialogFooter>
+            <DialogFooter className="pt-2.5 border-t flex flex-row items-center justify-end gap-2">
+              <DialogClose asChild><Button variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+              <Button size="sm" className="h-8 text-xs" onClick={handleLinkToPatient}>Link Procedure</Button>
+            </DialogFooter>
           </DialogContent>
       </Dialog>
       
       <Dialog open={isEditDialogOpen} onOpenChange={(isOpen) => { setIsEditDialogOpen(isOpen); if (!isOpen) setEditingProcedure(null); }}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>Edit Procedure: {editingProcedure?.name}</DialogTitle><CardDescription>Modify the details for this procedure.</CardDescription></DialogHeader>
-          <form onSubmit={handleUpdateProcedure}>
-            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-              <div className="space-y-2">
-                <Label htmlFor="editName">Procedure Name</Label>
-                <Input id="editName" name="name" value={editedProcedureData.name} onChange={handleEditInputChange} required disabled={isSubmitting} />
+        <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-xl max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
+          <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
+            <DialogTitle className="text-base sm:text-xl font-bold">Edit Procedure: {editingProcedure?.name}</DialogTitle>
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">Modify the details for this procedure.</CardDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateProcedure} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3 sm:space-y-3.5">
+              <div className="space-y-1">
+                <Label htmlFor="editName" className="text-xs sm:text-sm font-medium">Procedure Name *</Label>
+                <Input id="editName" name="name" value={editedProcedureData.name} onChange={handleEditInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="editDescription">Description (Optional)</Label>
-                <Textarea id="editDescription" name="description" value={editedProcedureData.description || ''} onChange={handleEditInputChange} disabled={isSubmitting} />
+              <div className="space-y-1">
+                <Label htmlFor="editDescription" className="text-xs sm:text-sm font-medium">Description (Optional)</Label>
+                <Textarea id="editDescription" name="description" value={editedProcedureData.description || ''} onChange={handleEditInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="editCategory">Category</Label>
-                    <Select name="category" value={editedProcedureData.category} onValueChange={handleEditSelectChange} disabled={isSubmitting}><SelectTrigger id="editCategory"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="editCategory" className="text-xs sm:text-sm font-medium">Category</Label>
+                    <Select name="category" value={editedProcedureData.category} onValueChange={handleEditSelectChange} disabled={isSubmitting}><SelectTrigger id="editCategory" className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="editCost">Cost (₹)</Label>
-                    <Input id="editCost" name="cost" type="number" value={editedProcedureData.cost} onChange={handleEditInputChange} required min="0" disabled={isSubmitting} />
+                  <div className="space-y-1">
+                    <Label htmlFor="editCost" className="text-xs sm:text-sm font-medium">Cost (₹) *</Label>
+                    <Input id="editCost" name="cost" type="number" value={editedProcedureData.cost} onChange={handleEditInputChange} required min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editDurationMinutes">Duration (minutes)</Label>
-                  <Input id="editDurationMinutes" name="durationMinutes" type="number" value={editedProcedureData.durationMinutes || 0} onChange={handleEditInputChange} min="0" disabled={isSubmitting} />
+                <div className="space-y-1">
+                  <Label htmlFor="editDurationMinutes" className="text-xs sm:text-sm font-medium">Duration (minutes)</Label>
+                  <Input id="editDurationMinutes" name="durationMinutes" type="number" value={editedProcedureData.durationMinutes || 0} onChange={handleEditInputChange} min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editVideoUrl">Demo Video Link (Optional)</Label>
-                  <Input id="editVideoUrl" name="videoUrl" value={editedProcedureData.videoUrl || ''} onChange={handleEditInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting}/>
+                <div className="space-y-1">
+                  <Label htmlFor="editVideoUrl" className="text-xs sm:text-sm font-medium">Demo Video Link (Optional)</Label>
+                  <Input id="editVideoUrl" name="videoUrl" value={editedProcedureData.videoUrl || ''} onChange={handleEditInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
-                <div className="border-t pt-4">{renderMaterialsFields(editedProcedureMaterials, setEditedProcedureMaterials, isSubmitting)}</div>
+                <div className="border-t border-border/60 pt-3">{renderMaterialsFields(editedProcedureMaterials, setEditedProcedureMaterials, isSubmitting)}</div>
             </div>
-            <DialogFooter className="border-t pt-4"><DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose><Button type="submit" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Changes'}</Button></DialogFooter>
+            <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">
+              <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+              <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving...</> : 'Save Changes'}</Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Card className="border-0 sm:border shadow-none sm:shadow-lg bg-transparent sm:bg-card">
-        <CardHeader className="no-print px-1 sm:px-6 pb-2 sm:pb-6">
-            <CardTitle className="text-xl sm:text-2xl flex items-center"><ClipboardList className="mr-2 h-5 w-5 text-primary" />Available Procedures</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Browse, manage, and link procedures to patients. Procedures are grouped by category.</CardDescription>
-            <div className="relative pt-2 sm:pt-3">
+      <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+        <CardContent className="px-0 sm:px-6 pt-1 sm:pt-6 space-y-3 sm:space-y-4">
+            <div className="relative no-print">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Search by name or description..."
+                    placeholder="Search procedures by name, category, or description..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 sm:pl-10 h-9 sm:h-10 text-sm"
+                    className="pl-9 sm:pl-10 h-9 sm:h-10 text-xs sm:text-sm"
                 />
             </div>
-        </CardHeader>
-        <CardContent className="px-0 sm:px-6">{renderContent()}</CardContent>
+            {renderContent()}
+        </CardContent>
       </Card>
     </div>
   );

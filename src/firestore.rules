@@ -8,18 +8,24 @@ service cloud.firestore {
     }
 
     function isClinicAdmin(clinicId) {
-      return exists(
-        /databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)
-      ) &&
-      get(
-        /databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)
-      ).data.role == 'admin';
+      return (
+        (exists(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)).data.role == 'admin') ||
+        (exists(/databases/$(database)/documents/clinics/$(clinicId)) &&
+         get(/databases/$(database)/documents/clinics/$(clinicId)).data.createdBy == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'owner'] ||
+          !('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data)))
+      );
     }
 
     function isClinicMember(clinicId) {
-      return exists(
-        /databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)
-      );
+      return exists(/databases/$(database)/documents/clinics/$(clinicId)/members/$(request.auth.uid)) ||
+             (exists(/databases/$(database)/documents/clinics/$(clinicId)) &&
+              get(/databases/$(database)/documents/clinics/$(clinicId)).data.createdBy == request.auth.uid) ||
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId);
     }
 
     /* ================= USERS ================= */
@@ -43,8 +49,7 @@ service cloud.firestore {
 
     /* ================= SURVEY RESPONSES ================= */
     match /survey_responses/{responseId} {
-      allow create: if signedIn();
-      allow read: if false; // Only accessible via admin panel/Firebase console
+      allow create, read: if signedIn();
     }
 
     /* ================= CLINICS ================= */
@@ -57,8 +62,9 @@ service cloud.firestore {
       // Anyone signed in can create a clinic
       allow create: if signedIn();
 
-      // Only admins can update/delete clinic
-      allow update, delete: if signedIn() && isClinicAdmin(clinicId);
+      // Clinic members / admins can update clinic (e.g., active dates), admins can delete
+      allow update: if signedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
+      allow delete: if signedIn() && isClinicAdmin(clinicId);
     }
 
     /* ================= MEMBERS ================= */
@@ -80,7 +86,7 @@ service cloud.firestore {
     /* ================= PATIENTS ================= */
     match /clinics/{clinicId}/patients/{patientId} {
       allow read, create, update: if signedIn() && isClinicMember(clinicId);
-      allow delete: if signedIn() && isClinicAdmin(clinicId);
+      allow delete: if signedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
     }
 
     /* ================= DRUGS ================= */
@@ -182,8 +188,7 @@ service cloud.firestore {
     // Recursive wildcard {document=**} matches any nested documents and subcollections,
     // and correctly permits collection list/query operations (onSnapshot/getDocs).
     match /clinics/{clinicId}/{document=**} {
-      allow read, create: if signedIn() && isClinicMember(clinicId);
-      allow update, delete: if signedIn() && isClinicAdmin(clinicId);
+      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
     }
 
     /* ===============================================================

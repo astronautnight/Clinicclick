@@ -149,80 +149,121 @@ function computeColumnsForDay(appts: Appointment[]) {
 }
 
 const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onEdit, onDelete }: { appointments: Appointment[]; title: string; searchQuery: string; onSearchChange: (q: string) => void; onEdit: (app: Appointment) => void; onDelete: (app: Appointment) => void; }) => {
-  if (appointments.length === 0 && !searchQuery) {
-    return (
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-center">No appointments for this period.</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
-    <Card className="mt-4">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <div className="relative pt-2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search appointments..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        {appointments.length === 0 && searchQuery ? (
-          <p className="text-muted-foreground text-center">No appointments match your search.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>Patient</TableHead>
-                <TableHead>Doctor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {appointments.map(app => (
-                <TableRow key={app.id}>
-                  <TableCell>{format(new Date(app.date), 'dd/MM/yyyy')}</TableCell>
-                  <TableCell>{app.startTime} - {app.endTime}</TableCell>
-                  <TableCell>{app.patientName}</TableCell>
-                  <TableCell>{app.doctorName}</TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      app.status === 'Completed' ? 'secondary' :
-                        app.status === 'Confirmed' ? 'default' :
-                          app.status === 'Cancelled' || app.status === 'Missed' ? 'destructive' :
-                            'outline'
-                    }>{app.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
-                      <Edit3 className="h-4 w-4" />
+    <div className="space-y-3 mt-4">
+      {/* Search Input Bar without redundant title banner */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search appointments by patient, doctor, or status..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-9 sm:pl-10 h-9 sm:h-10 text-xs sm:text-sm"
+        />
+      </div>
+
+      {appointments.length === 0 ? (
+        <Card className="border-border/70 shadow-none">
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground text-xs sm:text-sm">
+              {searchQuery ? "No appointments match your search." : "No appointments scheduled for this period."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile Card List (Clear visual hierarchy & self-contained card container) */}
+          <div className="space-y-2.5 sm:hidden">
+            {appointments.map(app => (
+              <div 
+                key={app.id} 
+                onClick={() => onEdit(app)}
+                className="rounded-xl border border-border/80 bg-card p-3 shadow-xs active:scale-[0.99] transition-all cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-sm text-foreground truncate">{app.patientName}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                      <span>{app.doctorName}</span>
+                      <span>&bull;</span>
+                      <span>{format(new Date(app.date), 'dd/MM/yyyy')}</span>
+                    </p>
+                  </div>
+                  <Badge variant={
+                    app.status === 'Completed' ? 'secondary' :
+                      app.status === 'Confirmed' ? 'default' :
+                        app.status === 'Cancelled' || app.status === 'Missed' ? 'destructive' :
+                          'outline'
+                  } className="text-2xs shrink-0">{app.status}</Badge>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground/90 bg-muted/50 px-2 py-0.5 rounded text-2xs">
+                    {app.startTime} - {app.endTime}
+                  </span>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onEdit(app)}>
+                      <Edit3 className="h-3.5 w-3.5 mr-1" /> Edit
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(app)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10" onClick={() => onDelete(app)}>
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <Card className="hidden sm:block border-border/80 shadow-xs">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Doctor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {appointments.map(app => (
+                    <TableRow key={app.id}>
+                      <TableCell>{format(new Date(app.date), 'dd/MM/yyyy')}</TableCell>
+                      <TableCell>{app.startTime} - {app.endTime}</TableCell>
+                      <TableCell className="font-medium">{app.patientName}</TableCell>
+                      <TableCell>{app.doctorName}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          app.status === 'Completed' ? 'secondary' :
+                            app.status === 'Confirmed' ? 'default' :
+                              app.status === 'Cancelled' || app.status === 'Missed' ? 'destructive' :
+                                'outline'
+                        }>{app.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => onDelete(app)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+};
 
 const QuickAddPatientForm = ({ onPatientAdded, user, clinicId }: { onPatientAdded: (patientId: string) => void; user: any; clinicId: string }) => {
   const [firstName, setFirstName] = useState('');
@@ -265,24 +306,24 @@ const QuickAddPatientForm = ({ onPatientAdded, user, clinicId }: { onPatientAdde
   };
 
   return (
-    <form onSubmit={handleQuickSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="quickFirstName">First Name *</Label>
-          <Input id="quickFirstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required disabled={isSubmitting} />
+    <form onSubmit={handleQuickSubmit} className="space-y-3 pt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+        <div className="space-y-1">
+          <Label htmlFor="quickFirstName" className="text-xs sm:text-sm font-medium">First Name *</Label>
+          <Input id="quickFirstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
         </div>
-        <div>
-          <Label htmlFor="quickLastName">Last Name *</Label>
-          <Input id="quickLastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required disabled={isSubmitting} />
+        <div className="space-y-1">
+          <Label htmlFor="quickLastName" className="text-xs sm:text-sm font-medium">Last Name *</Label>
+          <Input id="quickLastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
         </div>
       </div>
-      <div>
-        <Label htmlFor="quickContact">Contact Number *</Label>
-        <Input id="quickContact" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} required disabled={isSubmitting} />
+      <div className="space-y-1">
+        <Label htmlFor="quickContact" className="text-xs sm:text-sm font-medium">Contact Number *</Label>
+        <Input id="quickContact" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
       </div>
-      <DialogFooter className="pt-4 border-t">
-        <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add Patient'}</Button>
+      <DialogFooter className="pt-3 border-t flex flex-row items-center justify-end gap-2">
+        <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+        <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add Patient'}</Button>
       </DialogFooter>
     </form>
   )
@@ -573,14 +614,16 @@ export default function AppointmentsPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold tracking-tight flex items-center">
-            <CalendarDays className="mr-3 h-8 w-8 text-special2" />
+      <div className="space-y-4 sm:space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 no-print">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+            <CalendarDays className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special2" />
             Appointments
           </h1>
-          <Button onClick={openAddForm} disabled={!user || !!noClinic}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Appointment
+          <Button onClick={openAddForm} disabled={!user || !!noClinic} className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4">
+            <PlusCircle className="mr-1.5 sm:mr-2 h-4 w-4" />
+            <span className="sm:hidden">Add Appt</span>
+            <span className="hidden sm:inline">Add New Appointment</span>
           </Button>
         </div>
 
@@ -590,30 +633,30 @@ export default function AppointmentsPage() {
           setIsFormOpen(isOpen);
           if (!isOpen) { setEditingAppointmentId(null); setCurrentAppointment(initialAppointmentData); }
         }}>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle>{editingAppointmentId ? 'Edit Appointment' : 'Schedule New Appointment'}</DialogTitle>
-              <CardDescription>Fill in the details for the appointment.</CardDescription>
+          <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-[525px] max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
+            <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
+              <DialogTitle className="text-base sm:text-xl font-bold">{editingAppointmentId ? 'Edit Appointment' : 'Schedule New Appointment'}</DialogTitle>
+              <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">Fill in the details for the appointment.</CardDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
-                <div>
-                  <Label htmlFor="patientId">Patient *</Label>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3 sm:space-y-3.5">
+                <div className="space-y-1">
+                  <Label htmlFor="patientId" className="text-xs sm:text-sm font-medium">Patient *</Label>
                   <div className="flex gap-2">
                     <Select name="patientId" value={currentAppointment.patientId} onValueChange={(val) => handleSelectChange('patientId', val)} required>
-                      <SelectTrigger><SelectValue placeholder="Select Patient" /></SelectTrigger>
+                      <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select Patient" /></SelectTrigger>
                       <SelectContent>{patients.map(p => <SelectItem key={p.id} value={p.id}>{p.firstName} {p.lastName} {p.isConsult ? '(Consult)' : ''}</SelectItem>)}</SelectContent>
                     </Select>
                     <Dialog open={isQuickAddPatientOpen} onOpenChange={setIsQuickAddPatientOpen}>
                       <DialogTrigger asChild>
-                        <Button type="button" variant="outline" size="icon" aria-label="Add new patient">
-                          <UserPlus className="h-4 w-4" />
+                        <Button type="button" variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" aria-label="Add new patient">
+                          <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Quick Add Patient</DialogTitle>
-                          <CardDescription>Add a new patient for OPD.</CardDescription>
+                      <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-3.5 sm:p-6 shadow-2xl border border-border/80">
+                        <DialogHeader className="pb-2 border-b">
+                          <DialogTitle className="text-base sm:text-lg">Quick Add Patient</DialogTitle>
+                          <CardDescription className="text-xs">Add a new patient for OPD.</CardDescription>
                         </DialogHeader>
                         {clinicId && <QuickAddPatientForm user={user} clinicId={clinicId} onPatientAdded={(patientId) => {
                           handleSelectChange('patientId', patientId);
@@ -623,46 +666,46 @@ export default function AppointmentsPage() {
                     </Dialog>
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="doctorId">Doctor *</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="doctorId" className="text-xs sm:text-sm font-medium">Doctor *</Label>
                   <Select name="doctorId" value={currentAppointment.doctorId || ''} onValueChange={(val) => handleSelectChange('doctorId', val)} required>
-                    <SelectTrigger><SelectValue placeholder="Select Doctor" /></SelectTrigger>
+                    <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select Doctor" /></SelectTrigger>
                     <SelectContent>{doctors.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><Label htmlFor="date">Date *</Label><Input id="date" name="date" type="date" value={currentAppointment.date} onChange={handleInputChange} required /></div>
-                  <div>
-                    <Label htmlFor="status">Status *</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                  <div className="space-y-1"><Label htmlFor="date" className="text-xs sm:text-sm font-medium">Date *</Label><Input id="date" name="date" type="date" value={currentAppointment.date} onChange={handleInputChange} required className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                  <div className="space-y-1">
+                    <Label htmlFor="status" className="text-xs sm:text-sm font-medium">Status *</Label>
                     <Select name="status" value={currentAppointment.status} onValueChange={(val: Appointment['status']) => handleSelectChange('status', val)} required>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {(['Scheduled', 'Confirmed', 'Completed', 'Cancelled', 'Missed', 'Postponed'] as Appointment['status'][]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><Label htmlFor="startTime">Start Time *</Label><Input id="startTime" name="startTime" type="time" value={currentAppointment.startTime} onChange={handleInputChange} required /></div>
-                  <div><Label htmlFor="endTime">End Time *</Label><Input id="endTime" name="endTime" type="time" value={currentAppointment.endTime} onChange={handleInputChange} required /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                  <div className="space-y-1"><Label htmlFor="startTime" className="text-xs sm:text-sm font-medium">Start Time *</Label><Input id="startTime" name="startTime" type="time" value={currentAppointment.startTime} onChange={handleInputChange} required className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                  <div className="space-y-1"><Label htmlFor="endTime" className="text-xs sm:text-sm font-medium">End Time *</Label><Input id="endTime" name="endTime" type="time" value={currentAppointment.endTime} onChange={handleInputChange} required className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
                 </div>
-                <div className="items-start flex space-x-2">
+                <div className="items-start flex space-x-2 pt-1">
                   <Checkbox id="isConsult" checked={currentAppointment.isConsult} onCheckedChange={(checked) => setCurrentAppointment(prev => ({ ...prev, isConsult: !!checked }))} />
-                  <div className="grid gap-1.5 leading-none"><Label htmlFor="isConsult" className="text-sm font-medium">This is a consultation appointment</Label></div>
+                  <div className="grid gap-1 leading-none"><Label htmlFor="isConsult" className="text-xs sm:text-sm font-medium cursor-pointer">This is a consultation appointment</Label></div>
                 </div>
 
                 {currentAppointment.isConsult && (
-                  <div className="space-y-2 pl-6">
-                    <Label htmlFor="consultLocation">Consult Location / Clinic Name</Label>
-                    <Input id="consultLocation" name="consultLocation" value={currentAppointment.consultLocation || ''} onChange={handleInputChange} placeholder="e.g., City General Hospital" />
+                  <div className="space-y-1 pl-5 pt-1">
+                    <Label htmlFor="consultLocation" className="text-xs sm:text-sm font-medium">Consult Location / Clinic Name</Label>
+                    <Input id="consultLocation" name="consultLocation" value={currentAppointment.consultLocation || ''} onChange={handleInputChange} placeholder="e.g., City General Hospital" className="h-8 sm:h-9 text-xs sm:text-sm" />
                   </div>
                 )}
 
-                <div>
-                  <Label>Linked Procedures</Label>
-                  <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                    {procedures.length === 0 ? <p className="text-sm text-muted-foreground">No procedures found.</p> : procedures.map(proc => (
-                      <div key={proc.id} className="flex items-center space-x-2">
+                <div className="space-y-1">
+                  <Label className="text-xs sm:text-sm font-medium">Linked Procedures</Label>
+                  <div className="border rounded-md p-2 space-y-1 max-h-32 sm:max-h-40 overflow-y-auto bg-muted/20">
+                    {procedures.length === 0 ? <p className="text-xs text-muted-foreground">No procedures found.</p> : procedures.map(proc => (
+                      <div key={proc.id} className="flex items-center space-x-2 py-0.5">
                         <Checkbox checked={(currentAppointment.procedureIds || []).includes(proc.id)} onCheckedChange={() => setCurrentAppointment(prev => {
                           const prevIds = prev.procedureIds || [];
                           return {
@@ -670,24 +713,24 @@ export default function AppointmentsPage() {
                             procedureIds: prevIds.includes(proc.id) ? prevIds.filter(id => id !== proc.id) : [...prevIds, proc.id]
                           };
                         })} />
-                        <span className="text-sm">{proc.name}</span>
+                        <span className="text-xs sm:text-sm">{proc.name}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div><Label htmlFor="notes">Additional Notes (Optional)</Label><Textarea id="notes" name="notes" value={currentAppointment.notes || ''} onChange={handleInputChange} placeholder="Any specific instructions or details for the appointment." /></div>
+                <div className="space-y-1"><Label htmlFor="notes" className="text-xs sm:text-sm font-medium">Additional Notes (Optional)</Label><Textarea id="notes" name="notes" value={currentAppointment.notes || ''} onChange={handleInputChange} placeholder="Any specific instructions or details for the appointment." className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
               </div>
-              <DialogFooter className="pt-4 border-t flex flex-row justify-between items-center w-full">
+              <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row justify-between items-center w-full bg-background">
                 <div>
                   {editingAppointmentId && (
-                    <Button type="button" variant="destructive" onClick={handleEditDelete}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    <Button type="button" variant="destructive" size="sm" className="h-8 text-xs px-2.5" onClick={handleEditDelete}>
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
                     </Button>
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                  <Button type="submit">{editingAppointmentId ? 'Save Changes' : 'Schedule Appointment'}</Button>
+                  <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+                  <Button type="submit" size="sm" className="h-8 text-xs">{editingAppointmentId ? 'Save Changes' : 'Schedule Appointment'}</Button>
                 </div>
               </DialogFooter>
             </form>

@@ -31,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye } from "lucide-react";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -728,42 +728,105 @@ export default function PatientsPage() {
     }
 
     return (
-        <div className="px-1 sm:px-4 py-2 sm:py-4">
-            {/* Patient Header */}
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5 sm:mb-6 no-print">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-                    <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
-                        <AvatarImage src={undefined} />
-                        <AvatarFallback className="text-xl sm:text-2xl">{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <h3 className="text-xl sm:text-2xl font-bold">{patient.firstName} {patient.lastName}</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground">{patient.isConsult ? `Consult @ ${patient.consultLocation || 'N/A'}` : 'Primary Patient'}</p>
-                        <div className="text-xs sm:text-sm mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                            <p><strong>DOB:</strong> {patient.dateOfBirth ? format(new Date(patient.dateOfBirth), 'dd/MM/yyyy') : 'N/A'}</p>
-                            <p><strong>Phone:</strong> {patient.contactNumber || 'N/A'}</p>
-                            <p><strong>WhatsApp:</strong> {patient.whatsappId || 'N/A'}</p>
-                            <p><strong>Email:</strong> {patient.email || 'N/A'}</p>
-                            <p className="col-span-2"><strong>Address:</strong> {patient.address || 'N/A'}</p>
-                            <p><strong>Gender:</strong> {patient.gender}</p>
+        <div className="space-y-4">
+            {/* Patient Details Container (Level 2 Nested Hierarchy) */}
+            <div className="rounded-xl bg-card border border-border/80 p-3.5 sm:p-5 shadow-xs no-print">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                        <Avatar className="h-12 w-12 sm:h-16 sm:w-16 shrink-0 ring-2 ring-primary/20">
+                            <AvatarImage src={undefined} />
+                            <AvatarFallback className="text-base sm:text-lg font-bold bg-primary/10 text-primary">
+                                {patient.firstName?.[0]}{patient.lastName?.[0]}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-base sm:text-xl font-bold text-foreground truncate">
+                                    {patient.firstName} {patient.lastName}
+                                </h3>
+                                {patient.isConsult ? (
+                                    <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-xs">
+                                        Consult @ {patient.consultLocation || 'N/A'}
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="secondary" className="text-xs">Primary Patient</Badge>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Patient File &bull; Record ID: <span className="font-mono">{patient.id.slice(0, 8)}</span>
+                            </p>
                         </div>
                     </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                        <Button variant="outline" size="sm" className="h-8 text-xs font-medium" onClick={(e) => { e.stopPropagation(); openEditForm(patient); }}>
+                            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit Record
+                        </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" className="h-8 px-2.5" onClick={(e) => {e.stopPropagation(); setPatientToDelete(patient);}}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>This will permanently delete {patientToDelete?.firstName} {patientToDelete?.lastName}'s record.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={(e) => { e.stopPropagation(); setPatientToDelete(null); }}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={(e) => { e.stopPropagation(); handleDeletePatient(); }}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); openEditForm(patient); }}>
-                        <Pencil className="mr-1 h-3.5 w-3.5" /> Edit Record
-                    </Button>
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" onClick={(e) => {e.stopPropagation(); setPatientToDelete(patient);}}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {patientToDelete?.firstName} {patientToDelete?.lastName}'s record.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel onClick={(e) => { e.stopPropagation(); setPatientToDelete(null); }}>Cancel</AlertDialogCancel><AlertDialogAction onClick={(e) => { e.stopPropagation(); handleDeletePatient(); }}>Delete</AlertDialogAction></AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+
+                {/* Key-Value Details Grid */}
+                <div className="mt-4 pt-3.5 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs sm:text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                        <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">DOB:</span>
+                        <span className="truncate">{patient.dateOfBirth ? `${format(new Date(patient.dateOfBirth), 'dd/MM/yyyy')} (${differenceInYears(new Date(), new Date(patient.dateOfBirth))} yrs)` : 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                        <Phone className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">Phone:</span>
+                        <span className="truncate">{patient.contactNumber || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                        <MessageSquare className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-medium text-foreground">WhatsApp:</span>
+                        <span className="truncate">{patient.whatsappId || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">Email:</span>
+                        <span className="truncate">{patient.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                        <User className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">Gender:</span>
+                        <span className="truncate">{patient.gender || 'N/A'}</span>
+                    </div>
+                    {patient.bloodGroup && (
+                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                            <span className="font-medium text-foreground">Blood:</span>
+                            <span className="truncate">{patient.bloodGroup}</span>
+                        </div>
+                    )}
+                    {patient.occupation && (
+                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                            <span className="font-medium text-foreground">Occupation:</span>
+                            <span className="truncate">{patient.occupation}</span>
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md sm:col-span-2 lg:col-span-3">
+                        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">Address:</span>
+                        <span className="truncate">{patient.address || 'N/A'}</span>
+                    </div>
                 </div>
             </div>
 
@@ -972,35 +1035,64 @@ export default function PatientsPage() {
     }
     
     return (
-      <Accordion type="multiple" className="space-y-2">
+      <Accordion type="multiple" className="space-y-3">
         {filteredPatients.map((patient) => (
-            <AccordionItem value={patient.id} key={patient.id} className="border-b sm:border-b-0 border-border/50">
-                <Card className={cn(
-                    "border-0 sm:border shadow-none sm:shadow-sm rounded-none sm:rounded-lg bg-transparent sm:bg-card",
-                    patient.isConsult ? "sm:border-accent" : ""
-                )}>
-                    <AccordionTrigger className="px-1 py-3 sm:p-4 hover:no-underline w-full no-print">
-                      <div className="flex justify-between items-center w-full">
-                          <div className="flex items-center gap-3 sm:gap-4 text-left min-w-0">
-                              <Avatar className="h-9 w-9 sm:h-10 sm:w-10 shrink-0">
-                                <AvatarImage src={undefined} />
-                                <AvatarFallback className="text-sm">{patient.firstName?.[0]}{patient.lastName?.[0]}</AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <div className="font-semibold text-sm sm:text-base truncate">{patient.firstName} {patient.lastName}</div>
-                                <div className="text-xs sm:text-sm text-muted-foreground truncate">{patient.contactNumber}</div>
-                              </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                              {patient.isConsult && <Badge variant="outline" className="border-accent text-accent text-xs">Consult</Badge>}
-                          </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-0 sm:px-0">
-                        <PatientDetailView patient={patient} />
-                    </AccordionContent>
-                </Card>
-            </AccordionItem>
+          <AccordionItem 
+            value={patient.id} 
+            key={patient.id} 
+            className="border border-border/80 dark:border-border/60 rounded-xl bg-card shadow-xs overflow-hidden transition-all data-[state=open]:shadow-md data-[state=open]:border-primary/40 mb-3"
+          >
+            {/* Level 1: Primary Patient Summary Trigger */}
+            <AccordionTrigger className="px-3.5 py-3 sm:px-4 sm:py-3.5 hover:no-underline w-full no-print hover:bg-muted/30 transition-colors">
+              <div className="flex justify-between items-center w-full pr-2 text-left">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <Avatar className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 ring-1 ring-border">
+                    <AvatarImage src={undefined} />
+                    <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
+                      {patient.firstName?.[0]}{patient.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm sm:text-base text-foreground truncate">
+                        {patient.firstName} {patient.lastName}
+                      </span>
+                      {patient.gender && (
+                        <span className="hidden xs:inline-block text-2xs text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
+                          {patient.gender}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                      <span className="truncate">{patient.contactNumber || 'No phone'}</span>
+                      {patient.dateOfBirth && (
+                        <>
+                          <span>&bull;</span>
+                          <span className="truncate">{differenceInYears(new Date(), new Date(patient.dateOfBirth))} yrs</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  {patient.isConsult ? (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-2xs sm:text-xs">
+                      Consult
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-2xs sm:text-xs hidden xs:inline-flex">
+                      Primary
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </AccordionTrigger>
+
+            {/* Level 2: Expanded Details Container */}
+            <AccordionContent className="p-2.5 sm:p-4 bg-muted/20 dark:bg-muted/10 border-t border-border/60">
+              <PatientDetailView patient={patient} />
+            </AccordionContent>
+          </AccordionItem>
         ))}
       </Accordion>
     );
@@ -1059,66 +1151,77 @@ export default function PatientsPage() {
               <span className="hidden sm:inline">Add New Patient</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>{editingPatientId ? 'Edit Patient Details' : 'Add New Patient'}</DialogTitle>
-              <DialogDescription>
-                Fill in the details for the patient.
+          <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-3xl md:max-w-4xl max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
+            <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
+              <DialogTitle className="text-base sm:text-xl font-bold">{editingPatientId ? 'Edit Patient Details' : 'Add New Patient'}</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Fill in the details for the patient record.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-6 py-4 max-h-[80vh] overflow-y-auto pr-4">
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3.5 sm:space-y-5">
 
                 {/* Personal Details */}
-                <fieldset className="border-t pt-4">
-                  <legend className="text-lg font-medium mb-4">Personal Details</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label htmlFor="firstName">First Name *</Label><Input id="firstName" name="firstName" value={formData.firstName} onChange={handleInputChange} required disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="lastName">Last Name *</Label><Input id="lastName" name="lastName" value={formData.lastName} onChange={handleInputChange} required disabled={isSubmitting} /></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="dateOfBirth">Date of Birth *</Label>
+                <div className="rounded-lg bg-card/60 sm:bg-transparent border sm:border-0 p-2.5 sm:p-0">
+                  <div className="flex items-center gap-1.5 mb-2.5 pb-1 border-b border-border/60">
+                    <User className="h-3.5 w-3.5 text-primary" />
+                    <h4 className="text-xs sm:text-sm font-semibold tracking-wide text-foreground">Personal Details</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3.5">
+                    <div className="space-y-1"><Label htmlFor="firstName" className="text-xs sm:text-sm font-medium">First Name *</Label><Input id="firstName" name="firstName" value={formData.firstName} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="space-y-1"><Label htmlFor="lastName" className="text-xs sm:text-sm font-medium">Last Name *</Label><Input id="lastName" name="lastName" value={formData.lastName} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                        <div className="space-y-1">
+                            <Label htmlFor="dateOfBirth" className="text-xs sm:text-sm font-medium">Date of Birth *</Label>
                             <Popover><PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!formData.dateOfBirth && "text-muted-foreground")}>
-                                <CalendarIcon className="mr-2 h-4 w-4" />{formData.dateOfBirth ? format(new Date(formData.dateOfBirth), 'dd/MM/yyyy') : <span>Pick a date</span>}
+                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm",!formData.dateOfBirth && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />{formData.dateOfBirth ? format(new Date(formData.dateOfBirth), 'dd/MM/yyyy') : <span>Pick a date</span>}
                                 </Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined} onSelect={handleDateChange} captionLayout="dropdown-buttons" fromYear={1930} toYear={new Date().getFullYear()} initialFocus /></PopoverContent>
                             </Popover>
                         </div>
-                        <div className="space-y-2"><Label htmlFor="age">or Age (in years)</Label><Input id="age" name="age" type="number" value={age} onChange={handleAgeChange} onBlur={handleAgeBlur} placeholder="e.g., 35" disabled={isSubmitting} /></div>
+                        <div className="space-y-1"><Label htmlFor="age" className="text-xs sm:text-sm font-medium">or Age (in years)</Label><Input id="age" name="age" type="number" value={age} onChange={handleAgeChange} onBlur={handleAgeBlur} placeholder="e.g., 35" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="gender">Gender *</Label>
-                      <Select name="gender" value={formData.gender} onValueChange={handleSelectChange} disabled={isSubmitting}><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select>
+                    <div className="space-y-1">
+                      <Label htmlFor="gender" className="text-xs sm:text-sm font-medium">Gender *</Label>
+                      <Select name="gender" value={formData.gender} onValueChange={handleSelectChange} disabled={isSubmitting}><SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select gender" /></SelectTrigger><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select>
                     </div>
-                    <div className="space-y-2"><Label htmlFor="contactNumber">Contact Number *</Label><Input id="contactNumber" name="contactNumber" value={formData.contactNumber} onChange={handleInputChange} required disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="whatsappId">WhatsApp ID (Optional)</Label><Input id="whatsappId" name="whatsappId" value={formData.whatsappId || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="email">Email (Optional)</Label><Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
-                    <div className="space-y-2 md:col-span-2"><Label htmlFor="address">Address (Optional)</Label><Textarea id="address" name="address" value={formData.address || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="occupation">Occupation (Optional)</Label><Input id="occupation" name="occupation" value={formData.occupation || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="bloodGroup">Blood Group (Optional)</Label><Input id="bloodGroup" name="bloodGroup" value={formData.bloodGroup || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
+                    <div className="space-y-1"><Label htmlFor="contactNumber" className="text-xs sm:text-sm font-medium">Contact Number *</Label><Input id="contactNumber" name="contactNumber" value={formData.contactNumber} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="space-y-1"><Label htmlFor="whatsappId" className="text-xs sm:text-sm font-medium">WhatsApp ID (Optional)</Label><Input id="whatsappId" name="whatsappId" value={formData.whatsappId || ''} onChange={handleInputChange} disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="space-y-1"><Label htmlFor="email" className="text-xs sm:text-sm font-medium">Email (Optional)</Label><Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleInputChange} disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="space-y-1 md:col-span-2"><Label htmlFor="address" className="text-xs sm:text-sm font-medium">Address (Optional)</Label><Textarea id="address" name="address" value={formData.address || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+                    <div className="space-y-1"><Label htmlFor="occupation" className="text-xs sm:text-sm font-medium">Occupation (Optional)</Label><Input id="occupation" name="occupation" value={formData.occupation || ''} onChange={handleInputChange} disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
+                    <div className="space-y-1"><Label htmlFor="bloodGroup" className="text-xs sm:text-sm font-medium">Blood Group (Optional)</Label><Input id="bloodGroup" name="bloodGroup" value={formData.bloodGroup || ''} onChange={handleInputChange} disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" /></div>
                   </div>
-                  <div className="flex items-start space-x-2 mt-4"><Checkbox id="isConsult" checked={formData.isConsult} onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isConsult: !!checked }))} /><div className="grid gap-1.5 leading-none"><Label htmlFor="isConsult">This is a consultation patient from another clinic</Label></div></div>
-                   {formData.isConsult && (<div className="space-y-2 pl-6 pt-2"><Label htmlFor="consultLocation">Consult Location / Clinic Name</Label><Input id="consultLocation" name="consultLocation" value={formData.consultLocation || ''} onChange={handleInputChange} placeholder="e.g., City General Hospital" /></div>)}
-                </fieldset>
+                  <div className="flex items-start space-x-2 mt-3 pt-1"><Checkbox id="isConsult" checked={formData.isConsult} onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isConsult: !!checked }))} /><div className="grid gap-1 leading-none"><Label htmlFor="isConsult" className="text-xs sm:text-sm cursor-pointer">This is a consultation patient from another clinic</Label></div></div>
+                   {formData.isConsult && (<div className="space-y-1 pl-5 pt-2"><Label htmlFor="consultLocation" className="text-xs sm:text-sm font-medium">Consult Location / Clinic Name</Label><Input id="consultLocation" name="consultLocation" value={formData.consultLocation || ''} onChange={handleInputChange} placeholder="e.g., City General Hospital" className="h-8 sm:h-9 text-xs sm:text-sm" /></div>)}
+                </div>
 
-                <fieldset className="border-t pt-4">
-                  <legend className="text-lg font-medium mb-4">Medical & Dental History</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label htmlFor="allergies">Allergies (Optional)</Label><Textarea id="allergies" name="allergies" value={formData.allergies || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Penicillin, Latex" /></div>
-                    <div className="space-y-2"><Label htmlFor="medicalHistory">Medical History (Optional)</Label><Textarea id="medicalHistory" name="medicalHistory" value={formData.medicalHistory || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Diabetes, Hypertension" /></div>
-                    <div className="space-y-2 md:col-span-2"><Label htmlFor="dentalHistory">Dental History (Optional)</Label><Textarea id="dentalHistory" name="dentalHistory" value={formData.dentalHistory || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Previous extractions, braces" /></div>
+                {/* Medical & Dental History */}
+                <div className="rounded-lg bg-card/60 sm:bg-transparent border sm:border-0 p-2.5 sm:p-0">
+                  <div className="flex items-center gap-1.5 mb-2.5 pb-1 border-b border-border/60">
+                    <BriefcaseMedical className="h-3.5 w-3.5 text-primary" />
+                    <h4 className="text-xs sm:text-sm font-semibold tracking-wide text-foreground">Medical & Dental History</h4>
                   </div>
-                </fieldset>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3.5">
+                    <div className="space-y-1"><Label htmlFor="allergies" className="text-xs sm:text-sm font-medium">Allergies (Optional)</Label><Textarea id="allergies" name="allergies" value={formData.allergies || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Penicillin, Latex" className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+                    <div className="space-y-1"><Label htmlFor="medicalHistory" className="text-xs sm:text-sm font-medium">Medical History (Optional)</Label><Textarea id="medicalHistory" name="medicalHistory" value={formData.medicalHistory || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Diabetes, Hypertension" className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+                    <div className="space-y-1 md:col-span-2"><Label htmlFor="dentalHistory" className="text-xs sm:text-sm font-medium">Dental History (Optional)</Label><Textarea id="dentalHistory" name="dentalHistory" value={formData.dentalHistory || ''} onChange={handleInputChange} disabled={isSubmitting} placeholder="e.g., Previous extractions, braces" className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+                  </div>
+                </div>
 
-                <fieldset className="border-t pt-4">
-                  <legend className="text-lg font-medium mb-4">Diagnosis & Treatment Plan</legend>
-                  <div className="space-y-4">
-                    <div className="space-y-2"><Label htmlFor="diagnosis">Diagnosis</Label><Textarea id="diagnosis" name="diagnosis" value={formData.diagnosis || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
-                    <div className="space-y-2"><Label htmlFor="treatmentPlan">Treatment Plan</Label><Textarea id="treatmentPlan" name="treatmentPlan" value={formData.treatmentPlan || ''} onChange={handleInputChange} disabled={isSubmitting} /></div>
+                {/* Diagnosis & Treatment Plan */}
+                <div className="rounded-lg bg-card/60 sm:bg-transparent border sm:border-0 p-2.5 sm:p-0">
+                  <div className="flex items-center gap-1.5 mb-2.5 pb-1 border-b border-border/60">
+                    <FileText className="h-3.5 w-3.5 text-primary" />
+                    <h4 className="text-xs sm:text-sm font-semibold tracking-wide text-foreground">Diagnosis & Treatment Plan</h4>
+                  </div>
+                  <div className="space-y-2.5 sm:space-y-3.5">
+                    <div className="space-y-1"><Label htmlFor="diagnosis" className="text-xs sm:text-sm font-medium">Diagnosis</Label><Textarea id="diagnosis" name="diagnosis" value={formData.diagnosis || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+                    <div className="space-y-1"><Label htmlFor="treatmentPlan" className="text-xs sm:text-sm font-medium">Treatment Plan</Label><Textarea id="treatmentPlan" name="treatmentPlan" value={formData.treatmentPlan || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
                     
-                    <div className="space-y-2 pt-4">
-                      <Label>Initial Dental Chart</Label>
-                      <div className="border rounded-md p-2 sm:p-4 bg-slate-50/50 dark:bg-[#1C1C1C] overflow-hidden max-w-full">
+                    <div className="space-y-1.5 pt-1">
+                      <Label className="text-xs sm:text-sm font-medium">Initial Dental Chart</Label>
+                      <div className="border rounded-md p-1.5 sm:p-3 bg-slate-50/50 dark:bg-[#1C1C1C] overflow-hidden max-w-full">
                         <DentalChart
                           markedTeeth={formData.markedTeeth || []}
                           onTeethChange={(teeth) => setFormData(prev => ({ ...prev, markedTeeth: teeth }))}
@@ -1128,35 +1231,42 @@ export default function PatientsPage() {
                       </div>
                     </div>
                   </div>
-                </fieldset>
+                </div>
 
-                <fieldset className="border-t pt-4">
-                  <legend className="text-lg font-medium mb-4">Patient Files</legend>
-                  <div className="space-y-6">
+                {/* Patient Files */}
+                <div className="rounded-lg bg-card/60 sm:bg-transparent border sm:border-0 p-2.5 sm:p-0">
+                  <div className="flex items-center gap-1.5 mb-2.5 pb-1 border-b border-border/60">
+                    <Upload className="h-3.5 w-3.5 text-primary" />
+                    <h4 className="text-xs sm:text-sm font-semibold tracking-wide text-foreground">Patient Files</h4>
+                  </div>
+                  <div className="space-y-3.5 sm:space-y-4">
                     {[
-                      { type: 'photos', label: 'Patient Photos', desc: 'Max 5 MB per image. JPG, PNG, WebP supported.' },
-                      { type: 'xrays', label: 'X-Rays / Radiographs', desc: 'Max 5 MB per image. JPG, PNG, DICOM supported.' },
-                      { type: 'scans', label: 'Intraoral Scans', desc: 'Max 20 MB per file. PLY, OBJ, STL supported.' }
+                      { type: 'photos', label: 'Patient Photos', desc: 'Max 5 MB per image. JPG, PNG, WebP.' },
+                      { type: 'xrays', label: 'X-Rays / Radiographs', desc: 'Max 5 MB per image. JPG, PNG, DICOM.' },
+                      { type: 'scans', label: 'Intraoral Scans', desc: 'Max 20 MB per file. PLY, OBJ, STL.' }
                     ].map(({ type, label, desc }) => {
                       const fileType = type as 'photos' | 'xrays' | 'scans';
                       const existingUrls = (formData[fileType] as unknown as string[]) || [];
                       const pendingTypeUrls = pendingUrls[fileType] || [];
                       
                       return (
-                        <div key={fileType} className="space-y-4">
-                          <h4 className="text-sm font-semibold">{label}</h4>
+                        <div key={fileType} className="space-y-2 p-2 sm:p-3 rounded-lg bg-muted/20 border border-border/50">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-xs sm:text-sm font-semibold text-foreground">{label}</h5>
+                            <span className="text-2xs text-muted-foreground">{desc}</span>
+                          </div>
                           {/* Existing files */}
                           {existingUrls.length > 0 && (
-                              <div className="space-y-2">
-                                  <Label className="text-xs text-muted-foreground font-semibold uppercase">Saved files</Label>
-                                  <div className="flex flex-wrap gap-2">
+                              <div className="space-y-1">
+                                  <Label className="text-2xs text-muted-foreground font-semibold uppercase">Saved files</Label>
+                                  <div className="flex flex-wrap gap-1.5">
                                       {existingUrls.map((url, i) => (
-                                          <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-border bg-muted">
+                                          <div key={i} className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-md overflow-hidden border border-border bg-muted">
                                               <img src={url} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" />
                                               <button
                                                   type="button"
                                                   onClick={() => removeExistingFile(i, fileType)}
-                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                               >
                                                   <X className="h-3 w-3" />
                                               </button>
@@ -1167,16 +1277,16 @@ export default function PatientsPage() {
                           )}
                           {/* Pending files */}
                           {pendingTypeUrls.length > 0 && (
-                              <div className="space-y-2">
-                                  <Label className="text-xs text-muted-foreground font-semibold uppercase">New files (unsaved)</Label>
-                                  <div className="flex flex-wrap gap-2">
+                              <div className="space-y-1">
+                                  <Label className="text-2xs text-muted-foreground font-semibold uppercase">New files (unsaved)</Label>
+                                  <div className="flex flex-wrap gap-1.5">
                                       {pendingTypeUrls.map((url, i) => (
-                                          <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border-2 border-dashed border-primary/40 bg-muted">
+                                          <div key={i} className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-md overflow-hidden border-2 border-dashed border-primary/40 bg-muted">
                                               <img src={url} alt={`New ${label} ${i + 1}`} className="w-full h-full object-cover" />
                                               <button
                                                   type="button"
                                                   onClick={() => removePendingFile(i, fileType)}
-                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                                               >
                                                   <X className="h-3 w-3" />
                                               </button>
@@ -1205,22 +1315,21 @@ export default function PatientsPage() {
                                       document.getElementById(`${fileType}-upload-input`)?.click();
                                   }
                               }}
-                              className="gap-2"
+                              className="gap-1.5 h-7 sm:h-8 text-xs px-2.5"
                           >
-                              <ImagePlus className="h-4 w-4" />
+                              <ImagePlus className="h-3.5 w-3.5" />
                               Add {fileType}
                           </Button>
-                          <p className="text-xs text-muted-foreground">{desc}</p>
                         </div>
                       );
                     })}
                   </div>
-                </fieldset>
+                </div>
               </div>
 
-              <DialogFooter className="border-t pt-4">
-                <DialogClose asChild><Button type="button" variant="outline" onClick={() => setEditingPatientId(null)}>Cancel</Button></DialogClose>
-                <Button type="submit" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isSubmitting ? "Saving..." : (editingPatientId ? "Save Changes" : "Add Patient")}</Button>
+              <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">
+                <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => setEditingPatientId(null)}>Cancel</Button></DialogClose>
+                <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}{isSubmitting ? "Saving..." : (editingPatientId ? "Save Changes" : "Add Patient")}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -1236,8 +1345,8 @@ export default function PatientsPage() {
         }
         setIsLinkDialogOpen(open);
       }}>
-        <DialogContent className="sm:max-w-md no-print">
-          <DialogHeader><DialogTitle>Link Procedures to {patientToLink?.firstName}</DialogTitle></DialogHeader>
+        <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-3.5 sm:p-6 no-print">
+          <DialogHeader><DialogTitle className="text-base sm:text-lg">Link Procedures to {patientToLink?.firstName}</DialogTitle></DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
               <Label>Select Procedures</Label>
@@ -1267,11 +1376,7 @@ export default function PatientsPage() {
       </Dialog>
 
       <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-        <CardHeader className="no-print px-1 sm:px-6 pb-2 sm:pb-6">
-          <CardTitle className="text-xl sm:text-2xl">Patient List</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">Manage all patient records. Click a patient to see more details.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0 sm:px-6">
+        <CardContent className="px-0 sm:px-6 pt-1 sm:pt-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex justify-center no-print">
                 <TabsList className="h-9 sm:h-10">
