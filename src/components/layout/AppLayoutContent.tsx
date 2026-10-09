@@ -8,7 +8,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarInset,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Header } from '@/components/layout/header';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
@@ -50,7 +49,7 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
             collapsible="icon"
             className="border-r"
           >
-            <ShadSidebarHeader className="flex items-center justify-between p-4">
+            <ShadSidebarHeader className="flex items-center justify-between p-3 mb-3 border-b">
               <Link
                 href="/dashboard"
                 className="flex items-center space-x-2 group-data-[collapsible=icon]:hidden"
@@ -60,11 +59,9 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
                   Clinic<span className="text-primary">@</span>Click
                 </span>
               </Link>
-
-              <SidebarTrigger className="md:data-[sidebar=trigger]:flex" />
             </ShadSidebarHeader>
 
-            <SidebarContent className="p-2">
+            <SidebarContent className="p-2 pt-3">
               <SidebarNav items={sidebarNavItems} />
             </SidebarContent>
 
