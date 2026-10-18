@@ -1,8 +1,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { collection, doc, getDoc, onSnapshot, query, orderBy, where, getCountFromServer, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 import { useUser, useFirestore } from '@/firebase';
@@ -69,13 +70,26 @@ type JoinRequest = {
 /* ============================================================
    PAGE
 ============================================================ */
-export default function ClinicPage() {
+function ClinicPageContent() {
   const SHOW_FOUNDER_PROGRAM = false;
   const SHOW_INACTIVE_BADGE = false;
 
   const { user, clinicId, clinicRole } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+
+  const initialMode = searchParams.get('mode') === 'join' || searchParams.get('action') === 'join' ? 'join' : 'create';
+  const [setupMode, setSetupMode] = useState<'create' | 'join'>(initialMode);
+
+  useEffect(() => {
+    const param = searchParams.get('mode') || searchParams.get('action');
+    if (param === 'join') {
+      setSetupMode('join');
+    } else if (param === 'create') {
+      setSetupMode('create');
+    }
+  }, [searchParams]);
 
   const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
@@ -543,19 +557,66 @@ export default function ClinicPage() {
   ============================================================ */
   if (!clinicId) {
     return (
-      <div className="space-y-8 max-w-6xl mx-auto py-6 px-4">
-        <div className="text-center space-y-2 max-w-xl mx-auto">
+      <div className="space-y-6 max-w-xl mx-auto py-8 px-4">
+        <div className="text-center space-y-2">
           <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight flex items-center justify-center gap-3 text-slate-900 dark:text-white">
-            <Hospital className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-            Set Up Your Clinic
+            {setupMode === 'create' ? (
+              <>
+                <Hospital className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                Create Clinic
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                Join Clinic
+              </>
+            )}
           </h1>
           <p className="text-muted-foreground text-sm lg:text-base">
-            Get started by creating a new clinic workspace, or enter an invite code to join an existing clinic.
+            {setupMode === 'create'
+              ? 'Register a new clinic workspace as an administrator.'
+              : 'Request access to join an existing clinic workspace with an invite code.'}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-8 items-stretch mt-8">
-          {/* Create Clinic Card */}
+        {/* Mode Switcher Tabs */}
+        <div className="flex justify-center">
+          <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                setSetupMode('create');
+                window.history.replaceState(null, '', '/clinic?mode=create');
+              }}
+              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                setupMode === 'create'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Hospital className="h-4 w-4" />
+              Create Clinic
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSetupMode('join');
+                window.history.replaceState(null, '', '/clinic?mode=join');
+              }}
+              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+                setupMode === 'join'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              Join Clinic
+            </button>
+          </div>
+        </div>
+
+        {setupMode === 'create' ? (
+          /* Create Clinic Card */
           <Card className="flex flex-col justify-between border shadow-md hover:shadow-lg transition-shadow duration-300">
             <div>
               <CardHeader>
@@ -614,24 +675,30 @@ export default function ClinicPage() {
                 </div>
               </CardContent>
             </div>
-            <CardFooter className="pt-4 border-t mt-4">
+            <CardFooter className="flex flex-col gap-3 pt-4 border-t mt-4">
               <Button
                 onClick={handleCreateClinic}
                 className="w-full h-10 font-medium"
               >
                 Create Clinic
               </Button>
+              <div className="text-center text-sm text-muted-foreground">
+                Already have an invite code?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupMode('join');
+                    window.history.replaceState(null, '', '/clinic?mode=join');
+                  }}
+                  className="text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                >
+                  Join existing clinic
+                </button>
+              </div>
             </CardFooter>
           </Card>
-
-          {/* Divider */}
-          <div className="flex lg:flex-col items-center justify-center gap-4 py-6 lg:py-0">
-            <div className="h-px w-full lg:h-full lg:w-px bg-slate-200 dark:bg-slate-800 flex-1" />
-            <span className="text-xs font-bold text-muted-foreground bg-slate-50 dark:bg-slate-900 px-3 py-1.5 border rounded-full shadow-sm">OR</span>
-            <div className="h-px w-full lg:h-full lg:w-px bg-slate-200 dark:bg-slate-800 flex-1" />
-          </div>
-
-          {/* Join Clinic Card */}
+        ) : (
+          /* Join Clinic Card */
           <Card className="flex flex-col justify-between border shadow-md hover:shadow-lg transition-shadow duration-300">
             <div>
               <CardHeader>
@@ -667,7 +734,7 @@ export default function ClinicPage() {
                 </div>
               </CardContent>
             </div>
-            <CardFooter className="pt-4 border-t mt-4">
+            <CardFooter className="flex flex-col gap-3 pt-4 border-t mt-4">
               <Button
                 onClick={handleJoinClinic}
                 disabled={joining || !requestedRole || !joinCode.trim()}
@@ -676,9 +743,22 @@ export default function ClinicPage() {
               >
                 {joining ? 'Requesting…' : 'Request to Join'}
               </Button>
+              <div className="text-center text-sm text-muted-foreground">
+                Want to register a new clinic?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupMode('create');
+                    window.history.replaceState(null, '', '/clinic?mode=create');
+                  }}
+                  className="text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                >
+                  Create new clinic
+                </button>
+              </div>
             </CardFooter>
           </Card>
-        </div>
+        )}
       </div>
     );
   }
@@ -1378,5 +1458,19 @@ export default function ClinicPage() {
       </Card>
 
     </div>
+  );
+}
+
+export default function ClinicPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      }
+    >
+      <ClinicPageContent />
+    </Suspense>
   );
 }

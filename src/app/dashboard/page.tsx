@@ -377,16 +377,16 @@ export default function DashboardPage() {
                             <div className="flex flex-col gap-3">
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     <Button asChild size="lg" data-tutorial-id="tutorial-add-clinic" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5">
-                                        <Link href="/clinic" className="flex items-center gap-3">
+                                        <Link href="/clinic?mode=create" className="flex items-center gap-3">
                                             <ClipboardList className="h-5 w-5" />
                                             Add Your Clinic
                                             <ArrowRight className="h-5 w-5" />
                                         </Link>
                                     </Button>
                                     <Button asChild size="lg" variant="outline" data-tutorial-id="tutorial-join-clinic" className="border-2 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/50 px-8 py-6 text-base font-semibold rounded-xl transition-all duration-300 hover:-translate-y-0.5">
-                                        <Link href="/clinic" className="flex items-center gap-3">
+                                        <Link href="/clinic?mode=join" className="flex items-center gap-3">
                                             <UserPlus className="h-5 w-5" />
-                                            Join Your Clinic
+                                            Join Clinic
                                             <ArrowRight className="h-5 w-5" />
                                         </Link>
                                     </Button>
