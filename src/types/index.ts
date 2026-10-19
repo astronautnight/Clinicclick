@@ -50,6 +50,7 @@ export interface AdminClinic {
   clinicType?: 'General' | 'Specialist' | 'Multi-specialty';
   inviteCode?: string;
   createdBy?: string;
+  creatorEmail?: string;
   createdAt?: any;
   updatedAt?: any;
   logoUrl?: string;

@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "clinicclick-xreue"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

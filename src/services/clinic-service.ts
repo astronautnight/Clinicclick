@@ -97,6 +97,7 @@ export async function createClinic({
       clinicType,
       inviteCode: generateInviteCode(),
       createdBy: ownerUid,
+      creatorEmail: userSnap.data()?.email || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

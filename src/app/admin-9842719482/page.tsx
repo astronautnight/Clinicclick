@@ -61,6 +61,7 @@ import {
   Calendar as CalendarIcon,
   Phone,
   MapPin,
+  Mail,
   Tag,
   Copy,
   ExternalLink,
@@ -216,6 +217,7 @@ export default function AdminDashboardPage() {
           clinicType: data.clinicType || 'General',
           inviteCode: data.inviteCode,
           createdBy: data.createdBy,
+          creatorEmail: data.creatorEmail,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           logoUrl: data.logoUrl,
@@ -307,6 +309,7 @@ export default function AdminDashboardPage() {
           clinicType: data.clinicType || 'General',
           inviteCode: data.inviteCode,
           createdBy: data.createdBy,
+          creatorEmail: data.creatorEmail,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           logoUrl: data.logoUrl,
@@ -369,13 +372,36 @@ export default function AdminDashboardPage() {
   };
 
   /* ============================================================
-     CLINIC MAP FOR EASY USER LOOKUP
+     CLINIC MAP & USER MAP FOR EASY LOOKUPS
   ============================================================ */
   const clinicMap = useMemo(() => {
     const map = new Map<string, AdminClinic>();
     clinics.forEach((c) => map.set(c.id, c));
     return map;
   }, [clinics]);
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    usersList.forEach((u) => {
+      if (u.uid) map.set(u.uid, u);
+      if (u.id) map.set(u.id, u);
+    });
+    return map;
+  }, [usersList]);
+
+  const getClinicCreatorEmail = (clinic: AdminClinic): string => {
+    if (clinic.creatorEmail) return clinic.creatorEmail;
+    if ((clinic as any).ownerEmail) return (clinic as any).ownerEmail;
+    if (clinic.createdBy) {
+      const u = userMap.get(clinic.createdBy);
+      if (u?.email) return u.email;
+    }
+    const adminUser = usersList.find((u) => u.clinicId === clinic.id && (u.role === 'admin' || u.role === 'owner'));
+    if (adminUser?.email) return adminUser.email;
+    const anyClinicUser = usersList.find((u) => u.clinicId === clinic.id && !!u.email);
+    if (anyClinicUser?.email) return anyClinicUser.email;
+    return 'No email found';
+  };
 
   /* ============================================================
      COMPUTED STATS
@@ -449,13 +475,16 @@ export default function AdminDashboardPage() {
     return clinics.filter((c) => {
       // Search
       const search = clinicSearch.toLowerCase().trim();
+      const creatorEmail = getClinicCreatorEmail(c);
       const matchSearch =
         !search ||
         c.name.toLowerCase().includes(search) ||
         (c.address && c.address.toLowerCase().includes(search)) ||
         (c.phone && c.phone.includes(search)) ||
         (c.inviteCode && c.inviteCode.toLowerCase().includes(search)) ||
-        c.id.toLowerCase().includes(search);
+        c.id.toLowerCase().includes(search) ||
+        creatorEmail.toLowerCase().includes(search) ||
+        (c.createdBy && c.createdBy.toLowerCase().includes(search));
 
       if (!matchSearch) return false;
 
@@ -599,10 +628,12 @@ export default function AdminDashboardPage() {
 
   // CSV Exporters
   const exportClinicsCSV = () => {
-    const headers = ['Clinic ID', 'Name', 'Type', 'Phone', 'Address', 'Invite Code', 'Total Active Days', 'Last Active Date', 'Active Dates'];
+    const headers = ['Clinic ID', 'Name', 'Creator Email', 'Creator UID', 'Type', 'Phone', 'Address', 'Invite Code', 'Total Active Days', 'Last Active Date', 'Active Dates'];
     const rows = clinics.map((c) => [
       `"${c.id}"`,
       `"${c.name}"`,
+      `"${getClinicCreatorEmail(c)}"`,
+      `"${c.createdBy || ''}"`,
       `"${c.clinicType || 'General'}"`,
       `"${c.phone || ''}"`,
       `"${(c.address || '').replace(/"/g, '""')}"`,
@@ -1160,6 +1191,50 @@ export default function AdminDashboardPage() {
                         )}
                       </div>
 
+                      {/* Clinic ID & Creator Email */}
+                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            Clinic ID:
+                          </span>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <code className="font-mono text-[11px] bg-white dark:bg-slate-950 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 truncate max-w-[170px]" title={clinic.id}>
+                              {clinic.id}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(clinic.id, 'Clinic ID')}
+                              className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                              title="Copy Clinic ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                            <Mail className="h-3 w-3 text-indigo-500" />
+                            Creator:
+                          </span>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className="text-[11px] font-medium text-slate-900 dark:text-slate-100 truncate max-w-[170px]" title={getClinicCreatorEmail(clinic)}>
+                              {getClinicCreatorEmail(clinic)}
+                            </span>
+                            {getClinicCreatorEmail(clinic) !== 'No email found' && (
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(getClinicCreatorEmail(clinic), 'Creator Email')}
+                                className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                                title="Copy Creator Email"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Contact & Meta details */}
                       <div className="space-y-1 text-muted-foreground pt-1">
                         {clinic.phone && (
@@ -1216,7 +1291,8 @@ export default function AdminDashboardPage() {
               <Table>
                 <TableHeader className="bg-slate-50 dark:bg-slate-900">
                   <TableRow>
-                    <TableHead>Clinic Name</TableHead>
+                    <TableHead>Clinic & ID</TableHead>
+                    <TableHead>Creator Email</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-center">Total Active Dates</TableHead>
                     <TableHead>Last Active</TableHead>
@@ -1228,7 +1304,7 @@ export default function AdminDashboardPage() {
                 <TableBody>
                   {filteredClinics.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No clinics match the current filter criteria.
                       </TableCell>
                     </TableRow>
@@ -1236,12 +1312,41 @@ export default function AdminDashboardPage() {
                     filteredClinics.map((clinic) => {
                       const dates = clinic.activeDates || [];
                       const sortedDates = [...dates].sort().reverse();
+                      const creatorEmail = getClinicCreatorEmail(clinic);
                       return (
                         <TableRow key={clinic.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/50">
                           <TableCell className="font-semibold">
-                            <div className="flex flex-col">
-                              <span className="text-slate-900 dark:text-slate-100">{clinic.name}</span>
-                              <span className="text-[11px] text-muted-foreground font-mono">{clinic.id}</span>
+                            <div className="flex flex-col gap-0.5 max-w-[200px]">
+                              <span className="text-slate-900 dark:text-slate-100 font-bold truncate">{clinic.name}</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-muted-foreground font-mono truncate select-all">{clinic.id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(clinic.id, 'Clinic ID')}
+                                  className="text-muted-foreground hover:text-foreground transition-colors"
+                                  title="Copy Clinic ID"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="flex items-center gap-1.5 max-w-[190px]">
+                              <Mail className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+                              <span className="font-medium text-slate-800 dark:text-slate-200 select-all truncate" title={creatorEmail}>
+                                {creatorEmail}
+                              </span>
+                              {creatorEmail !== 'No email found' && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(creatorEmail, 'Creator Email')}
+                                  className="text-muted-foreground hover:text-foreground transition-colors"
+                                  title="Copy Creator Email"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>{getClinicStatusBadge(clinic)}</TableCell>
@@ -1732,7 +1837,7 @@ export default function AdminDashboardPage() {
               </DialogHeader>
 
               {/* Stats Bar */}
-              <div className="grid grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border">
                 <div>
                   <p className="text-[10px] text-muted-foreground font-semibold uppercase">Total Active Days</p>
                   <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
@@ -1751,6 +1856,44 @@ export default function AdminDashboardPage() {
                     {selectedClinic.inviteCode || 'N/A'}
                   </p>
                 </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">Clinic ID</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-xs font-mono font-bold text-foreground truncate max-w-[110px]" title={selectedClinic.id}>
+                      {selectedClinic.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(selectedClinic.id, 'Clinic ID')}
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Copy Clinic ID"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Creator Info Box in Modal */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Creator Email:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100 select-all">
+                    {getClinicCreatorEmail(selectedClinic)}
+                  </span>
+                </div>
+                {getClinicCreatorEmail(selectedClinic) !== 'No email found' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(getClinicCreatorEmail(selectedClinic), 'Creator Email')}
+                    className="h-7 text-xs gap-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                  >
+                    <Copy className="h-3 w-3" />
+                    Copy Email
+                  </Button>
+                )}
               </div>
 
               {/* Active Dates Chronological List */}
