@@ -48,8 +48,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { updateAppointment } from '@/services/appointment-service';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { updateAppointment, addAppointment } from '@/services/appointment-service';
+import { addPatient } from '@/services/patient-service';
+import { addDoc, serverTimestamp } from 'firebase/firestore';
+import { Checkbox } from '@/components/ui/checkbox';
+import type { Drug, PrescriptionItem, Procedure, TransactionType, PaymentMethod, TransactionCategory } from '@/types';
+import { CalendarPlus, Trash2, Receipt } from 'lucide-react';
 
 
 // Reusable components from user's example, adapted to TSX and project styles
@@ -135,15 +140,46 @@ function QueueItem({
 }
 
 
-function ActionButton({ icon, label, primary, danger, href }: { icon: React.ReactNode, label: string, primary?: boolean, danger?: boolean, href: string }) {
+function ActionButton({ 
+    icon, 
+    label, 
+    href, 
+    onClick,
+    className 
+}: { 
+    icon: React.ReactNode; 
+    label: string; 
+    href?: string; 
+    onClick?: () => void;
+    className?: string;
+}) {
+    if (onClick) {
+        return (
+            <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onClick} 
+                className={cn(
+                    "w-full justify-start gap-3 py-6 text-sm font-medium transition-all duration-200 border shadow-xs hover:scale-[1.01] active:scale-[0.99]",
+                    className
+                )}
+            >
+                {icon}
+                {label}
+            </Button>
+        );
+    }
+
     return (
-        <Button asChild variant="outline" className={cn(
-            "w-full justify-start gap-3 py-6 text-sm font-medium",
-            primary && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
-            danger && "bg-destructive/10 text-destructive hover:bg-destructive/20",
-            !primary && !danger && "bg-slate-100 dark:bg-muted"
-        )}>
-            <Link href={href}>
+        <Button 
+            asChild 
+            variant="outline" 
+            className={cn(
+                "w-full justify-start gap-3 py-6 text-sm font-medium transition-all duration-200 border shadow-xs hover:scale-[1.01] active:scale-[0.99]",
+                className
+            )}
+        >
+            <Link href={href || '#'}>
                 {icon}
                 {label}
             </Link>
@@ -182,6 +218,281 @@ export default function DashboardPage() {
     const [founderCount, setFounderCount] = useState<number>(0);
     const [isFounderDialogOpen, setIsFounderDialogOpen] = useState(false);
 
+    // Drugs & Procedures for Prescription and Appointment dialogs
+    const [drugs, setDrugs] = useState<Drug[]>([]);
+    const [procedures, setProcedures] = useState<Procedure[]>([]);
+
+    // Modal visibility states
+    const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
+    const [isAppointmentOpen, setIsAppointmentOpen] = useState(false);
+    const [isTransactionOpen, setIsTransactionOpen] = useState(false);
+    const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
+    const [modalSubmitting, setModalSubmitting] = useState(false);
+
+    // 1. Patient Form State
+    const [patientForm, setPatientForm] = useState({
+        firstName: '',
+        lastName: '',
+        contactNumber: '',
+        gender: 'Other' as Patient['gender'],
+        dateOfBirth: format(new Date(), 'yyyy-MM-dd'),
+        email: '',
+        address: '',
+        medicalHistory: '',
+        allergies: '',
+        isConsult: false,
+        consultLocation: '',
+    });
+
+    const handleCreatePatient = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!clinicId) {
+            toast({ title: 'Error', description: 'Clinic not selected.', variant: 'destructive' });
+            return;
+        }
+        if (!patientForm.firstName || !patientForm.lastName || !patientForm.contactNumber) {
+            toast({ title: 'Missing Information', description: 'First name, last name, and contact number are required.', variant: 'destructive' });
+            return;
+        }
+
+        setModalSubmitting(true);
+        try {
+            await addPatient(clinicId, {
+                ...patientForm,
+                markedTeeth: [],
+                stagedObservations: [],
+            });
+            toast({ title: 'Patient Added', description: `${patientForm.firstName} ${patientForm.lastName} has been added.` });
+            setIsNewPatientOpen(false);
+            setPatientForm({
+                firstName: '',
+                lastName: '',
+                contactNumber: '',
+                gender: 'Other',
+                dateOfBirth: format(new Date(), 'yyyy-MM-dd'),
+                email: '',
+                address: '',
+                medicalHistory: '',
+                allergies: '',
+                isConsult: false,
+                consultLocation: '',
+            });
+        } catch (error: any) {
+            console.error('Failed to add patient:', error);
+            toast({ title: 'Error', description: error?.message || 'Could not add patient.', variant: 'destructive' });
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
+    // 2. Full Appointment Form State (matches /appointments page exactly)
+    const [appointmentForm, setAppointmentForm] = useState({
+        patientId: '',
+        doctorId: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        startTime: '10:00',
+        endTime: '10:30',
+        status: 'Scheduled' as Appointment['status'],
+        isConsult: false,
+        consultLocation: '',
+        procedureIds: [] as string[],
+        notes: '',
+    });
+
+    const handleCreateAppointment = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!clinicId) {
+            toast({ title: 'Error', description: 'No active clinic selected.', variant: 'destructive' });
+            return;
+        }
+        if (!appointmentForm.patientId || !appointmentForm.doctorId || !appointmentForm.date || !appointmentForm.startTime || !appointmentForm.endTime) {
+            toast({ title: 'Missing Information', description: 'Patient, Doctor, Date, and Time are required.', variant: 'destructive' });
+            return;
+        }
+
+        const patient = patients.find(p => p.id === appointmentForm.patientId);
+        const doctor = doctors.find(d => d.id === appointmentForm.doctorId);
+
+        setModalSubmitting(true);
+        try {
+            await addAppointment(clinicId, {
+                patientId: appointmentForm.patientId,
+                patientName: patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown Patient',
+                doctorId: appointmentForm.doctorId,
+                doctorName: doctor ? doctor.name : 'Unknown Doctor',
+                date: appointmentForm.date,
+                startTime: appointmentForm.startTime,
+                endTime: appointmentForm.endTime,
+                status: appointmentForm.status,
+                isConsult: appointmentForm.isConsult,
+                consultLocation: appointmentForm.consultLocation,
+                procedureIds: appointmentForm.procedureIds,
+                notes: appointmentForm.notes,
+            });
+
+            toast({ title: 'Appointment Scheduled', description: 'New appointment successfully created.' });
+            setIsAppointmentOpen(false);
+            setAppointmentForm({
+                patientId: '',
+                doctorId: '',
+                date: format(new Date(), 'yyyy-MM-dd'),
+                startTime: '10:00',
+                endTime: '10:30',
+                status: 'Scheduled',
+                isConsult: false,
+                consultLocation: '',
+                procedureIds: [],
+                notes: '',
+            });
+        } catch (error: any) {
+            console.error('Failed to schedule appointment:', error);
+            toast({ title: 'Error', description: error?.message || 'Could not schedule appointment.', variant: 'destructive' });
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
+    // 3. Transaction / Invoice Form State (matches /financials transaction recording)
+    const [transactionForm, setTransactionForm] = useState({
+        date: format(new Date(), 'yyyy-MM-dd'),
+        paymentDate: format(new Date(), 'yyyy-MM-dd'),
+        type: 'Earning' as TransactionType,
+        category: 'Consultation Fee' as TransactionCategory,
+        amount: '',
+        paymentMethod: 'Cash' as PaymentMethod,
+        patientId: '',
+        isConsult: false,
+        consultLocation: '',
+        description: '',
+    });
+
+    const handleCreateTransaction = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!user || !db || !clinicId) {
+            toast({ title: 'Error', description: 'Not authenticated with clinic.', variant: 'destructive' });
+            return;
+        }
+        const amt = parseFloat(transactionForm.amount);
+        if (isNaN(amt) || amt <= 0) {
+            toast({ title: 'Invalid Amount', description: 'Please enter a valid amount greater than 0.', variant: 'destructive' });
+            return;
+        }
+
+        setModalSubmitting(true);
+        try {
+            const payload = {
+                date: transactionForm.date,
+                paymentDate: transactionForm.paymentDate,
+                type: transactionForm.type,
+                category: transactionForm.category,
+                amount: amt,
+                paymentMethod: transactionForm.paymentMethod,
+                patientId: transactionForm.patientId || null,
+                isConsult: transactionForm.isConsult,
+                consultLocation: transactionForm.consultLocation || '',
+                description: transactionForm.description || '',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+
+            await addDoc(collection(db, 'clinics', clinicId, 'transactions'), payload);
+            toast({ title: 'Transaction Recorded', description: `${transactionForm.type} of ₹${amt.toLocaleString()} recorded.` });
+            setIsTransactionOpen(false);
+            setTransactionForm({
+                date: format(new Date(), 'yyyy-MM-dd'),
+                paymentDate: format(new Date(), 'yyyy-MM-dd'),
+                type: 'Earning',
+                category: 'Consultation Fee',
+                amount: '',
+                paymentMethod: 'Cash',
+                patientId: '',
+                isConsult: false,
+                consultLocation: '',
+                description: '',
+            });
+        } catch (error: any) {
+            console.error('Failed to add transaction:', error);
+            toast({ title: 'Error', description: error?.message || 'Could not record transaction.', variant: 'destructive' });
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
+    // 4. Prescription Form State (matches /pharmacy creation)
+    const [prescriptionForm, setPrescriptionForm] = useState({
+        patientId: '',
+        doctorId: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        notes: '',
+        items: [{ drugId: '', drugName: '', dosage: '1 Tab', frequency: 'BD', duration: '5 Days', notes: '' }] as PrescriptionItem[],
+    });
+
+    const handlePrescriptionItemChange = (idx: number, field: keyof PrescriptionItem, val: string) => {
+        setPrescriptionForm(prev => {
+            const items = [...prev.items];
+            items[idx] = { ...items[idx], [field]: val };
+            if (field === 'drugId') {
+                const found = drugs.find(d => d.id === val);
+                items[idx].drugName = found ? `${found.genericName} (${found.brandName || 'Generic'}) - ${found.strength || ''}` : '';
+            }
+            return { ...prev, items };
+        });
+    };
+
+    const addPrescriptionItemRow = () => {
+        setPrescriptionForm(prev => ({
+            ...prev,
+            items: [...prev.items, { drugId: '', drugName: '', dosage: '1 Tab', frequency: 'BD', duration: '5 Days', notes: '' }],
+        }));
+    };
+
+    const removePrescriptionItemRow = (idx: number) => {
+        setPrescriptionForm(prev => ({
+            ...prev,
+            items: prev.items.filter((_, i) => i !== idx),
+        }));
+    };
+
+    const handleCreatePrescription = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!user || !db || !clinicId) {
+            toast({ title: 'Error', description: 'Not authenticated with clinic.', variant: 'destructive' });
+            return;
+        }
+        if (!prescriptionForm.patientId || !prescriptionForm.doctorId) {
+            toast({ title: 'Missing Information', description: 'Patient and Doctor are required.', variant: 'destructive' });
+            return;
+        }
+        if (prescriptionForm.items.length === 0 || prescriptionForm.items.some(it => !it.drugId || !it.dosage)) {
+            toast({ title: 'Incomplete Medications', description: 'Please choose a drug and dosage for each row.', variant: 'destructive' });
+            return;
+        }
+
+        setModalSubmitting(true);
+        try {
+            const payload = {
+                ...prescriptionForm,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            };
+            await addDoc(collection(db, 'clinics', clinicId, 'prescriptions'), payload);
+            toast({ title: 'Prescription Created', description: 'New prescription recorded successfully.' });
+            setIsPrescriptionOpen(false);
+            setPrescriptionForm({
+                patientId: '',
+                doctorId: '',
+                date: format(new Date(), 'yyyy-MM-dd'),
+                notes: '',
+                items: [{ drugId: '', drugName: '', dosage: '1 Tab', frequency: 'BD', duration: '5 Days', notes: '' }],
+            });
+        } catch (error: any) {
+            console.error('Failed to create prescription:', error);
+            toast({ title: 'Error', description: error?.message || 'Could not save prescription.', variant: 'destructive' });
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
     useEffect(() => {
         const getGreeting = () => {
             const hour = new Date().getHours();
@@ -217,6 +528,12 @@ export default function DashboardPage() {
         const doctorsCol = collection(db, 'clinics', clinicId, 'doctors');
         const unsubDoctors = onSnapshot(doctorsCol, (snap) => setDoctors(snap.docs.map(d => ({ ...d.data(), id: d.id } as Doctor))));
 
+        const drugsCol = collection(db, 'clinics', clinicId, 'drugs');
+        const unsubDrugs = onSnapshot(drugsCol, (snap) => setDrugs(snap.docs.map(d => ({ ...d.data(), id: d.id } as Drug))));
+
+        const proceduresCol = collection(db, 'clinics', clinicId, 'procedures');
+        const unsubProcedures = onSnapshot(proceduresCol, (snap) => setProcedures(snap.docs.map(d => ({ ...d.data(), id: d.id } as Procedure))));
+
         const clinicDoc = doc(db, 'clinics', clinicId);
         const unsubClinic = onSnapshot(clinicDoc, (snap) => {
             if (snap.exists()) {
@@ -239,6 +556,8 @@ export default function DashboardPage() {
             unsubTransactions();
             unsubOperatories();
             unsubDoctors();
+            unsubDrugs();
+            unsubProcedures();
             unsubClinic();
         }
     }, [user, db, clinicId]);
@@ -943,39 +1262,818 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* PATIENT QUEUE */}
-                <div className="lg:col-span-2 bg-white dark:bg-card rounded-xl shadow-sm p-5">
-                    <h2 className="text-lg font-semibold mb-4">Patient Queue</h2>
+                <div className="lg:col-span-2 bg-white dark:bg-card rounded-xl shadow-sm p-5 flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold">Patient Queue</h2>
+                            <Button 
+                                size="sm" 
+                                onClick={() => setIsAppointmentOpen(true)}
+                                className="h-8 gap-1.5 bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700 shadow-xs text-xs font-medium cursor-pointer"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Appointment
+                            </Button>
+                        </div>
 
-                    {patientQueue.length > 0 ? (
-                        patientQueue.map(app => (
-                            <QueueItem
-                                key={app.id}
-                                time={app.startTime}
-                                name={app.patientName || "Unknown"}
-                                procedure={app.notes || (app.procedureIds && app.procedureIds.length > 0 ? `${app.procedureIds.length} procedure(s)` : 'General Consultation')}
-                                status={app.status}
-                                onStatusChange={(newStatus) => handleStatusChange(app.id, newStatus)}
-                            />
-                        ))
-                    ) : (
-                        <p className="text-muted-foreground text-center py-4">No appointments scheduled for today.</p>
-                    )}
+                        {patientQueue.length > 0 ? (
+                            <div className="divide-y divide-border/60">
+                                {patientQueue.map(app => (
+                                    <QueueItem
+                                        key={app.id}
+                                        time={app.startTime}
+                                        name={app.patientName || "Unknown"}
+                                        procedure={app.notes || (app.procedureIds && app.procedureIds.length > 0 ? `${app.procedureIds.length} procedure(s)` : 'General Consultation')}
+                                        status={app.status}
+                                        onStatusChange={(newStatus) => handleStatusChange(app.id, newStatus)}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-10 px-4 text-center rounded-xl border border-dashed border-border/80 bg-muted/20 my-2 flex flex-col items-center justify-center">
+                                <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">
+                                    <CalendarPlus className="h-6 w-6" />
+                                </div>
+                                <h3 className="font-semibold text-sm text-foreground mb-1">No appointments scheduled for today</h3>
+                                <p className="text-muted-foreground text-xs max-w-sm mb-4">
+                                    Get started by scheduling an appointment directly into today&apos;s schedule.
+                                </p>
+                                <Button 
+                                    onClick={() => setIsAppointmentOpen(true)} 
+                                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-9 text-xs font-medium cursor-pointer"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                    Add Appointment
+                                </Button>
+                            </div>
+                        )}
+                    </div>
 
-                    <Button variant="link" asChild className="text-blue-600 dark:text-primary text-sm mt-4 p-0 h-auto">
-                        <Link href="/appointments">View Calendar →</Link>
-                    </Button>
+                    <div className="pt-3 border-t border-border/40 mt-3 flex items-center justify-between">
+                        <Button variant="link" asChild className="text-blue-600 dark:text-blue-400 text-sm p-0 h-auto hover:underline font-medium">
+                            <Link href="/appointments">View Calendar →</Link>
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                            {patientQueue.length} patient{patientQueue.length === 1 ? '' : 's'} in queue
+                        </span>
+                    </div>
                 </div>
 
                 {/* QUICK ACTIONS */}
                 <div className="bg-white dark:bg-card rounded-xl shadow-sm p-5 space-y-3">
                     <h2 className="text-lg font-semibold">Quick Actions</h2>
 
-                    <ActionButton href="/patients" icon={<UserPlus />} label="New Patient" />
-                    <ActionButton href="/patients" icon={<Stethoscope />} label="Open Dental Chart" />
-                    <ActionButton href="/financials" icon={<FileText />} label="Generate Invoice" primary />
-                    <ActionButton href="/patients" icon={<ImageIcon />} label="Create Appointment" />
-                    <ActionButton href="/pharmacy" icon={<FileText />} label="Write Prescription" danger />
+                    {/* 1. New Patient - Emerald / Green (Opens Patient Dialog) */}
+                    <ActionButton 
+                        onClick={() => setIsNewPatientOpen(true)}
+                        icon={<UserPlus className="h-5 w-5 text-emerald-500 shrink-0" />} 
+                        label="New Patient" 
+                        className="bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-500/50 cursor-pointer"
+                    />
+
+                    {/* 2. Create Appointment - Sky / Blue (Opens Full Appointment Dialog) */}
+                    <ActionButton 
+                        onClick={() => setIsAppointmentOpen(true)} 
+                        icon={<CalendarPlus className="h-5 w-5 text-sky-500 shrink-0" />} 
+                        label="Schedule Appointment" 
+                        className="bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 hover:border-sky-500/50 cursor-pointer"
+                    />
+
+                    {/* 3. Generate Invoice / Record Transaction - Amber / Orange (Opens Transaction Dialog) */}
+                    <ActionButton 
+                        onClick={() => setIsTransactionOpen(true)}
+                        icon={<Receipt className="h-5 w-5 text-amber-500 shrink-0" />} 
+                        label="Generate Invoice" 
+                        className="bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 cursor-pointer"
+                    />
+
+                    {/* 4. Write Prescription - Rose / Red (Opens Prescription Dialog) */}
+                    <ActionButton 
+                        onClick={() => setIsPrescriptionOpen(true)}
+                        icon={<ClipboardList className="h-5 w-5 text-rose-500 shrink-0" />} 
+                        label="Write Prescription" 
+                        className="bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 hover:border-rose-500/50 cursor-pointer"
+                    />
                 </div>
+
+                {/* 1. NEW PATIENT DIALOG */}
+                <Dialog open={isNewPatientOpen} onOpenChange={setIsNewPatientOpen}>
+                    <DialogContent className="w-[calc(100%-1.25rem)] max-w-xl max-h-[90vh] rounded-2xl p-4 sm:p-6 shadow-2xl border border-border flex flex-col gap-0 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b shrink-0">
+                            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                <UserPlus className="h-5 w-5 text-emerald-500" />
+                                Add New Patient
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Register a new patient record into your clinic.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreatePatient} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptFirstName" className="text-xs font-medium">First Name *</Label>
+                                        <Input 
+                                            id="ptFirstName" 
+                                            value={patientForm.firstName} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, firstName: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs" 
+                                            placeholder="John"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptLastName" className="text-xs font-medium">Last Name *</Label>
+                                        <Input 
+                                            id="ptLastName" 
+                                            value={patientForm.lastName} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, lastName: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs" 
+                                            placeholder="Doe"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptContact" className="text-xs font-medium">Contact Number *</Label>
+                                        <Input 
+                                            id="ptContact" 
+                                            value={patientForm.contactNumber} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, contactNumber: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs" 
+                                            placeholder="9876543210"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptGender" className="text-xs font-medium">Gender</Label>
+                                        <Select 
+                                            value={patientForm.gender} 
+                                            onValueChange={(val: Patient['gender']) => setPatientForm(p => ({ ...p, gender: val }))}
+                                        >
+                                            <SelectTrigger id="ptGender" className="h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Male" className="text-xs">Male</SelectItem>
+                                                <SelectItem value="Female" className="text-xs">Female</SelectItem>
+                                                <SelectItem value="Other" className="text-xs">Other</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptDob" className="text-xs font-medium">Date of Birth</Label>
+                                        <Input 
+                                            id="ptDob" 
+                                            type="date" 
+                                            value={patientForm.dateOfBirth} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, dateOfBirth: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptEmail" className="text-xs font-medium">Email (Optional)</Label>
+                                        <Input 
+                                            id="ptEmail" 
+                                            type="email" 
+                                            value={patientForm.email} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, email: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                            placeholder="patient@example.com"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label htmlFor="ptAddress" className="text-xs font-medium">Address (Optional)</Label>
+                                    <Input 
+                                        id="ptAddress" 
+                                        value={patientForm.address} 
+                                        onChange={(e) => setPatientForm(p => ({ ...p, address: e.target.value }))} 
+                                        className="h-9 text-xs" 
+                                        placeholder="Street, City"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptAllergies" className="text-xs font-medium">Allergies</Label>
+                                        <Input 
+                                            id="ptAllergies" 
+                                            value={patientForm.allergies} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, allergies: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                            placeholder="e.g. Penicillin, Latex"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="ptMedHistory" className="text-xs font-medium">Medical History</Label>
+                                        <Input 
+                                            id="ptMedHistory" 
+                                            value={patientForm.medicalHistory} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, medicalHistory: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                            placeholder="e.g. Diabetes, Hypertension"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-1 flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="ptIsConsult" 
+                                        checked={patientForm.isConsult} 
+                                        onCheckedChange={(checked) => setPatientForm(p => ({ ...p, isConsult: !!checked }))}
+                                    />
+                                    <Label htmlFor="ptIsConsult" className="text-xs font-medium cursor-pointer">
+                                        This is an external consultation patient
+                                    </Label>
+                                </div>
+
+                                {patientForm.isConsult && (
+                                    <div className="space-y-1 pl-6">
+                                        <Label htmlFor="ptConsultLoc" className="text-xs font-medium">Consult Location / Clinic Name</Label>
+                                        <Input 
+                                            id="ptConsultLoc" 
+                                            value={patientForm.consultLocation} 
+                                            onChange={(e) => setPatientForm(p => ({ ...p, consultLocation: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                            placeholder="e.g. City Dental Hospital"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <DialogFooter className="pt-3 border-t shrink-0 flex flex-row justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsNewPatientOpen(false)} className="h-9 text-xs">
+                                    Cancel
+                                </Button>
+                                <Button type="submit" size="sm" disabled={modalSubmitting} className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                                    {modalSubmitting ? 'Saving...' : 'Save Patient'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                {/* 2. FULL APPOINTMENT DIALOG (matches /appointments) */}
+                <Dialog open={isAppointmentOpen} onOpenChange={setIsAppointmentOpen}>
+                    <DialogContent className="w-[calc(100%-1.25rem)] max-w-lg max-h-[90vh] rounded-2xl p-4 sm:p-6 shadow-2xl border border-border flex flex-col gap-0 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b shrink-0">
+                            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                <CalendarPlus className="h-5 w-5 text-sky-500" />
+                                Schedule Appointment
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Set up patient appointment details, procedure linkages, and schedule.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreateAppointment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <div className="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
+                                <div className="space-y-1">
+                                    <Label htmlFor="appPatient" className="text-xs font-medium">Patient *</Label>
+                                    <Select 
+                                        value={appointmentForm.patientId} 
+                                        onValueChange={(val) => setAppointmentForm(p => ({ ...p, patientId: val }))}
+                                        required
+                                    >
+                                        <SelectTrigger id="appPatient" className="h-9 text-xs">
+                                            <SelectValue placeholder="Select Patient" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-56">
+                                            {patients.length === 0 ? (
+                                                <div className="p-3 text-xs text-muted-foreground text-center">No patients found. Add a patient first.</div>
+                                            ) : (
+                                                patients.map(p => (
+                                                    <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
+                                                        {p.firstName} {p.lastName} {p.isConsult ? '(Consult)' : ''}
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label htmlFor="appDoctor" className="text-xs font-medium">Doctor *</Label>
+                                    <Select 
+                                        value={appointmentForm.doctorId} 
+                                        onValueChange={(val) => setAppointmentForm(p => ({ ...p, doctorId: val }))}
+                                        required
+                                    >
+                                        <SelectTrigger id="appDoctor" className="h-9 text-xs">
+                                            <SelectValue placeholder="Select Doctor" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-56">
+                                            {doctors.length === 0 ? (
+                                                <div className="p-3 text-xs text-muted-foreground text-center">No doctors registered yet.</div>
+                                            ) : (
+                                                doctors.map(d => (
+                                                    <SelectItem key={d.id} value={d.id} className="text-xs cursor-pointer">
+                                                        {d.name} {d.specialization ? `• ${d.specialization}` : ''}
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="appDate" className="text-xs font-medium">Date *</Label>
+                                        <Input 
+                                            id="appDate" 
+                                            type="date" 
+                                            value={appointmentForm.date} 
+                                            onChange={(e) => setAppointmentForm(p => ({ ...p, date: e.target.value }))}
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="appStatus" className="text-xs font-medium">Status *</Label>
+                                        <Select 
+                                            value={appointmentForm.status} 
+                                            onValueChange={(val: Appointment['status']) => setAppointmentForm(p => ({ ...p, status: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="appStatus" className="h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(['Scheduled', 'Confirmed', 'Completed', 'Cancelled', 'Missed', 'Postponed'] as Appointment['status'][]).map(s => (
+                                                    <SelectItem key={s} value={s} className="text-xs cursor-pointer">{s}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="appStartTime" className="text-xs font-medium">Start Time *</Label>
+                                        <Input 
+                                            id="appStartTime" 
+                                            type="time" 
+                                            value={appointmentForm.startTime} 
+                                            onChange={(e) => setAppointmentForm(p => ({ ...p, startTime: e.target.value }))}
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="appEndTime" className="text-xs font-medium">End Time *</Label>
+                                        <Input 
+                                            id="appEndTime" 
+                                            type="time" 
+                                            value={appointmentForm.endTime} 
+                                            onChange={(e) => setAppointmentForm(p => ({ ...p, endTime: e.target.value }))}
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-1 flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="appIsConsult" 
+                                        checked={appointmentForm.isConsult} 
+                                        onCheckedChange={(checked) => setAppointmentForm(p => ({ ...p, isConsult: !!checked }))}
+                                    />
+                                    <Label htmlFor="appIsConsult" className="text-xs font-medium cursor-pointer">
+                                        This is a consultation appointment
+                                    </Label>
+                                </div>
+
+                                {appointmentForm.isConsult && (
+                                    <div className="space-y-1 pl-6">
+                                        <Label htmlFor="appConsultLoc" className="text-xs font-medium">Consult Location / Clinic Name</Label>
+                                        <Input 
+                                            id="appConsultLoc" 
+                                            value={appointmentForm.consultLocation} 
+                                            onChange={(e) => setAppointmentForm(p => ({ ...p, consultLocation: e.target.value }))} 
+                                            className="h-9 text-xs" 
+                                            placeholder="e.g. City General Hospital"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-medium">Linked Procedures</Label>
+                                    <div className="border rounded-md p-2 space-y-1 max-h-32 overflow-y-auto bg-muted/20">
+                                        {procedures.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground">No procedures registered in clinic.</p>
+                                        ) : (
+                                            procedures.map(proc => (
+                                                <div key={proc.id} className="flex items-center space-x-2 py-0.5">
+                                                    <Checkbox 
+                                                        checked={(appointmentForm.procedureIds || []).includes(proc.id)} 
+                                                        onCheckedChange={() => setAppointmentForm(prev => {
+                                                            const prevIds = prev.procedureIds || [];
+                                                            return {
+                                                                ...prev,
+                                                                procedureIds: prevIds.includes(proc.id) ? prevIds.filter(id => id !== proc.id) : [...prevIds, proc.id]
+                                                            };
+                                                        })} 
+                                                    />
+                                                    <span className="text-xs">{proc.name}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label htmlFor="appNotes" className="text-xs font-medium">Additional Notes (Optional)</Label>
+                                    <Textarea 
+                                        id="appNotes" 
+                                        value={appointmentForm.notes} 
+                                        onChange={(e) => setAppointmentForm(p => ({ ...p, notes: e.target.value }))} 
+                                        placeholder="Any specific clinical notes, teeth to observe, or instructions." 
+                                        className="min-h-[50px] text-xs py-1.5" 
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter className="pt-3 border-t shrink-0 flex flex-row justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsAppointmentOpen(false)} className="h-9 text-xs">
+                                    Cancel
+                                </Button>
+                                <Button type="submit" size="sm" disabled={modalSubmitting} className="h-9 text-xs bg-sky-600 hover:bg-sky-700 text-white">
+                                    {modalSubmitting ? 'Scheduling...' : 'Schedule Appointment'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                {/* 3. GENERATE INVOICE / TRANSACTION DIALOG (matches /financials) */}
+                <Dialog open={isTransactionOpen} onOpenChange={setIsTransactionOpen}>
+                    <DialogContent className="w-[calc(100%-1.25rem)] max-w-lg max-h-[90vh] rounded-2xl p-4 sm:p-6 shadow-2xl border border-border flex flex-col gap-0 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b shrink-0">
+                            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                <Receipt className="h-5 w-5 text-amber-500" />
+                                Record Transaction / Invoice
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Record a financial earning, invoice entry, or expense for the clinic.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreateTransaction} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <div className="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txDate" className="text-xs font-medium">Transaction Date *</Label>
+                                        <Input 
+                                            id="txDate" 
+                                            type="date" 
+                                            value={transactionForm.date} 
+                                            onChange={(e) => setTransactionForm(t => ({ ...t, date: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txPayDate" className="text-xs font-medium">Payment Date *</Label>
+                                        <Input 
+                                            id="txPayDate" 
+                                            type="date" 
+                                            value={transactionForm.paymentDate} 
+                                            onChange={(e) => setTransactionForm(t => ({ ...t, paymentDate: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txType" className="text-xs font-medium">Type *</Label>
+                                        <Select 
+                                            value={transactionForm.type} 
+                                            onValueChange={(val: TransactionType) => setTransactionForm(t => ({ ...t, type: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="txType" className="h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Earning" className="text-xs">Earning</SelectItem>
+                                                <SelectItem value="Expense" className="text-xs">Expense</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txMethod" className="text-xs font-medium">Payment Method *</Label>
+                                        <Select 
+                                            value={transactionForm.paymentMethod} 
+                                            onValueChange={(val: PaymentMethod) => setTransactionForm(t => ({ ...t, paymentMethod: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="txMethod" className="h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(['Cash', 'Card', 'UPI', 'Bank Transfer', 'Other'] as PaymentMethod[]).map(m => (
+                                                    <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txCategory" className="text-xs font-medium">Category *</Label>
+                                        <Select 
+                                            value={transactionForm.category} 
+                                            onValueChange={(val: TransactionCategory) => setTransactionForm(t => ({ ...t, category: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="txCategory" className="h-9 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {transactionForm.type === 'Earning' ? (
+                                                    <>
+                                                        <SelectItem value="Consultation Fee" className="text-xs">Consultation Fee</SelectItem>
+                                                        <SelectItem value="Procedure Payment" className="text-xs">Procedure Payment</SelectItem>
+                                                        <SelectItem value="Miscellaneous Income" className="text-xs">Miscellaneous Income</SelectItem>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <SelectItem value="Lab Charges" className="text-xs">Lab Charges</SelectItem>
+                                                        <SelectItem value="Supplies (Dental)" className="text-xs">Supplies (Dental)</SelectItem>
+                                                        <SelectItem value="Rent" className="text-xs">Rent</SelectItem>
+                                                        <SelectItem value="Salaries" className="text-xs">Salaries</SelectItem>
+                                                        <SelectItem value="Utilities" className="text-xs">Utilities</SelectItem>
+                                                        <SelectItem value="Miscellaneous Expense" className="text-xs">Miscellaneous Expense</SelectItem>
+                                                    </>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txAmount" className="text-xs font-medium">Amount (₹) *</Label>
+                                        <Input 
+                                            id="txAmount" 
+                                            type="number" 
+                                            min="1" 
+                                            step="0.01" 
+                                            value={transactionForm.amount} 
+                                            onChange={(e) => setTransactionForm(t => ({ ...t, amount: e.target.value }))} 
+                                            required 
+                                            className="h-9 text-xs font-semibold" 
+                                            placeholder="500" 
+                                        />
+                                    </div>
+                                </div>
+
+                                {transactionForm.type === 'Earning' && (
+                                    <div className="space-y-1">
+                                        <Label htmlFor="txPatient" className="text-xs font-medium">Patient (Optional)</Label>
+                                        <Select 
+                                            value={transactionForm.patientId} 
+                                            onValueChange={(val) => setTransactionForm(t => ({ ...t, patientId: val }))}
+                                        >
+                                            <SelectTrigger id="txPatient" className="h-9 text-xs">
+                                                <SelectValue placeholder="Select Patient (if applicable)" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-56">
+                                                {patients.map(p => (
+                                                    <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
+                                                        {p.firstName} {p.lastName} {p.isConsult ? '(Consult)' : ''}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+
+                                <div className="space-y-1">
+                                    <Label htmlFor="txDescription" className="text-xs font-medium">Description (Optional)</Label>
+                                    <Textarea 
+                                        id="txDescription" 
+                                        value={transactionForm.description} 
+                                        onChange={(e) => setTransactionForm(t => ({ ...t, description: e.target.value }))} 
+                                        placeholder="Invoice details, payment reference or notes." 
+                                        className="min-h-[50px] text-xs py-1.5" 
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter className="pt-3 border-t shrink-0 flex flex-row justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsTransactionOpen(false)} className="h-9 text-xs">
+                                    Cancel
+                                </Button>
+                                <Button type="submit" size="sm" disabled={modalSubmitting} className="h-9 text-xs bg-amber-600 hover:bg-amber-700 text-white">
+                                    {modalSubmitting ? 'Recording...' : 'Record Transaction'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+
+                {/* 4. WRITE PRESCRIPTION DIALOG (matches /pharmacy) */}
+                <Dialog open={isPrescriptionOpen} onOpenChange={setIsPrescriptionOpen}>
+                    <DialogContent className="w-[calc(100%-1.25rem)] max-w-2xl max-h-[92vh] rounded-2xl p-4 sm:p-6 shadow-2xl border border-border flex flex-col gap-0 overflow-hidden">
+                        <DialogHeader className="pb-3 border-b shrink-0">
+                            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                <ClipboardList className="h-5 w-5 text-rose-500" />
+                                Write New Prescription
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                Prescribe medications with dosage, frequency, and instructions.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleCreatePrescription} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="rxPatient" className="text-xs font-medium">Patient *</Label>
+                                        <Select 
+                                            value={prescriptionForm.patientId} 
+                                            onValueChange={(val) => setPrescriptionForm(p => ({ ...p, patientId: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="rxPatient" className="h-9 text-xs">
+                                                <SelectValue placeholder="Select Patient" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-56">
+                                                {patients.map(p => (
+                                                    <SelectItem key={p.id} value={p.id} className="text-xs cursor-pointer">
+                                                        {p.firstName} {p.lastName}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="rxDoctor" className="text-xs font-medium">Doctor *</Label>
+                                        <Select 
+                                            value={prescriptionForm.doctorId} 
+                                            onValueChange={(val) => setPrescriptionForm(p => ({ ...p, doctorId: val }))}
+                                            required
+                                        >
+                                            <SelectTrigger id="rxDoctor" className="h-9 text-xs">
+                                                <SelectValue placeholder="Select Doctor" />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-56">
+                                                {doctors.map(d => (
+                                                    <SelectItem key={d.id} value={d.id} className="text-xs cursor-pointer">
+                                                        {d.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="rxDate" className="text-xs font-medium">Date *</Label>
+                                        <Input 
+                                            id="rxDate" 
+                                            type="date" 
+                                            value={prescriptionForm.date} 
+                                            onChange={(e) => setPrescriptionForm(p => ({ ...p, date: e.target.value }))}
+                                            required 
+                                            className="h-9 text-xs" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 pt-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-foreground">Medications</Label>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            onClick={addPrescriptionItemRow} 
+                                            className="h-7 text-xs gap-1"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" /> Add Drug
+                                        </Button>
+                                    </div>
+
+                                    {prescriptionForm.items.map((item, idx) => (
+                                        <div key={idx} className="p-3 rounded-lg border border-border/80 bg-muted/20 space-y-2.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-semibold text-muted-foreground">Medication #{idx + 1}</span>
+                                                {prescriptionForm.items.length > 1 && (
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        onClick={() => removePrescriptionItemRow(idx)}
+                                                        className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <div className="space-y-1">
+                                                    <Label className="text-2xs font-medium">Drug *</Label>
+                                                    <Select 
+                                                        value={item.drugId} 
+                                                        onValueChange={(val) => handlePrescriptionItemChange(idx, 'drugId', val)}
+                                                        required
+                                                    >
+                                                        <SelectTrigger className="h-8 text-xs">
+                                                            <SelectValue placeholder="Select Drug" />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="max-h-56">
+                                                            {drugs.length === 0 ? (
+                                                                <div className="p-2 text-xs text-muted-foreground">No drugs found in pharmacy inventory.</div>
+                                                            ) : (
+                                                                drugs.map(d => (
+                                                                    <SelectItem key={d.id} value={d.id} className="text-xs cursor-pointer">
+                                                                        {d.genericName} ({d.brandName || 'Generic'}) {d.strength ? `- ${d.strength}` : ''}
+                                                                    </SelectItem>
+                                                                ))
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-2xs font-medium">Dosage *</Label>
+                                                    <Input 
+                                                        value={item.dosage} 
+                                                        onChange={(e) => handlePrescriptionItemChange(idx, 'dosage', e.target.value)} 
+                                                        required 
+                                                        className="h-8 text-xs" 
+                                                        placeholder="e.g. 1 Tab, 5ml"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                <div className="space-y-1">
+                                                    <Label className="text-2xs font-medium">Frequency *</Label>
+                                                    <Input 
+                                                        value={item.frequency} 
+                                                        onChange={(e) => handlePrescriptionItemChange(idx, 'frequency', e.target.value)} 
+                                                        required 
+                                                        className="h-8 text-xs" 
+                                                        placeholder="e.g. BD, TDS, SOS"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-2xs font-medium">Duration *</Label>
+                                                    <Input 
+                                                        value={item.duration} 
+                                                        onChange={(e) => handlePrescriptionItemChange(idx, 'duration', e.target.value)} 
+                                                        required 
+                                                        className="h-8 text-xs" 
+                                                        placeholder="e.g. 5 Days"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label className="text-2xs font-medium">Instructions (Optional)</Label>
+                                                <Input 
+                                                    value={item.notes || ''} 
+                                                    onChange={(e) => handlePrescriptionItemChange(idx, 'notes', e.target.value)} 
+                                                    className="h-8 text-xs" 
+                                                    placeholder="e.g. After food, take with water"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label htmlFor="rxNotes" className="text-xs font-medium">Overall Prescription Notes (Optional)</Label>
+                                    <Textarea 
+                                        id="rxNotes" 
+                                        value={prescriptionForm.notes} 
+                                        onChange={(e) => setPrescriptionForm(p => ({ ...p, notes: e.target.value }))} 
+                                        placeholder="e.g. Review after 3 days. Drink plenty of water." 
+                                        className="min-h-[50px] text-xs py-1.5" 
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter className="pt-3 border-t shrink-0 flex flex-row justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setIsPrescriptionOpen(false)} className="h-9 text-xs">
+                                    Cancel
+                                </Button>
+                                <Button type="submit" size="sm" disabled={modalSubmitting} className="h-9 text-xs bg-rose-600 hover:bg-rose-700 text-white">
+                                    {modalSubmitting ? 'Saving...' : 'Generate Prescription'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
 
             {/* BOTTOM GRID */}
