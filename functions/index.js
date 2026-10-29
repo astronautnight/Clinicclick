@@ -4,6 +4,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const { Resend } = require("resend");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 admin.initializeApp();
 
@@ -189,6 +190,136 @@ exports.sendWelcomeEmail = onDocumentCreated(
     } catch (error) {
       console.error("Welcome email processing failed:", error);
       throw error;
+    }
+  }
+);
+
+
+/**
+ * 4. Send an incomplete-setup reminder 48+ hours after signup.
+ * Runs daily at 10:00 AM India time.
+ */
+exports.sendSetupReminder = onSchedule(
+  {
+    schedule: "0 10 * * *",
+    timeZone: "Asia/Kolkata",
+    region: "us-central1",
+    secrets: [resendApiKey],
+  },
+  async () => {
+    const cutoff = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 48 * 60 * 60 * 1000)
+    );
+
+    const usersSnapshot = await db
+      .collection("users")
+      .where("clinicId", "==", null)
+      .where("createdAt", "<=", cutoff)
+      .get();
+
+    console.log(
+      `Found ${usersSnapshot.size} users with incomplete setup candidates.`
+    );
+
+    for (const userDoc of usersSnapshot.docs) {
+      const user = userDoc.data();
+      const userId = userDoc.id;
+
+      if (!user.email) {
+        console.log("Skipping user without email:", userId);
+        continue;
+      }
+
+      const logRef = db
+        .collection("emailLogs")
+        .doc(`setup_reminder_${userId}`);
+
+      // Skip reminders already sent or currently being processed.
+      const shouldSend = await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(logRef);
+
+        if (
+          existing.exists &&
+          ["sent", "sending"].includes(existing.data().status)
+        ) {
+          return false;
+        }
+
+        transaction.set(
+          logRef,
+          {
+            type: "setup_reminder",
+            userId,
+            status: "sending",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        return true;
+      });
+
+      if (!shouldSend) {
+        continue;
+      }
+
+      try {
+        const firstName =
+          typeof user.displayName === "string" &&
+          user.displayName.trim()
+            ? user.displayName.trim().split(/\s+/)[0]
+            : "Doctor";
+
+        const { data, error } = await getResend().emails.send({
+          from: "Clinic@Click <hello@mail.clinicatclick.com>",
+          to: [user.email],
+          subject: "Your Clinic@Click setup is waiting for you",
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#222;line-height:1.6">
+              <h2>You're a few steps away, ${firstName}.</h2>
+              <p>Complete your Clinic@Click setup to get started with tools designed for your dental practice.</p>
+              <ul>
+                <li>Manage patient records and appointments</li>
+                <li>Maintain digital dental charts and treatment records</li>
+                <li>Keep track of billing and clinic operations</li>
+              </ul>
+              <p style="margin:28px 0">
+                <a href="https://clinicatclick.com"
+                   style="background:#256AF3;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;display:inline-block">
+                  Complete Your Setup
+                </a>
+              </p>
+              <p>If you ran into an issue or need help, simply reply to this email.</p>
+              <p>Regards,<br><strong>Team Clinic@Click</strong><br>
+              <span style="color:#666">Modern Dentistry Starts Here.</span></p>
+            </div>
+          `,
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        await logRef.update({
+          status: "sent",
+          resendId: data?.id || null,
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log("Setup reminder sent to:", user.email);
+      } catch (error) {
+        await logRef.update({
+          status: "failed",
+          error: String(error.message || error).slice(0, 500),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.error(
+          "Setup reminder failed for",
+          userId,
+          error.message || error
+        );
+      }
     }
   }
 );

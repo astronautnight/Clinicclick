@@ -9,7 +9,12 @@ import {
   ReactNode,
 } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { useAuth } from '../provider';
 import { useFirestore } from '../provider';
 import { useRouter, usePathname } from 'next/navigation';
@@ -22,7 +27,6 @@ export type ClinicRole = 'owner' | 'admin' | 'member';
 interface UserContextValue {
   user: User | null;
   loading: boolean;
-
   clinicId: string | null;
   clinicRole: ClinicRole | null;
   clinicLoading: boolean;
@@ -52,7 +56,6 @@ export const useUser = () => {
   return ctx;
 };
 
-
 /* ------------------------------------------------------------------ */
 /* Provider */
 /* ------------------------------------------------------------------ */
@@ -70,12 +73,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [clinicLoading, setClinicLoading] = useState(true);
 
   /* -------------------------------------------------------------- */
-  /* Auth state listener */
+  /* Auth state listener and clinic context                         */
   /* -------------------------------------------------------------- */
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | null = null;
+    let active = true;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (!active) return;
+
       setUser(currentUser);
       setLoading(false);
 
@@ -113,37 +119,41 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       }
 
       /* -------------------- LOGGED IN -------------------- */
-      if (isAuthPage) {
-        router.replace('/dashboard');
-      }
-
-      if (pathname === '/') {
+      if (isAuthPage || pathname === '/') {
         router.replace('/dashboard');
       }
 
       /* -------------------- LOAD CLINIC CONTEXT -------------------- */
-      try {
-        setClinicLoading(true);
+      setClinicLoading(true);
 
-        const userRef = doc(db, 'users', currentUser.uid);
-        
-        unsubscribeUserDoc = onSnapshot(userRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            setClinicId(data.clinicId ?? null);
-            setClinicRole((data.role as ClinicRole) ?? null);
-          } else {
+      const userRef = doc(db, 'users', currentUser.uid);
+
+      try {
+        unsubscribeUserDoc = onSnapshot(
+          userRef,
+          (snap) => {
+            if (!active) return;
+
+            if (snap.exists()) {
+              const data = snap.data();
+              setClinicId(data.clinicId ?? null);
+              setClinicRole((data.role as ClinicRole) ?? null);
+            } else {
+              setClinicId(null);
+              setClinicRole(null);
+            }
+
+            setClinicLoading(false);
+          },
+          (error) => {
+            if (!active) return;
+
+            console.error('Failed to load clinic context', error);
             setClinicId(null);
             setClinicRole(null);
+            setClinicLoading(false);
           }
-          setClinicLoading(false);
-        }, (error) => {
-          console.error('Failed to load clinic context', error);
-          setClinicId(null);
-          setClinicRole(null);
-          setClinicLoading(false);
-        });
-
+        );
       } catch (error) {
         console.error('Failed to initialize clinic context listener', error);
         setClinicId(null);
@@ -153,7 +163,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
+      active = false;
       unsubscribeAuth();
+
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
@@ -161,7 +173,75 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, [auth, db, router, pathname]);
 
   /* ------------------------------------------------------------------ */
-  /* Provider value */
+  /* Track last activity for authenticated users                         */
+  /* ------------------------------------------------------------------ */
+  useEffect(() => {
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    let lastWriteAt = 0;
+    let writeInProgress = false;
+
+    const updateActivity = async (force = false) => {
+      if (document.visibilityState !== 'visible') return;
+      if (writeInProgress) return;
+
+      // Avoid writing more often than once every 15 minutes.
+      const now = Date.now();
+      if (!force && now - lastWriteAt < 15 * 60 * 1000) return;
+
+      writeInProgress = true;
+
+      try {
+        await setDoc(
+          userRef,
+          { lastActiveAt: serverTimestamp() },
+          { merge: true }
+        );
+        lastWriteAt = Date.now();
+      } catch (error) {
+        console.error('Failed to update user activity:', error);
+      } finally {
+        writeInProgress = false;
+      }
+    };
+
+    // Record activity when the authenticated app becomes active.
+    void updateActivity(true);
+
+    const intervalId = window.setInterval(() => {
+      void updateActivity();
+    }, 60 * 1000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void updateActivity(true);
+      }
+    };
+
+    const handleUserActivity = () => {
+      void updateActivity();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pointerdown', handleUserActivity, {
+      passive: true,
+    });
+    window.addEventListener('keydown', handleUserActivity);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
+      window.removeEventListener('pointerdown', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+    };
+  }, [user, db]);
+
+  /* ------------------------------------------------------------------ */
+  /* Provider value                                                      */
   /* ------------------------------------------------------------------ */
   return (
     <UserContext.Provider
