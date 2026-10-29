@@ -41,7 +41,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
         const baseColorClass = item.color ? item.color.replace('bg-', 'text-') : 'text-slate-500';
 
         const iconContainerClassName = cn(
-          "p-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 shadow-sm flex items-center justify-center"
+          "p-1.5 rounded-lg bg-white dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/[0.08] shadow-xs flex items-center justify-center transition-colors group-hover:dark:bg-white/[0.1]"
         );
         
         const finalIconClassName = cn("h-4 w-4", baseColorClass);
