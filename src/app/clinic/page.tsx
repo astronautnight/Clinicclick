@@ -45,7 +45,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 
-import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Link2, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -65,6 +65,8 @@ type Member = {
 type JoinRequest = {
   uid: string;
   displayName: string;
+  role?: string;
+  note?: string;
 };
 
 /* ============================================================
@@ -185,9 +187,12 @@ function ClinicPageContent() {
       async (snap) => {
         const requestData = await Promise.all(snap.docs.map(async (d) => {
           const profile = await getUserProfile(d.id);
+          const data = d.data();
           return {
             uid: d.id,
-            displayName: profile?.displayName || d.id
+            displayName: profile?.displayName || data.displayName || d.id,
+            role: data.requestedRole || 'Other',
+            note: data.note || '',
           };
         }));
         setRequests(requestData);
@@ -500,16 +505,33 @@ function ClinicPageContent() {
     }
   };
 
+  const getInviteUrl = () => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/join?code=${inviteCode}`;
+    }
+    return `https://clinicatclick.com/join?code=${inviteCode}`;
+  };
+
   const handleCopyInviteCode = () => {
     navigator.clipboard.writeText(inviteCode);
     toast({ title: 'Invite code copied!' });
   };
 
+  const handleCopyInviteLink = () => {
+    const url = getInviteUrl();
+    navigator.clipboard.writeText(url);
+    toast({
+      title: 'Invite link copied!',
+      description: 'Anyone with this link can click and send a join request.',
+    });
+  };
+
   const getInviteMessages = () => {
-    const plainMsg = `Hello Doctor,\n\nYou have been invited to Clinic@Click on clinicclick.\n\nYour invite code is: ${inviteCode}\n\nPlease visit clinicatclick.com or download the Clinic@Click app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
-    const waMsg = `Hello Doctor,\n\nYou have been invited to Clinic@Click on clinicclick.\n\nYour invite code is: *${inviteCode}*\n\nPlease visit clinicatclick.com or download the Clinic@Click app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
-    const subject = "Join Clinic@Click on clinicclick";
-    return { plainMsg, waMsg, subject };
+    const inviteUrl = getInviteUrl();
+    const plainMsg = `Hello,\n\nYou have been invited to join ${clinicName || 'Clinic@Click'} on Clinic@Click.\n\nClick this link to send your join request:\n${inviteUrl}\n\nInvite Code: ${inviteCode}\n\nDownload app: https://play.google.com/store/apps/details?id=com.clinicclick.app`;
+    const waMsg = `Hello,\n\nYou have been invited to join *${clinicName || 'Clinic@Click'}* on Clinic@Click.\n\n👉 Click the link to send your join request:\n${inviteUrl}\n\nInvite Code: *${inviteCode}*\n\nClinic@Click App:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app`;
+    const subject = `Join ${clinicName || 'Clinic@Click'} on Clinic@Click`;
+    return { plainMsg, waMsg, subject, inviteUrl };
   };
 
   const handleShareWhatsApp = () => {
@@ -1249,8 +1271,20 @@ function ClinicPageContent() {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={handleCopyInviteLink}
+                  aria-label="Copy invite link"
+                  title="Copy invite link to clipboard"
+                  className="h-9 px-3 font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-400"
+                >
+                  <Link2 className="h-4 w-4 mr-1.5" />
+                  Copy Link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={handleCopyInviteCode}
                   aria-label="Copy invite code"
+                  title="Copy invite code only"
                   className="h-9 px-3 text-slate-600 hover:text-slate-900 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:text-white dark:hover:bg-[#3A3A3A]"
                 >
                   <Copy className="h-4 w-4" />
@@ -1314,17 +1348,29 @@ function ClinicPageContent() {
                       Review
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[300px] p-2 dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
+                  <DropdownMenuContent align="end" className="w-[320px] p-2 dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
                     <div className="text-xs font-bold text-slate-400 mb-2 px-2 uppercase tracking-wider">Join Requests</div>
-                    {requests.map(r => (
-                      <div key={r.uid} className="flex justify-between items-center p-2 rounded-md hover:bg-slate-50 dark:hover:bg-[#3A3A3A]">
-                        <span className="font-semibold text-sm dark:text-white">{r.displayName}</span>
-                        <div className="flex gap-2">
-                          <Button size="sm" className="h-7 text-xs px-3 bg-green-600 hover:bg-green-700" onClick={() => acceptRequest(r.uid)}>Accept</Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40" onClick={() => rejectRequest(r.uid)}>Reject</Button>
+                    <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                      {requests.map(r => (
+                        <div key={r.uid} className="flex justify-between items-center p-2 rounded-md hover:bg-slate-50 dark:hover:bg-[#3A3A3A]">
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="font-semibold text-sm truncate dark:text-white">{r.displayName}</span>
+                            <span className="text-[11px] text-muted-foreground capitalize">
+                              Role: <span className="font-medium text-blue-600 dark:text-blue-400">{r.role || 'Member'}</span>
+                            </span>
+                            {r.note && (
+                              <span className="text-[10px] text-slate-400 italic truncate max-w-[160px]" title={r.note}>
+                                &quot;{r.note}&quot;
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" className="h-7 text-xs px-2.5 bg-green-600 hover:bg-green-700" onClick={() => acceptRequest(r.uid)}>Accept</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40" onClick={() => rejectRequest(r.uid)}>Reject</Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,8 +38,10 @@ function isStrongPassword(password: string) {
   return hasMinLength && numbers && special;
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnUrl = searchParams.get('returnUrl') || '/dashboard';
   const { user, loading } = useUser();
   const { toast } = useToast();
 
@@ -64,7 +66,7 @@ export default function LoginPage() {
   try {
     await signInWithGoogleNative();
     toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-    router.push('/dashboard');
+    router.push(returnUrl);
   } catch (error) {
     const err = error as AuthError;
     toast({
@@ -82,7 +84,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       toast({ title: 'Sign- Successful', description: 'Welcome back!' });
-      router.push('/dashboard');
+      router.push(returnUrl);
     } catch (error) {
       const err = error as AuthError;
       let errorMessage = err.message || 'An unexpected error occurred.';
@@ -116,7 +118,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmail(email, password);
-      router.push('/dashboard');
+      router.push(returnUrl);
     } catch (error) {
       const err = error as AuthError;
       toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
@@ -162,7 +164,7 @@ export default function LoginPage() {
       const newUser = await signUpWithEmail(email, password);
       await updateUserProfile(newUser.uid, { displayName: fullName });
       toast({ title: 'Account created successfully' });
-      router.push('/dashboard');
+      router.push(returnUrl);
     } catch (error: any) {
       toast({
         title: 'Sign Up Failed',
@@ -299,5 +301,20 @@ export default function LoginPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

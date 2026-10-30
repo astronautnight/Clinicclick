@@ -42,6 +42,25 @@ interface JoinClinicInput {
   userId: string;
   inviteCode: string;
   requestedRole: string;
+  note?: string;
+}
+
+export interface ClinicPreview {
+  clinicId: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  clinicType?: string;
+  logoUrl?: string;
+  createdBy?: string;
+}
+
+export interface PendingRequestData {
+  requestedAt?: any;
+  displayName?: string;
+  email?: string | null;
+  requestedRole?: string;
+  note?: string;
 }
 
 type ClinicRole = 'admin' | 'member';
@@ -144,6 +163,7 @@ export async function joinClinicWithCode({
   userId,
   inviteCode,
   requestedRole,
+  note,
 }: JoinClinicInput): Promise<{ clinicId: string }> {
   if (!userId || !inviteCode || !requestedRole) {
     throw new Error('User ID, invite code, and requested role are required');
@@ -158,7 +178,7 @@ export async function joinClinicWithCode({
   // 1️⃣ Find clinic by invite code
   const q = query(
     collection(db, 'clinics'),
-    where('inviteCode', '==', inviteCode)
+    where('inviteCode', '==', inviteCode.trim())
   );
 
   const snap = await getDocs(q);
@@ -176,12 +196,83 @@ export async function joinClinicWithCode({
     {
       requestedAt: serverTimestamp(),
       displayName: userProfile?.displayName || 'Unknown User',
+      email: userProfile?.email || null,
       requestedRole: requestedRole,
+      note: note || '',
     }
   );
 
   // ❌ DO NOT update users/{uid} here
   return { clinicId };
+}
+
+/* ============================================================
+   GET CLINIC BY INVITE CODE (PUBLIC SAFE PREVIEW)
+============================================================ */
+
+export async function getClinicByInviteCode(inviteCode: string): Promise<ClinicPreview | null> {
+  if (!inviteCode || !inviteCode.trim()) return null;
+
+  try {
+    const q = query(
+      collection(db, 'clinics'),
+      where('inviteCode', '==', inviteCode.trim())
+    );
+
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const clinicDoc = snap.docs[0];
+    const data = clinicDoc.data();
+    return {
+      clinicId: clinicDoc.id,
+      name: data.name || 'Unnamed Clinic',
+      address: data.address || '',
+      phone: data.phone || '',
+      clinicType: data.clinicType || 'General',
+      logoUrl: data.logoUrl || '',
+      createdBy: data.createdBy,
+    };
+  } catch (error: any) {
+    console.error('Error fetching clinic by invite code:', error);
+    throw error;
+  }
+}
+
+/* ============================================================
+   GET USER'S PENDING REQUEST STATUS
+============================================================ */
+
+export async function getPendingRequest(clinicId: string, userId: string): Promise<PendingRequestData | null> {
+  if (!clinicId || !userId) return null;
+
+  try {
+    const reqSnap = await getDoc(doc(db, 'clinics', clinicId, 'pendingRequests', userId));
+    if (reqSnap.exists()) {
+      return reqSnap.data() as PendingRequestData;
+    }
+    return null;
+  } catch (error: any) {
+    console.error('Error fetching pending request status:', error);
+    return null;
+  }
+}
+
+/* ============================================================
+   CANCEL PENDING JOIN REQUEST
+============================================================ */
+
+export async function cancelPendingRequest({
+  clinicId,
+  userId,
+}: {
+  clinicId: string;
+  userId: string;
+}) {
+  if (!clinicId || !userId) {
+    throw new Error('clinicId and userId required');
+  }
+  await deleteDoc(doc(db, 'clinics', clinicId, 'pendingRequests', userId));
 }
 
 /* ============================================================

@@ -121,7 +121,7 @@ service cloud.firestore {
     /* ================= PENDING REQUESTS ================= */
     match /clinics/{clinicId}/pendingRequests/{uid} {
       allow create: if signedIn();
-      allow read, delete: if signedIn() && isClinicAdmin(clinicId);
+      allow read, delete: if signedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }
     
     /* ================= PROCEDURES ================= */

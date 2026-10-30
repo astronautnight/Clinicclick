@@ -97,6 +97,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         pathname.startsWith('/blog') ||
         pathname.startsWith('/login') ||
         pathname.startsWith('/signup') ||
+        pathname.startsWith('/join') ||
         pathname.startsWith('/forgot-password') ||
         pathname.startsWith('/reset-password');
 
@@ -120,7 +121,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
       /* -------------------- LOGGED IN -------------------- */
       if (isAuthPage || pathname === '/') {
-        router.replace('/dashboard');
+        let destination = '/dashboard';
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const returnUrl = params.get('returnUrl');
+          if (returnUrl && returnUrl.startsWith('/')) {
+            destination = returnUrl;
+          }
+        }
+        router.replace(destination);
       }
 
       /* -------------------- LOAD CLINIC CONTEXT -------------------- */
