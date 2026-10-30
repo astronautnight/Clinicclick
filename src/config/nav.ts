@@ -106,7 +106,7 @@ export const sidebarNavItems: NavItem[] = [
     href: '/consults',
     iconName: 'UsersRound',
     description: 'Manage external consults and student academics.',
-    color: 'bg-accent',
+    color: 'bg-indigo-500',
     iconColorClass: 'text-accent-foreground',
   },
   {

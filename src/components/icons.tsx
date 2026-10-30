@@ -1,4 +1,3 @@
-
 import type { SVGProps } from 'react';
 
 export function LogoCC(props: SVGProps<SVGSVGElement>) {
@@ -22,7 +21,7 @@ export function LogoCC(props: SVGProps<SVGSVGElement>) {
       {/* Inner C: Centered at (18,18), Radius 8, Stroke 3, ~90-degree opening on the right */}
       <path
         d="M 23.657 23.657 A 8 8 0 1 1 23.657 12.343"
-        stroke="hsl(var(--accent))"
+        stroke="#ec4899"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -30,4 +29,3 @@ export function LogoCC(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-

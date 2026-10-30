@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { collection, doc, getDoc, onSnapshot, query, orderBy, where, getCountFromServer, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -45,7 +45,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 
-import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -99,6 +99,7 @@ function ClinicPageContent() {
   const [isFounder, setIsFounder] = useState<boolean>(false);
   const [founderCount, setFounderCount] = useState<number>(0);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingClinicName, setEditingClinicName] = useState('');
   const [editingClinicAddress, setEditingClinicAddress] = useState('');
   const [editingClinicPhone, setEditingClinicPhone] = useState('');
@@ -258,7 +259,7 @@ function ClinicPageContent() {
   // Check and claim founder slot if eligible
   useEffect(() => {
     if (!db || !clinicId || isFounder || founderCount >= 100) return;
-    
+
     const activeDaysCount = activeDates.length;
     const patientsCount = patients.length;
     const doctorsCount = doctors.filter(d => d.doctorType === 'activedoctor').length;
@@ -433,6 +434,11 @@ function ClinicPageContent() {
     });
   };
 
+  const handleTriggerLogoUpload = () => {
+    if (isUploadingLogo || clinicRole !== 'admin') return;
+    fileInputRef.current?.click();
+  };
+
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !clinicId) return;
@@ -444,6 +450,7 @@ function ClinicPageContent() {
         description: "Please select an image file (PNG, JPG, SVG, etc.).",
         variant: "destructive",
       });
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
@@ -475,6 +482,7 @@ function ClinicPageContent() {
       });
     } finally {
       setIsUploadingLogo(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -495,6 +503,92 @@ function ClinicPageContent() {
   const handleCopyInviteCode = () => {
     navigator.clipboard.writeText(inviteCode);
     toast({ title: 'Invite code copied!' });
+  };
+
+  const getInviteMessages = () => {
+    const plainMsg = `Hello Doctor,\n\nYou have been invited to Clinic@Click on clinicclick.\n\nYour invite code is: ${inviteCode}\n\nPlease visit clinicatclick.com or download the Clinic@Click app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
+    const waMsg = `Hello Doctor,\n\nYou have been invited to Clinic@Click on clinicclick.\n\nYour invite code is: *${inviteCode}*\n\nPlease visit clinicatclick.com or download the Clinic@Click app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
+    const subject = "Join Clinic@Click on clinicclick";
+    return { plainMsg, waMsg, subject };
+  };
+
+  const handleShareWhatsApp = () => {
+    const { waMsg } = getInviteMessages();
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareWhatsApp) {
+      try {
+        const handled = (window as any).AndroidBridge.shareWhatsApp(waMsg);
+        if (handled) return;
+      } catch (err) {
+        console.error("AndroidBridge.shareWhatsApp error:", err);
+      }
+    }
+
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = `whatsapp://send?text=${encodeURIComponent(waMsg)}`;
+      setTimeout(() => {
+        window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, '_blank');
+      }, 1500);
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, '_blank');
+    }
+  };
+
+  const handleShareEmail = () => {
+    const { plainMsg, subject } = getInviteMessages();
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareEmail) {
+      try {
+        const handled = (window as any).AndroidBridge.shareEmail(subject, plainMsg);
+        if (handled) return;
+      } catch (err) {
+        console.error("AndroidBridge.shareEmail error:", err);
+      }
+    }
+
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainMsg)}`;
+  };
+
+  const handleShareSms = () => {
+    const { plainMsg } = getInviteMessages();
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareSms) {
+      try {
+        const handled = (window as any).AndroidBridge.shareSms(plainMsg);
+        if (handled) return;
+      } catch (err) {
+        console.error("AndroidBridge.shareSms error:", err);
+      }
+    }
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const separator = isIOS ? '&' : '?';
+    window.location.href = `sms:${separator}body=${encodeURIComponent(plainMsg)}`;
+  };
+
+  const handleShareGeneric = async () => {
+    const { plainMsg, subject } = getInviteMessages();
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareGeneric) {
+      try {
+        const handled = (window as any).AndroidBridge.shareGeneric(subject, plainMsg);
+        if (handled) return;
+      } catch (err) {
+        console.error("AndroidBridge.shareGeneric error:", err);
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: subject,
+          text: plainMsg,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error("navigator.share error:", err);
+        }
+      }
+    }
+    handleCopyInviteCode();
   };
 
   const handleAddOperatory = async () => {
@@ -588,11 +682,10 @@ function ClinicPageContent() {
                 setSetupMode('create');
                 window.history.replaceState(null, '', '/clinic?mode=create');
               }}
-              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                setupMode === 'create'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${setupMode === 'create'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
             >
               <Hospital className="h-4 w-4" />
               Create Clinic
@@ -603,11 +696,10 @@ function ClinicPageContent() {
                 setSetupMode('join');
                 window.history.replaceState(null, '', '/clinic?mode=join');
               }}
-              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
-                setupMode === 'join'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${setupMode === 'join'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
             >
               <UserPlus className="h-4 w-4" />
               Join Clinic
@@ -772,7 +864,7 @@ function ClinicPageContent() {
 
   let founderTier: 'None' | 'Bronze' | 'Silver' | 'Gold' = 'None';
   let nextTier: 'Bronze' | 'Silver' | 'Gold' | 'None' = 'Bronze';
-  
+
   const qualifiesGold = activeDaysCount >= 60 && patientsCount >= 30 && doctorsCount >= 2;
   const qualifiesSilver = activeDaysCount >= 30 && patientsCount >= 20 && doctorsCount >= 2;
   const qualifiesBronze = activeDaysCount >= 10 && patientsCount >= 10 && doctorsCount >= 1;
@@ -824,30 +916,38 @@ function ClinicPageContent() {
           <div className="flex justify-between items-start p-6 pb-5">
             <div className="flex gap-4 items-center">
               {/* Clinic Logo / Placeholder Icon */}
-              <div className="relative group h-16 w-16 shrink-0">
-                <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center border border-blue-100 overflow-hidden dark:bg-[#E3F2FD] dark:border-transparent dark:text-blue-500">
+              <div
+                className="relative group h-16 w-16 shrink-0 cursor-pointer"
+                onClick={clinicRole === 'admin' ? handleTriggerLogoUpload : undefined}
+                title={clinicRole === 'admin' ? "Upload logo (max 200KB)" : undefined}
+              >
+                <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center border border-blue-100 overflow-hidden dark:bg-[#E3F2FD] dark:border-transparent dark:text-blue-500 relative">
                   {logoUrl ? (
                     <img src={logoUrl} alt={`${clinicName} logo`} className="h-full w-full object-cover" />
                   ) : (
                     <Hospital className="h-8 w-8" />
                   )}
+                  {isUploadingLogo && (
+                    <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </div>
+                  )}
                 </div>
                 {clinicRole === 'admin' && (
                   <>
-                    <label
-                      htmlFor="logo-upload-input"
-                      className="absolute inset-0 bg-black/40 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                      title="Upload logo (max 200KB)"
+                    <div
+                      className="absolute inset-0 bg-black/40 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none"
                     >
                       <Camera className="h-5 w-5" />
-                    </label>
+                    </div>
                     <input
+                      ref={fileInputRef}
                       id="logo-upload-input"
                       type="file"
                       accept="image/*"
                       onChange={handleLogoChange}
                       disabled={isUploadingLogo}
-                      className="sr-only"
+                      className="sr-only hidden"
                     />
                   </>
                 )}
@@ -870,231 +970,231 @@ function ClinicPageContent() {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                       <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">{clinicName}</h1>
                       <div className="flex flex-wrap items-center gap-2">
-                      {SHOW_INACTIVE_BADGE && (
-                        isTodayActive ? (
-                         <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-[#E8F5E9] dark:hover:bg-[#E8F5E9] dark:text-[#2E7D32] font-medium border-green-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
-                           <CheckCircle2 className="h-3.5 w-3.5" />
-                           Active
-                         </Badge>
-                        ) : (
-                         <Dialog>
-                           <DialogTrigger asChild>
-                             <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100 dark:bg-[#3D3D3D] dark:hover:bg-[#3D3D3D] dark:text-[#E0E0E0] font-medium border-slate-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 transition-all">
-                               <AlertTriangle className="h-3.5 w-3.5 text-amber-500 animate-bounce" />
-                               Inactive
-                             </Badge>
-                           </DialogTrigger>
-                           <DialogContent className="sm:max-w-[480px] w-[95vw] p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-slate-200 dark:border-[#333] shadow-xl">
-                             <DialogHeader>
-                               <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                 <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                 Clinic is Inactive Today
-                               </DialogTitle>
-                               <DialogDescription className="text-sm text-slate-500 dark:text-[#A0A0A0] mt-1">
-                                 Your clinic is currently marked as inactive for today. Follow these instructions to record active days and qualify for the Founder Program.
-                               </DialogDescription>
-                             </DialogHeader>
-                             <div className="mt-4 space-y-4 text-sm text-slate-600 dark:text-[#D0D0D0]">
-                               <p className="font-semibold text-slate-800 dark:text-white">How to maintain an active clinic:</p>
-                               <ul className="list-disc pl-5 space-y-2">
-                                 <li>
-                                   <strong className="text-slate-800 dark:text-white">Schedule appointments:</strong> Add a patient appointment to your calendar.
-                                 </li>
-                                 <li>
-                                   <strong className="text-slate-800 dark:text-white">Add patient records:</strong> Register a new patient in the system.
-                                 </li>
-                                 <li>
-                                   <strong className="text-slate-800 dark:text-white">Generate invoices:</strong> Record a transaction or issue a billing invoice.
-                                 </li>
-                                </ul>
-                                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3 rounded-lg text-amber-800 dark:text-amber-300 text-xs">
-                                  💡 Completing any of these daily operations automatically registers the current day as active under the Founder Program progress.
+                        {SHOW_INACTIVE_BADGE && (
+                          isTodayActive ? (
+                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 dark:bg-[#E8F5E9] dark:hover:bg-[#E8F5E9] dark:text-[#2E7D32] font-medium border-green-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Active
+                            </Badge>
+                          ) : (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 hover:bg-slate-100 dark:bg-[#3D3D3D] dark:hover:bg-[#3D3D3D] dark:text-[#E0E0E0] font-medium border-slate-200 dark:border-transparent rounded-full px-2.5 py-0.5 flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 transition-all">
+                                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 animate-bounce" />
+                                  Inactive
+                                </Badge>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[480px] w-[95vw] p-6 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-slate-200 dark:border-[#333] shadow-xl">
+                                <DialogHeader>
+                                  <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                    Clinic is Inactive Today
+                                  </DialogTitle>
+                                  <DialogDescription className="text-sm text-slate-500 dark:text-[#A0A0A0] mt-1">
+                                    Your clinic is currently marked as inactive for today. Follow these instructions to record active days and qualify for the Founder Program.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="mt-4 space-y-4 text-sm text-slate-600 dark:text-[#D0D0D0]">
+                                  <p className="font-semibold text-slate-800 dark:text-white">How to maintain an active clinic:</p>
+                                  <ul className="list-disc pl-5 space-y-2">
+                                    <li>
+                                      <strong className="text-slate-800 dark:text-white">Schedule appointments:</strong> Add a patient appointment to your calendar.
+                                    </li>
+                                    <li>
+                                      <strong className="text-slate-800 dark:text-white">Add patient records:</strong> Register a new patient in the system.
+                                    </li>
+                                    <li>
+                                      <strong className="text-slate-800 dark:text-white">Generate invoices:</strong> Record a transaction or issue a billing invoice.
+                                    </li>
+                                  </ul>
+                                  <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3 rounded-lg text-amber-800 dark:text-amber-300 text-xs">
+                                    💡 Completing any of these daily operations automatically registers the current day as active under the Founder Program progress.
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )
+                        )}
+
+                        {SHOW_FOUNDER_PROGRAM && (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <button className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold shadow-sm transition-all hover:scale-105 border ${founderTier !== 'None' ? currentTierInfo.color + ' border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-[#2A2A2A] dark:text-[#E0E0E0] dark:border-[#4A4A4A] dark:hover:bg-[#3A3A3A]'}`}>
+                                <Medal className="h-4 w-4" style={{ color: founderTier !== 'None' ? currentTierInfo.iconColor : 'currentColor' }} />
+                                {founderTier !== 'None' ? currentTierInfo.label : 'Unlock Founder'}
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col bg-[#FAFAFA] dark:bg-[#1A1A1A] border-0 rounded-2xl shadow-xl">
+                              <DialogHeader className="sr-only">
+                                <DialogTitle>Founder Program</DialogTitle>
+                                <DialogDescription>Founder program tier and benefits</DialogDescription>
+                              </DialogHeader>
+                              <div className="p-6 bg-white dark:bg-[#252525] flex items-center gap-4 border-b border-slate-100 dark:border-[#333] shrink-0">
+                                <div className="h-12 w-12 rounded-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30">
+                                  <Medal className="h-6 w-6 text-indigo-500" />
+                                </div>
+                                <div>
+                                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                                    {founderTier !== 'None' ? currentTierInfo.label : 'Founder Program'}
+                                  </h2>
+                                  <p className="text-sm text-slate-500 dark:text-[#A0A0A0]">
+                                    {founderTier !== 'None' ? "You're among the earliest clinics on Clinic@Click." : "Complete requirements to unlock premium benefits."}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="p-6 space-y-8 overflow-y-auto flex-1">
+                                {/* Description */}
+                                <div className="text-sm text-slate-600 dark:text-[#B0B0B0] space-y-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                                  <p className="font-bold text-slate-900 dark:text-white">Founder Program</p>
+                                  <p>Clinic@Click is currently free while we continue building the platform.</p>
+                                  <p>As premium plans are introduced in the future, Founder Clinics will receive exclusive discounts based on their Founder Tier.</p>
+                                  <p>Clinic@Click will always offer a free plan with essential clinic management features. Premium plans will focus on advanced automation, AI tools, analytics, reporting, and productivity features.</p>
+                                </div>
+
+                                {/* Current Benefit */}
+                                <div>
+                                  <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-3">Current Benefit</h3>
+                                  <div className="bg-[#FFF4E5] dark:bg-[#3D2C1D] border border-[#FDE0B6] dark:border-[#5C4328] rounded-xl p-4 flex items-start gap-4">
+                                    <Tag className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5" />
+                                    <div>
+                                      <div className="font-bold text-amber-900 dark:text-amber-100 text-base">
+                                        {founderTier !== 'None' ? `${currentTierInfo.discount}% off future premium plans` : 'No benefits unlocked yet'}
+                                      </div>
+                                      <div className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                        {founderTier !== 'None' ? 'Locked in for as long as you stay a founder.' : 'Reach Bronze tier to get 25% off.'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Progress to Next Tier */}
+                                {nextTier !== 'None' && (
+                                  <div>
+                                    <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">Progress to {nextTier}</h3>
+                                    <div className="space-y-5">
+                                      {/* Active Days */}
+                                      <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                            <Calendar className="h-4 w-4 text-slate-400" /> Maintain an active clinic
+                                          </div>
+                                          <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                            {activeDaysCount} / {nextTierInfo.days} days
+                                          </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (activeDaysCount / nextTierInfo.days) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
+                                          {Math.max(0, nextTierInfo.days - activeDaysCount)} days left
+                                        </div>
+                                      </div>
+
+                                      {/* Patients */}
+                                      <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                            <Users className="h-4 w-4 text-slate-400" /> Grow patient records
+                                          </div>
+                                          <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                            {patientsCount} / {nextTierInfo.patients}
+                                          </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (patientsCount / nextTierInfo.patients) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
+                                          {Math.max(0, nextTierInfo.patients - patientsCount)} more
+                                        </div>
+                                      </div>
+
+                                      {/* Doctors */}
+                                      <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
+                                            <UserCheck className="h-4 w-4 text-slate-400" /> Collaborate with doctors
+                                          </div>
+                                          <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
+                                            {doctorsCount} / {nextTierInfo.doctors}
+                                          </div>
+                                        </div>
+                                        <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
+                                          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (doctorsCount / nextTierInfo.doctors) * 100)}%` }}></div>
+                                        </div>
+                                        <div className="flex justify-between items-start mt-1">
+                                          <details className="text-xs group">
+                                            <summary className="text-blue-500 cursor-pointer font-medium hover:underline list-none flex items-center">
+                                              <svg className="w-3 h-3 mr-1 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                              How to add a doctor?
+                                            </summary>
+                                            <div className="mt-2 bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 leading-relaxed text-left">
+                                              <ol className="list-decimal pl-4 space-y-1">
+                                                <li>Share your clinic's invite code with your associate doctor.</li>
+                                                <li>Ask them to visit <strong>clinicatclick.com</strong> or download the Clinic@Click app.</li>
+                                                <li>They should sign up, go to "Join Clinic", enter your code, and select the <strong>Doctor</strong> role.</li>
+                                                <li>Approve their request in the pending requests section.</li>
+                                              </ol>
+                                            </div>
+                                          </details>
+                                          <div className="text-xs text-right text-slate-400 dark:text-[#888] whitespace-nowrap ml-4">
+                                            {Math.max(0, nextTierInfo.doctors - doctorsCount)} more
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* All Founder Tiers */}
+                                <div>
+                                  <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">All Founder Tiers</h3>
+                                  <div className="grid grid-cols-3 gap-3">
+                                    {[
+                                      { name: 'Bronze', days: 10, patients: 10, doctors: 1, discount: 25, achieved: founderTier === 'Bronze' || founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Bronze' },
+                                      { name: 'Silver', days: 30, patients: 20, doctors: 2, discount: 50, achieved: founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Silver' },
+                                      { name: 'Gold', days: 60, patients: 30, doctors: 2, discount: 75, achieved: founderTier === 'Gold', current: founderTier === 'Gold' }
+                                    ].map(t => (
+                                      <div key={t.name} className={`rounded-xl p-4 border ${t.current ? 'bg-[#FFF9F0] border-amber-400 dark:bg-[#332A1F] dark:border-amber-600' : 'bg-white border-slate-200 dark:bg-[#252525] dark:border-[#333]'} relative overflow-hidden flex flex-col justify-between h-full`}>
+                                        <div>
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <Medal className={`h-5 w-5 ${t.name === 'Bronze' ? 'text-amber-700' : t.name === 'Silver' ? 'text-slate-400' : 'text-yellow-500'}`} />
+                                            <span className="font-bold text-sm text-slate-900 dark:text-white">{t.name}</span>
+                                          </div>
+                                          <div className="text-[11px] text-slate-500 dark:text-[#A0A0A0] space-y-1 mb-4">
+                                            <div>{t.days} days active</div>
+                                            <div>{t.patients} patient records</div>
+                                            <div>{t.doctors} doctors</div>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${t.current ? 'bg-amber-500 text-white' : t.achieved ? 'bg-slate-100 text-slate-600 dark:bg-[#333] dark:text-[#C0C0C0]' : 'bg-slate-50 text-slate-400 border border-slate-200 dark:bg-[#1A1A1A] dark:border-[#333]'}`}>
+                                            {t.discount}% off
+                                          </span>
+                                          <div className="mt-2 text-[10px] font-bold">
+                                            {t.current ? <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">← Current</span> : t.achieved ? <span className="text-slate-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Achieved</span> : <span className="text-slate-300 dark:text-[#666]">In progress</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-4 p-3 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-[#333] rounded-lg text-center text-xs text-slate-500 dark:text-[#A0A0A0]">
+                                    {(() => {
+                                      const displayFounderCount = Math.min(100, Math.round(25 + founderCount * 0.75));
+                                      if (founderCount >= 100 && !isFounder) {
+                                        return "100 clinics have already joined the Founder Program. New founder spots are currently closed.";
+                                      }
+                                      if (isFounder) {
+                                        return "You are part of the exclusive first 100 Founder Clinics!";
+                                      }
+                                      return `Only the first 100 clinics to reach Bronze will be a part of the Founder Program. (${displayFounderCount}/100 spots claimed)`;
+                                    })()}
+                                  </div>
                                 </div>
                               </div>
                             </DialogContent>
                           </Dialog>
-                        )
-                       )}
-
-                       {SHOW_FOUNDER_PROGRAM && (
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <button className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold shadow-sm transition-all hover:scale-105 border ${founderTier !== 'None' ? currentTierInfo.color + ' border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-[#2A2A2A] dark:text-[#E0E0E0] dark:border-[#4A4A4A] dark:hover:bg-[#3A3A3A]'}`}>
-                              <Medal className="h-4 w-4" style={{ color: founderTier !== 'None' ? currentTierInfo.iconColor : 'currentColor' }} />
-                              {founderTier !== 'None' ? currentTierInfo.label : 'Unlock Founder'}
-                            </button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] p-0 overflow-hidden flex flex-col bg-[#FAFAFA] dark:bg-[#1A1A1A] border-0 rounded-2xl shadow-xl">
-                            <DialogHeader className="sr-only">
-                              <DialogTitle>Founder Program</DialogTitle>
-                              <DialogDescription>Founder program tier and benefits</DialogDescription>
-                            </DialogHeader>
-                            <div className="p-6 bg-white dark:bg-[#252525] flex items-center gap-4 border-b border-slate-100 dark:border-[#333] shrink-0">
-                              <div className="h-12 w-12 rounded-full flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30">
-                                <Medal className="h-6 w-6 text-indigo-500" />
-                              </div>
-                              <div>
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                  {founderTier !== 'None' ? currentTierInfo.label : 'Founder Program'}
-                                </h2>
-                                <p className="text-sm text-slate-500 dark:text-[#A0A0A0]">
-                                  {founderTier !== 'None' ? "You're among the earliest clinics on Clinic@Click." : "Complete requirements to unlock premium benefits."}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="p-6 space-y-8 overflow-y-auto flex-1">
-                              {/* Description */}
-                              <div className="text-sm text-slate-600 dark:text-[#B0B0B0] space-y-3 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                                <p className="font-bold text-slate-900 dark:text-white">Founder Program</p>
-                                <p>Clinic@Click is currently free while we continue building the platform.</p>
-                                <p>As premium plans are introduced in the future, Founder Clinics will receive exclusive discounts based on their Founder Tier.</p>
-                                <p>Clinic@Click will always offer a free plan with essential clinic management features. Premium plans will focus on advanced automation, AI tools, analytics, reporting, and productivity features.</p>
-                              </div>
-
-                              {/* Current Benefit */}
-                              <div>
-                                <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-3">Current Benefit</h3>
-                                <div className="bg-[#FFF4E5] dark:bg-[#3D2C1D] border border-[#FDE0B6] dark:border-[#5C4328] rounded-xl p-4 flex items-start gap-4">
-                                  <Tag className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5" />
-                                  <div>
-                                    <div className="font-bold text-amber-900 dark:text-amber-100 text-base">
-                                      {founderTier !== 'None' ? `${currentTierInfo.discount}% off future premium plans` : 'No benefits unlocked yet'}
-                                    </div>
-                                    <div className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                                      {founderTier !== 'None' ? 'Locked in for as long as you stay a founder.' : 'Reach Bronze tier to get 25% off.'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Progress to Next Tier */}
-                              {nextTier !== 'None' && (
-                                <div>
-                                  <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">Progress to {nextTier}</h3>
-                                  <div className="space-y-5">
-                                    {/* Active Days */}
-                                    <div>
-                                      <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                          <Calendar className="h-4 w-4 text-slate-400" /> Maintain an active clinic
-                                        </div>
-                                        <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                          {activeDaysCount} / {nextTierInfo.days} days
-                                        </div>
-                                      </div>
-                                      <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                        <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (activeDaysCount / nextTierInfo.days) * 100)}%` }}></div>
-                                      </div>
-                                      <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
-                                        {Math.max(0, nextTierInfo.days - activeDaysCount)} days left
-                                      </div>
-                                    </div>
-
-                                    {/* Patients */}
-                                    <div>
-                                      <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                          <Users className="h-4 w-4 text-slate-400" /> Grow patient records
-                                        </div>
-                                        <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                          {patientsCount} / {nextTierInfo.patients}
-                                        </div>
-                                      </div>
-                                      <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                        <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (patientsCount / nextTierInfo.patients) * 100)}%` }}></div>
-                                      </div>
-                                      <div className="text-xs text-right mt-1 text-slate-400 dark:text-[#888]">
-                                        {Math.max(0, nextTierInfo.patients - patientsCount)} more
-                                      </div>
-                                    </div>
-
-                                    {/* Doctors */}
-                                    <div>
-                                      <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[#D0D0D0]">
-                                          <UserCheck className="h-4 w-4 text-slate-400" /> Collaborate with doctors
-                                        </div>
-                                        <div className="text-sm font-medium text-slate-500 dark:text-[#A0A0A0]">
-                                          {doctorsCount} / {nextTierInfo.doctors}
-                                        </div>
-                                      </div>
-                                      <div className="h-2 w-full bg-slate-200 dark:bg-[#333] rounded-full overflow-hidden">
-                                        <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (doctorsCount / nextTierInfo.doctors) * 100)}%` }}></div>
-                                      </div>
-                                      <div className="flex justify-between items-start mt-1">
-                                        <details className="text-xs group">
-                                          <summary className="text-blue-500 cursor-pointer font-medium hover:underline list-none flex items-center">
-                                            <svg className="w-3 h-3 mr-1 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                                            How to add a doctor?
-                                          </summary>
-                                          <div className="mt-2 bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 leading-relaxed text-left">
-                                            <ol className="list-decimal pl-4 space-y-1">
-                                              <li>Share your clinic's invite code with your associate doctor.</li>
-                                              <li>Ask them to visit <strong>clinicatclick.com</strong> or download the app.</li>
-                                              <li>They should sign up, go to "Join Clinic", enter your code, and select the <strong>Doctor</strong> role.</li>
-                                              <li>Approve their request in the pending requests section.</li>
-                                            </ol>
-                                          </div>
-                                        </details>
-                                        <div className="text-xs text-right text-slate-400 dark:text-[#888] whitespace-nowrap ml-4">
-                                          {Math.max(0, nextTierInfo.doctors - doctorsCount)} more
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* All Founder Tiers */}
-                              <div>
-                                <h3 className="text-xs font-bold tracking-widest text-slate-400 dark:text-[#888] uppercase mb-4">All Founder Tiers</h3>
-                                <div className="grid grid-cols-3 gap-3">
-                                  {[
-                                    { name: 'Bronze', days: 10, patients: 10, doctors: 1, discount: 25, achieved: founderTier === 'Bronze' || founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Bronze' },
-                                    { name: 'Silver', days: 30, patients: 20, doctors: 2, discount: 50, achieved: founderTier === 'Silver' || founderTier === 'Gold', current: founderTier === 'Silver' },
-                                    { name: 'Gold', days: 60, patients: 30, doctors: 2, discount: 75, achieved: founderTier === 'Gold', current: founderTier === 'Gold' }
-                                  ].map(t => (
-                                    <div key={t.name} className={`rounded-xl p-4 border ${t.current ? 'bg-[#FFF9F0] border-amber-400 dark:bg-[#332A1F] dark:border-amber-600' : 'bg-white border-slate-200 dark:bg-[#252525] dark:border-[#333]'} relative overflow-hidden flex flex-col justify-between h-full`}>
-                                      <div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <Medal className={`h-5 w-5 ${t.name === 'Bronze' ? 'text-amber-700' : t.name === 'Silver' ? 'text-slate-400' : 'text-yellow-500'}`} />
-                                          <span className="font-bold text-sm text-slate-900 dark:text-white">{t.name}</span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 dark:text-[#A0A0A0] space-y-1 mb-4">
-                                          <div>{t.days} days active</div>
-                                          <div>{t.patients} patient records</div>
-                                          <div>{t.doctors} doctors</div>
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${t.current ? 'bg-amber-500 text-white' : t.achieved ? 'bg-slate-100 text-slate-600 dark:bg-[#333] dark:text-[#C0C0C0]' : 'bg-slate-50 text-slate-400 border border-slate-200 dark:bg-[#1A1A1A] dark:border-[#333]'}`}>
-                                          {t.discount}% off
-                                        </span>
-                                        <div className="mt-2 text-[10px] font-bold">
-                                          {t.current ? <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">← Current</span> : t.achieved ? <span className="text-slate-500 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Achieved</span> : <span className="text-slate-300 dark:text-[#666]">In progress</span>}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="mt-4 p-3 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-[#333] rounded-lg text-center text-xs text-slate-500 dark:text-[#A0A0A0]">
-                                  {(() => {
-                                    const displayFounderCount = Math.min(100, Math.round(25 + founderCount * 0.75));
-                                    if (founderCount >= 100 && !isFounder) {
-                                      return "100 clinics have already joined the Founder Program. New founder spots are currently closed.";
-                                    }
-                                    if (isFounder) {
-                                      return "You are part of the exclusive first 100 Founder Clinics!";
-                                    }
-                                    return `Only the first 100 clinics to reach Bronze will be a part of the Founder Program. (${displayFounderCount}/100 spots claimed)`;
-                                  })()}
-                                </div>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                       )}
+                        )}
                       </div>
                     </div>
                   )}
@@ -1178,26 +1278,17 @@ function ClinicPageContent() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
-                    <DropdownMenuItem onClick={() => {
-                      const msg = `Hello Doctor,\n\nYou have been invited to join our clinic on ClinicClick.\n\nYour invite code is: *${inviteCode}*\n\nPlease visit clinicatclick.com or download the ClinicClick app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
-                      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-                    }}>
-                      <MessageCircle className="h-4 w-4 mr-2" /> WhatsApp
+                    <DropdownMenuItem onClick={handleShareWhatsApp}>
+                      <MessageCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" /> WhatsApp
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const subject = "Join our Clinic on ClinicClick";
-                      const msg = `Hello Doctor,\n\nYou have been invited to join our clinic on ClinicClick.\n\nYour invite code is: ${inviteCode}\n\nPlease visit clinicatclick.com or download the ClinicClick app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
-                      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`, '_blank');
-                    }}>
-                      <Mail className="h-4 w-4 mr-2" /> Email (Gmail)
+                    <DropdownMenuItem onClick={handleShareEmail}>
+                      <Mail className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" /> Email
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const msg = `Hello Doctor,\n\nYou have been invited to join our clinic on ClinicClick.\n\nYour invite code is: ${inviteCode}\n\nPlease visit clinicatclick.com or download the ClinicClick app from the Play Store:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app\n\nAfter signing up, navigate to 'Join Clinic' and enter your invite code.`;
-                      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-                      const separator = isIOS ? '&' : '?';
-                      window.open(`sms:${separator}body=${encodeURIComponent(msg)}`, '_blank');
-                    }}>
-                      <MessageSquare className="h-4 w-4 mr-2" /> Messages (SMS)
+                    <DropdownMenuItem onClick={handleShareSms}>
+                      <MessageSquare className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Messages (SMS)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleShareGeneric}>
+                      <Share2 className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" /> More Options...
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
