@@ -45,7 +45,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 
-import { MoreVertical, Edit, Hospital, Copy, Link2, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { MoreVertical, Edit, Hospital, Copy, Link2, Trash2, UserPlus, User, Share2, Mail, MessageCircle, MessageSquare, MapPin, Phone, Users, CheckCircle2, Camera, Medal, Tag, Calendar, UserCheck, AlertTriangle, Loader2, ChevronDown, RefreshCw } from 'lucide-react';
 import { getUserProfile } from '@/services/auth-service';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -144,7 +144,7 @@ function ClinicPageContent() {
         setClinicName(data.name || '');
         setClinicAddress(data.address || '');
         setClinicPhone(data.phone || '');
-        setInviteCode(data.inviteCode || '');
+        setInviteCode(clinicRole === 'admin' ? (data.inviteCode || '') : '');
         setLogoUrl(data.logoUrl || '');
         setActiveDates(data.activeDates || []);
         setIsFounder(data.isFounder || false);
@@ -181,30 +181,33 @@ function ClinicPageContent() {
       }
     );
 
-    const requestsColRef = collection(db, 'clinics', clinicId, 'pendingRequests');
-    const unsubRequests = onSnapshot(
-      requestsColRef,
-      async (snap) => {
-        const requestData = await Promise.all(snap.docs.map(async (d) => {
-          const profile = await getUserProfile(d.id);
-          const data = d.data();
-          return {
-            uid: d.id,
-            displayName: profile?.displayName || data.displayName || d.id,
-            role: data.requestedRole || 'Other',
-            note: data.note || '',
-          };
-        }));
-        setRequests(requestData);
-      },
-      (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: requestsColRef.path,
-          operation: 'list',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      }
-    );
+    let unsubRequests: () => void = () => {};
+    if (clinicRole === 'admin') {
+      const requestsColRef = collection(db, 'clinics', clinicId, 'pendingRequests');
+      unsubRequests = onSnapshot(
+        requestsColRef,
+        async (snap) => {
+          const requestData = await Promise.all(snap.docs.map(async (d) => {
+            const profile = await getUserProfile(d.id);
+            const data = d.data();
+            return {
+              uid: d.id,
+              displayName: profile?.displayName || data.displayName || d.id,
+              role: data.requestedRole || 'Other',
+              note: data.note || '',
+            };
+          }));
+          setRequests(requestData);
+        },
+        (error) => {
+          const permissionError = new FirestorePermissionError({
+            path: requestsColRef.path,
+            operation: 'list',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+      );
+    }
 
     const operatoriesColRef = collection(db, 'clinics', clinicId, 'operatories');
     const unsubOperatories = onSnapshot(query(operatoriesColRef, orderBy('createdAt')), (snap) => {
@@ -250,7 +253,7 @@ function ClinicPageContent() {
       unsubPatients();
       unsubDoctors();
     };
-  }, [clinicId, db, isLeaving, isDeleting]);
+  }, [clinicId, clinicRole, db, isLeaving, isDeleting]);
 
   // Fetch founder count to display spots left
   useEffect(() => {
@@ -512,9 +515,17 @@ function ClinicPageContent() {
     return `https://clinicatclick.com/join?code=${inviteCode}`;
   };
 
+  const isMobileDevice = () => {
+    if (typeof window === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  };
+
   const handleCopyInviteCode = () => {
     navigator.clipboard.writeText(inviteCode);
-    toast({ title: 'Invite code copied!' });
+    toast({
+      title: 'Invite code copied!',
+      description: `Code: ${inviteCode}`,
+    });
   };
 
   const handleCopyInviteLink = () => {
@@ -526,12 +537,52 @@ function ClinicPageContent() {
     });
   };
 
+  const handleCopyInviteMessage = () => {
+    const { plainMsg } = getInviteMessages();
+    navigator.clipboard.writeText(plainMsg);
+    toast({
+      title: 'Invite message copied!',
+      description: 'Includes clinic invite link and code. Ready to paste.',
+    });
+  };
+
   const getInviteMessages = () => {
     const inviteUrl = getInviteUrl();
     const plainMsg = `Hello,\n\nYou have been invited to join ${clinicName || 'Clinic@Click'} on Clinic@Click.\n\nClick this link to send your join request:\n${inviteUrl}\n\nInvite Code: ${inviteCode}\n\nDownload app: https://play.google.com/store/apps/details?id=com.clinicclick.app`;
     const waMsg = `Hello,\n\nYou have been invited to join *${clinicName || 'Clinic@Click'}* on Clinic@Click.\n\n👉 Click the link to send your join request:\n${inviteUrl}\n\nInvite Code: *${inviteCode}*\n\nClinic@Click App:\nhttps://play.google.com/store/apps/details?id=com.clinicclick.app`;
     const subject = `Join ${clinicName || 'Clinic@Click'} on Clinic@Click`;
     return { plainMsg, waMsg, subject, inviteUrl };
+  };
+
+  const handlePrimaryShare = async () => {
+    const { plainMsg, subject } = getInviteMessages();
+
+    // 1. Native Android WebView bridge
+    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareGeneric) {
+      try {
+        const handled = (window as any).AndroidBridge.shareGeneric(subject, plainMsg);
+        if (handled) return;
+      } catch (err) {
+        console.error("AndroidBridge.shareGeneric error:", err);
+      }
+    }
+
+    // 2. On phones: open native share sheet (WhatsApp, Telegram, etc.)
+    if (isMobileDevice() && typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: subject,
+          text: plainMsg,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return; // User cancelled share sheet
+        console.error("navigator.share error:", err);
+      }
+    }
+
+    // 3. Fallback on desktop (or if share unavailable): copy full pre-written message
+    handleCopyInviteMessage();
   };
 
   const handleShareWhatsApp = () => {
@@ -545,7 +596,7 @@ function ClinicPageContent() {
       }
     }
 
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isMobile = isMobileDevice();
     if (isMobile) {
       window.location.href = `whatsapp://send?text=${encodeURIComponent(waMsg)}`;
       setTimeout(() => {
@@ -587,30 +638,7 @@ function ClinicPageContent() {
   };
 
   const handleShareGeneric = async () => {
-    const { plainMsg, subject } = getInviteMessages();
-    if (typeof window !== 'undefined' && (window as any).AndroidBridge?.shareGeneric) {
-      try {
-        const handled = (window as any).AndroidBridge.shareGeneric(subject, plainMsg);
-        if (handled) return;
-      } catch (err) {
-        console.error("AndroidBridge.shareGeneric error:", err);
-      }
-    }
-
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title: subject,
-          text: plainMsg,
-        });
-        return;
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error("navigator.share error:", err);
-        }
-      }
-    }
-    handleCopyInviteCode();
+    await handlePrimaryShare();
   };
 
   const handleAddOperatory = async () => {
@@ -1262,120 +1290,168 @@ function ClinicPageContent() {
             </div>
           </div>
 
-          {/* Middle row: Invite code and Requests */}
-          <div className="flex flex-col md:flex-row border-t border-slate-200 dark:border-[#4A4A4A]">
-            <div className="flex-1 p-6 md:border-r border-slate-200 dark:border-[#4A4A4A]">
-              <Label className="text-[11px] font-bold tracking-widest uppercase mb-3 block" style={{ backgroundImage: 'linear-gradient(to right, #ef4444, #3b82f6, #10b981, #eab308)', WebkitBackgroundClip: 'text', color: 'transparent' }}>Invite code - Share with your associate dentists and team to let them join.</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="h-9 px-4 flex items-center justify-center font-mono text-sm font-bold tracking-widest border border-slate-200 dark:border-transparent rounded-md bg-slate-50 dark:bg-[#1A1A1A] text-slate-900 dark:text-white">{inviteCode}</div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyInviteLink}
-                  aria-label="Copy invite link"
-                  title="Copy invite link to clipboard"
-                  className="h-9 px-3 font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-400"
-                >
-                  <Link2 className="h-4 w-4 mr-1.5" />
-                  Copy Link
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyInviteCode}
-                  aria-label="Copy invite code"
-                  title="Copy invite code only"
-                  className="h-9 px-3 text-slate-600 hover:text-slate-900 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:text-white dark:hover:bg-[#3A3A3A]"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                {clinicRole === 'admin' && (
+          {/* Middle row: Invite code and Requests (ADMIN ONLY) */}
+          {clinicRole === 'admin' && (
+            <div className="flex flex-col md:flex-row border-t border-slate-200 dark:border-[#4A4A4A]">
+              <div className="flex-1 p-6 md:border-r border-slate-200 dark:border-[#4A4A4A]">
+                <Label className="text-[11px] font-bold tracking-widest uppercase mb-3 block" style={{ backgroundImage: 'linear-gradient(to right, #ef4444, #3b82f6, #10b981, #eab308)', WebkitBackgroundClip: 'text', color: 'transparent' }}>Invite code - Share with your associate dentists and team to let them join.</Label>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* 1. Code Pill with copy icon inside */}
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteCode}
+                    title="Click to copy invite code"
+                    aria-label={`Copy invite code ${inviteCode}`}
+                    className="group h-9 px-3.5 flex items-center gap-2 font-mono text-sm font-bold tracking-widest border border-slate-200 dark:border-[#3D3D3D] rounded-md bg-slate-50 hover:bg-slate-100 hover:border-slate-300 dark:bg-[#1A1A1A] dark:hover:bg-[#252525] dark:hover:border-[#4A4A4A] text-slate-900 dark:text-white transition-all cursor-pointer active:scale-95 shadow-sm"
+                  >
+                    <span>{inviteCode}</span>
+                    <Copy className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-blue-400 transition-colors" />
+                  </button>
+
+                  {/* 2. Secondary labeled "Copy link" button */}
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={async () => {
-                      if (!clinicId) return;
-                      const code = await regenerateInviteCode(clinicId);
-                      setInviteCode(code);
-                      toast({ title: 'Invite code regenerated' });
-                    }}
-                    className="h-9 font-medium text-slate-600 hover:text-slate-900 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:text-white dark:hover:bg-[#3A3A3A]"
+                    onClick={handleCopyInviteLink}
+                    aria-label="Copy invite link"
+                    title="Copy invite link to clipboard"
+                    className="h-9 px-3 font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:text-white dark:hover:bg-[#3A3A3A]"
                   >
-                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2"><path d="M1.84998 7.49998C1.84998 4.66458 4.05979 2.28987 6.89998 1.9231V0.916122C3.50495 1.28827 0.849976 4.12214 0.849976 7.49998C0.849976 10.8778 3.50495 13.7117 6.89998 14.0838V13.0768C4.05979 12.7101 1.84998 10.3354 1.84998 7.49998ZM14.15 7.49998C14.15 10.8778 11.495 13.7117 8.09998 14.0838V13.0768C10.9402 12.7101 13.15 10.3354 13.15 7.49998C13.15 4.66458 10.9402 2.28987 8.09998 1.9231V0.916122C11.495 1.28827 14.15 4.12214 14.15 7.49998Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path><path d="M8.09998 0V3L10.5 1.5L8.09998 0Z" fill="currentColor"></path><path d="M6.89998 15V12L4.5 13.5L6.89998 15Z" fill="currentColor"></path></svg>
-                    Regenerate
+                    <Link2 className="h-4 w-4 mr-1.5 text-slate-500 dark:text-slate-400" />
+                    Copy link
                   </Button>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" aria-label="Share invite code" className="h-9 font-medium text-slate-600 hover:text-slate-900 dark:border-[#4A4A4A] dark:bg-transparent dark:text-[#E0E0E0] dark:hover:text-white dark:hover:bg-[#3A3A3A]">
-                      <Share2 className="h-4 w-4 mr-2" /> Share
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
-                    <DropdownMenuItem onClick={handleShareWhatsApp}>
-                      <MessageCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" /> WhatsApp
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleShareEmail}>
-                      <Mail className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" /> Email
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleShareSms}>
-                      <MessageSquare className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Messages (SMS)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleShareGeneric}>
-                      <Share2 className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" /> More Options...
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
 
-            <div className="p-6 md:min-w-[280px] flex items-center justify-between gap-6">
-              <div>
-                <Label className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-[#A0A0A0] uppercase block mb-1">Pending Requests</Label>
-                {requests.length > 0 ? (
-                  <div className="text-sm font-semibold text-blue-600 dark:text-[#60A5FA] flex items-center gap-1.5">
-                    {requests.length} awaiting approval
+                  {/* 3. Primary "Share" button with split dropdown */}
+                  <div className="inline-flex rounded-md shadow-sm">
+                    <Button
+                      size="sm"
+                      onClick={handlePrimaryShare}
+                      className="h-9 px-3.5 font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-r-none shadow-sm"
+                    >
+                      <Share2 className="h-4 w-4 mr-1.5" />
+                      Share
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          className="h-9 px-2 bg-blue-600 hover:bg-blue-700 text-white border-l border-blue-500/40 rounded-l-none shadow-sm"
+                          aria-label="More share options"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52 dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
+                        <DropdownMenuItem onClick={handleCopyInviteMessage}>
+                          <Copy className="h-4 w-4 mr-2 text-blue-600 dark:text-blue-400" />
+                          Copy Invite Message
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleShareWhatsApp}>
+                          <MessageCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
+                          WhatsApp
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleShareEmail}>
+                          <Mail className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
+                          Email
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleShareSms}>
+                          <MessageSquare className="h-4 w-4 mr-2 text-indigo-500 dark:text-indigo-400" />
+                          Messages (SMS)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                ) : (
-                  <div className="text-sm font-medium text-slate-500">None</div>
+
+                  {/* 4. Regenerate text link with confirm dialog */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-xs text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400 hover:underline transition-colors flex items-center gap-1 sm:ml-auto py-1"
+                        title="Regenerate invite code"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Regenerate
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Regenerate Invite Code?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          The old code will stop working. Anyone with the previous link or code won&apos;t be able to use it to join.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={async () => {
+                            if (!clinicId) return;
+                            try {
+                              const code = await regenerateInviteCode(clinicId);
+                              setInviteCode(code);
+                              toast({ title: 'Invite code regenerated', description: `New code: ${code}` });
+                            } catch (err: any) {
+                              toast({ title: 'Regeneration failed', description: err.message, variant: 'destructive' });
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          Regenerate Code
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+
+              <div className="p-6 md:min-w-[280px] flex items-center justify-between gap-6">
+                <div>
+                  <Label className="text-[11px] font-bold tracking-widest text-slate-400 dark:text-[#A0A0A0] uppercase block mb-1">Pending Requests</Label>
+                  {requests.length > 0 ? (
+                    <div className="text-sm font-semibold text-blue-600 dark:text-[#60A5FA] flex items-center gap-1.5">
+                      {requests.length} awaiting approval
+                    </div>
+                  ) : (
+                    <div className="text-sm font-medium text-slate-500">None</div>
+                  )}
+                </div>
+                {requests.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-9 font-medium text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-[#1E3A8A] dark:bg-[#172554] dark:hover:bg-[#1E3A8A] dark:text-[#93C5FD]">
+                        <Users className="h-4 w-4 mr-2" />
+                        Review
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[320px] p-2 dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
+                      <div className="text-xs font-bold text-slate-400 mb-2 px-2 uppercase tracking-wider">Join Requests</div>
+                      <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                        {requests.map(r => (
+                          <div key={r.uid} className="flex justify-between items-center p-2 rounded-md hover:bg-slate-50 dark:hover:bg-[#3A3A3A]">
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-semibold text-sm truncate dark:text-white">{r.displayName}</span>
+                              <span className="text-[11px] text-muted-foreground capitalize">
+                                Role: <span className="font-medium text-blue-600 dark:text-blue-400">{r.role || 'Member'}</span>
+                              </span>
+                              {r.note && (
+                                <span className="text-[10px] text-slate-400 italic truncate max-w-[160px]" title={r.note}>
+                                  &quot;{r.note}&quot;
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <Button size="sm" className="h-7 text-xs px-2.5 bg-green-600 hover:bg-green-700" onClick={() => acceptRequest(r.uid)}>Accept</Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40" onClick={() => rejectRequest(r.uid)}>Reject</Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
-              {clinicRole === 'admin' && requests.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-9 font-medium text-blue-600 border-blue-200 hover:bg-blue-50 dark:border-[#1E3A8A] dark:bg-[#172554] dark:hover:bg-[#1E3A8A] dark:text-[#93C5FD]">
-                      <Users className="h-4 w-4 mr-2" />
-                      Review
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[320px] p-2 dark:bg-[#2A2A2A] dark:border-[#3D3D3D]">
-                    <div className="text-xs font-bold text-slate-400 mb-2 px-2 uppercase tracking-wider">Join Requests</div>
-                    <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                      {requests.map(r => (
-                        <div key={r.uid} className="flex justify-between items-center p-2 rounded-md hover:bg-slate-50 dark:hover:bg-[#3A3A3A]">
-                          <div className="flex flex-col min-w-0 pr-2">
-                            <span className="font-semibold text-sm truncate dark:text-white">{r.displayName}</span>
-                            <span className="text-[11px] text-muted-foreground capitalize">
-                              Role: <span className="font-medium text-blue-600 dark:text-blue-400">{r.role || 'Member'}</span>
-                            </span>
-                            {r.note && (
-                              <span className="text-[10px] text-slate-400 italic truncate max-w-[160px]" title={r.note}>
-                                &quot;{r.note}&quot;
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-1.5 shrink-0">
-                            <Button size="sm" className="h-7 text-xs px-2.5 bg-green-600 hover:bg-green-700" onClick={() => acceptRequest(r.uid)}>Accept</Button>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/40" onClick={() => rejectRequest(r.uid)}>Reject</Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
-          </div>
+          )}
 
           {/* Bottom row: Action Buttons */}
           <div className="p-4 px-6 border-t border-slate-200 dark:border-[#4A4A4A] flex flex-wrap justify-between items-center gap-4 bg-white dark:bg-transparent rounded-b-lg">
