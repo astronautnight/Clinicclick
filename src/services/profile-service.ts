@@ -10,25 +10,29 @@ import type { UserProfile } from "@/types";
 // they need db and user instances passed to them.
 
 export async function getProfile(db: any, user: any): Promise<UserProfile | null> {
-  if (!db || !user) return null;
+  if (!db || !user?.uid) return null;
 
   const docRef = doc(db, "users", user.uid);
   const snap = await getDoc(docRef);
 
   if (!snap.exists()) return null;
 
+  const data = snap.data();
   return {
     id: snap.id,
-    ...snap.data(),
+    uid: user.uid,
+    displayName: data?.displayName ?? user.displayName ?? null,
+    email: data?.email ?? user.email ?? null,
+    ...data,
   } as UserProfile;
 }
 
 export async function updateProfile(db: any, user: any, data: Partial<UserProfile>): Promise<UserProfile> {
-  if (!db || !user) throw new Error("Not authenticated");
+  if (!db || !user?.uid) throw new Error("Not authenticated");
 
   const docRef = doc(db, "users", user.uid);
 
-  const payload = {
+  const payload: Partial<UserProfile> = {
     ...data,
     updatedAt: serverTimestamp(),
   };
@@ -36,14 +40,16 @@ export async function updateProfile(db: any, user: any, data: Partial<UserProfil
   // setDoc with merge: true will create the doc if it doesn't exist or update it if it does.
   await setDoc(docRef, payload, { merge: true });
 
-  // For consistency, we can refetch or just return the merged data.
-  // Returning merged data is faster and usually sufficient.
-  const currentData = (await getDoc(docRef)).data();
+  // For consistency, refetch the updated document.
+  const currentSnap = await getDoc(docRef);
+  const currentData = currentSnap.data();
 
   return {
     id: user.uid,
+    uid: user.uid,
+    displayName: currentData?.displayName ?? user.displayName ?? null,
+    email: currentData?.email ?? user.email ?? null,
     ...currentData,
-    ...payload,
   } as UserProfile;
 }
 

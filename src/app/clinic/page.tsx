@@ -3,7 +3,7 @@
 
 import { Suspense, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { collection, doc, getDoc, onSnapshot, query, orderBy, where, getCountFromServer, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 import { useUser, useFirestore } from '@/firebase';
@@ -79,10 +79,12 @@ function ClinicPageContent() {
   const { user, clinicId, clinicRole } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const initialMode = searchParams.get('mode') === 'join' || searchParams.get('action') === 'join' ? 'join' : 'create';
   const [setupMode, setSetupMode] = useState<'create' | 'join'>(initialMode);
+  const [isCreatingClinic, setIsCreatingClinic] = useState(false);
 
   useEffect(() => {
     const param = searchParams.get('mode') || searchParams.get('action');
@@ -285,6 +287,7 @@ function ClinicPageContent() {
   ============================================================ */
 
   const handleCreateClinic = async () => {
+    if (isCreatingClinic) return;
     if (!user) return;
 
     if (clinicId) {
@@ -319,6 +322,7 @@ function ClinicPageContent() {
       return;
     }
 
+    setIsCreatingClinic(true);
     try {
       await createClinic({
         ownerUid: user.uid,
@@ -329,15 +333,14 @@ function ClinicPageContent() {
       });
 
       toast({ title: 'Clinic created successfully' });
-
-      // 🔥 FORCE UI TO UPDATE
-      window.location.reload();
-
+      router.push('/dashboard');
     } catch (e: any) {
       toast({
         title: e.message || 'Failed to create clinic',
         variant: 'destructive',
       });
+    } finally {
+      setIsCreatingClinic(false);
     }
   };
 
@@ -820,9 +823,17 @@ function ClinicPageContent() {
             <CardFooter className="flex flex-col gap-3 pt-4 border-t mt-4">
               <Button
                 onClick={handleCreateClinic}
+                disabled={isCreatingClinic}
                 className="w-full h-10 font-medium"
               >
-                Create Clinic
+                {isCreatingClinic ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Clinic...
+                  </>
+                ) : (
+                  'Create Clinic'
+                )}
               </Button>
               <div className="text-center text-sm text-muted-foreground">
                 Already have an invite code?{' '}

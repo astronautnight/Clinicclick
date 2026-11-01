@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
     Card,
     CardContent,
@@ -199,9 +200,17 @@ function FinancialRow({ label, value }: { label: string, value: string }) {
 export default function DashboardPage() {
     const SHOW_FOUNDER_PROGRAM = false;
 
+    const router = useRouter();
     const { user, clinicId, clinicLoading } = useUser();
     const db = useFirestore();
     const { toast } = useToast();
+
+    // Redirect users without a clinic to onboarding
+    useEffect(() => {
+        if (!clinicLoading && user && !clinicId) {
+            router.replace('/clinic?mode=create');
+        }
+    }, [clinicLoading, user, clinicId, router]);
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);

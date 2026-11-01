@@ -42,41 +42,116 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
+export interface EnsureUserProfileOptions {
+  displayName?: string | null;
+  photoURL?: string | null;
+}
+
 /* ------------------------------------------------------------------ */
-/* Internal helper: ensure user profile exists */
+/* Internal helper: ensure user profile exists with all standard fields */
 /* ------------------------------------------------------------------ */
-async function ensureUserProfile(user: User): Promise<void> {
+export async function ensureUserProfile(
+  user: User,
+  options?: EnsureUserProfileOptions
+): Promise<UserProfile> {
   const ref = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
 
+  const fallbackDisplayName = options?.displayName?.trim() || user.displayName || null;
+  const fallbackPhotoURL = options?.photoURL || user.photoURL || null;
+  const userEmail = user.email || null;
+
   if (!snap.exists()) {
-    const payload: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'> & {
-      createdAt: any;
-      updatedAt: any;
-    } = {
+    // 1️⃣ Brand-new user: initialize complete document with all core fields
+    const payload = {
       uid: user.uid,
-      email: user.email ?? null,
-      displayName: user.displayName ?? null,
-      photoURL: user.photoURL ?? null,
+      email: userEmail,
+      displayName: fallbackDisplayName,
+      photoURL: fallbackPhotoURL,
       clinicId: null,
       role: null,
+      notificationsEnabled: true,
+      lastActiveAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
     await setDoc(ref, payload);
 
     // Create a welcome survey notification for the new user
-    const notifRef = doc(collection(db, 'users', user.uid, 'notifications'));
-    await setDoc(notifRef, {
-      type: 'survey_source',
-      title: 'Welcome! How did you hear about us?',
-      body: 'Tap here to let us know where you heard about Clinic@Click.',
-      createdAt: serverTimestamp(),
-      read: false,
-    });
+    try {
+      const notifRef = doc(collection(db, 'users', user.uid, 'notifications'));
+      await setDoc(notifRef, {
+        type: 'survey_source',
+        title: 'Welcome! How did you hear about us?',
+        body: 'Tap here to let us know where you heard about Clinic@Click.',
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (e) {
+      console.warn('Could not create initial welcome notification:', e);
+    }
 
-
+    return { id: user.uid, ...payload } as unknown as UserProfile;
   }
+
+  // 2️⃣ Existing user: self-healing for missing fields without overwriting existing data
+  const existing = snap.data();
+  const updates: Record<string, any> = {};
+
+  if (!existing.uid) {
+    updates.uid = user.uid;
+  }
+  if ((!existing.email || existing.email === null) && userEmail) {
+    updates.email = userEmail;
+  }
+  if ((!existing.displayName || existing.displayName === null) && fallbackDisplayName) {
+    updates.displayName = fallbackDisplayName;
+  }
+  if ((!existing.photoURL || existing.photoURL === null) && fallbackPhotoURL) {
+    updates.photoURL = fallbackPhotoURL;
+  }
+  if (typeof existing.notificationsEnabled !== 'boolean') {
+    updates.notificationsEnabled = true;
+  }
+  if (existing.clinicId === undefined) {
+    updates.clinicId = null;
+  }
+  if (existing.role === undefined) {
+    updates.role = null;
+  }
+  if (!existing.lastActiveAt) {
+    updates.lastActiveAt = serverTimestamp();
+  }
+
+  // Update only if missing fields were detected
+  if (Object.keys(updates).length > 0) {
+    updates.updatedAt = serverTimestamp();
+    await updateDoc(ref, updates);
+  }
+
+  return { id: user.uid, ...existing, ...updates } as unknown as UserProfile;
+}
+
+export async function getPostLoginRedirect(
+  userId: string,
+  returnUrl?: string | null
+): Promise<string> {
+  if (
+    returnUrl &&
+    returnUrl.startsWith('/') &&
+    !returnUrl.startsWith('/login') &&
+    !returnUrl.startsWith('/signup') &&
+    returnUrl !== '/dashboard'
+  ) {
+    return returnUrl;
+  }
+
+  const profile = await getUserProfile(userId);
+  if (profile && profile.clinicId) {
+    return '/dashboard';
+  }
+
+  return '/clinic?mode=create';
 }
 
 /* ------------------------------------------------------------------ */
@@ -84,10 +159,11 @@ async function ensureUserProfile(user: User): Promise<void> {
 /* ------------------------------------------------------------------ */
 export async function signUpWithEmail(
   email: string,
-  password: string
+  password: string,
+  displayName?: string
 ): Promise<User> {
   const result: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
-  await ensureUserProfile(result.user);
+  await ensureUserProfile(result.user, { displayName });
   await sendEmailVerification(result.user);
   return result.user;
 }
@@ -116,10 +192,11 @@ export async function signInWithGoogleNative(): Promise<User> {
       return;
     }
 
-    const successHandler = async (event: CustomEvent) => {
-      window.removeEventListener('nativeGoogleSignIn', successHandler as EventListener);
-      window.removeEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+    const successHandler = async (evt: Event) => {
+      window.removeEventListener('nativeGoogleSignIn', successHandler);
+      window.removeEventListener('nativeGoogleSignInError', errorHandler);
 
+      const event = evt as CustomEvent;
       console.log('nativeGoogleSignIn event received:', event.detail);
 
       const idToken = event.detail?.idToken;
@@ -139,15 +216,16 @@ export async function signInWithGoogleNative(): Promise<User> {
       }
     };
 
-    const errorHandler = (event: CustomEvent) => {
-      window.removeEventListener('nativeGoogleSignIn', successHandler as EventListener);
-      window.removeEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+    const errorHandler = (evt: Event) => {
+      window.removeEventListener('nativeGoogleSignIn', successHandler);
+      window.removeEventListener('nativeGoogleSignInError', errorHandler);
+      const event = evt as CustomEvent;
       console.error('nativeGoogleSignInError event received:', event.detail);
       reject(new Error(event.detail?.error || 'Native Google Sign-In failed'));
     };
 
-    window.addEventListener('nativeGoogleSignIn', successHandler as EventListener);
-    window.addEventListener('nativeGoogleSignInError', errorHandler as EventListener);
+    window.addEventListener('nativeGoogleSignIn', successHandler);
+    window.addEventListener('nativeGoogleSignInError', errorHandler);
 
     try {
       (window as any).AndroidBridge.startGoogleSignIn();
@@ -209,12 +287,19 @@ export async function signUpCreateClinic(
   const user = cred.user;
   await ensureUserProfile(user);
   const clinicRef = doc(collection(db, 'clinics'));
-  const inviteCode = nanoid(8);
+  const inviteCode = nanoid(8).toUpperCase();
   await setDoc(clinicRef, {
     name: clinicName,
     inviteCode,
     createdBy: user.uid,
+    creatorEmail: user.email || null,
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await setDoc(doc(db, 'clinics', clinicRef.id, 'members', user.uid), {
+    role: 'admin',
+    joinedAt: serverTimestamp(),
+    displayName: user.displayName || 'Owner',
   });
   await updateDoc(doc(db, 'users', user.uid), {
     clinicId: clinicRef.id,

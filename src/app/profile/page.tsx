@@ -45,6 +45,25 @@ const profileFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
+function formatProfileToFormValues(
+  p: UserProfile,
+  clinicNameVal: string,
+  userFallback?: { email?: string | null; displayName?: string | null } | null
+): ProfileFormValues {
+  return {
+    displayName: p.displayName || userFallback?.displayName || "",
+    clinicName: clinicNameVal || "",
+    email: p.email || userFallback?.email || "",
+    phoneNumber: p.phoneNumber || "",
+    address: p.address || "",
+    specialization: p.specialization || "",
+    registrationNumber: p.registrationNumber || "",
+    yearsOfExperience: p.yearsOfExperience ?? null,
+    certifications: p.certifications?.map((c) => ({ value: c })) || [],
+    awards: p.awards?.map((a) => ({ value: a })) || [],
+  };
+}
+
 export default function ProfilePage() {
   const db = useFirestore();
   const { user, clinicId } = useUser();
@@ -64,7 +83,7 @@ export default function ProfilePage() {
       address: "",
       specialization: "",
       registrationNumber: "",
-      yearsOfExperience: undefined,
+      yearsOfExperience: null,
       certifications: [],
       awards: [],
     },
@@ -88,9 +107,11 @@ export default function ProfilePage() {
       setIsLoading(true);
       const fetched = await getProfile(db, user);
       
+      let resolvedClinicName = "";
       if (clinicId) {
         const clinicData = await getClinic(clinicId);
         if (clinicData) {
+            resolvedClinicName = clinicData.name;
             setClinicName(clinicData.name);
             form.setValue('clinicName', clinicData.name);
         }
@@ -98,18 +119,7 @@ export default function ProfilePage() {
 
       if (fetched) {
         setProfile(fetched);
-        form.reset({
-          displayName: fetched.displayName || "",
-          clinicName: clinicName || "",
-          email: fetched.email || "",
-          phoneNumber: fetched.phoneNumber || "",
-          address: fetched.address || "",
-          specialization: fetched.specialization || "",
-          registrationNumber: fetched.registrationNumber || "",
-          yearsOfExperience: fetched.yearsOfExperience || undefined,
-          certifications: fetched.certifications?.map((c) => ({ value: c })) || [],
-          awards: fetched.awards?.map((a) => ({ value: a })) || [],
-        });
+        form.reset(formatProfileToFormValues(fetched, resolvedClinicName || clinicName, user));
       }
       setIsLoading(false);
     }
@@ -123,24 +133,21 @@ export default function ProfilePage() {
       setIsLoading(true);
 
       const payload: Partial<UserProfile> = {
-        ...data,
+        displayName: data.displayName,
+        phoneNumber: data.phoneNumber || "",
+        address: data.address || "",
+        specialization: data.specialization || "",
+        registrationNumber: data.registrationNumber || "",
+        yearsOfExperience: data.yearsOfExperience ?? null,
         certifications: data.certifications?.map((c) => c.value) || [],
         awards: data.awards?.map((a) => a.value) || [],
       };
-      
-      delete payload.clinicName; // Do not save clinicName to user profile
-      delete payload.email; // Do not update email
 
       const updated = await updateProfile(db, user, payload);
 
       setProfile(updated);
 
-      form.reset({
-        ...updated,
-        clinicName: clinicName,
-        certifications: updated.certifications?.map((c) => ({ value: c })) || [],
-        awards: updated.awards?.map((a) => ({ value: a })) || [],
-      });
+      form.reset(formatProfileToFormValues(updated, clinicName, user));
 
       setIsEditing(false);
     } catch (err) {
@@ -393,12 +400,7 @@ export default function ProfilePage() {
                     onClick={() => {
                       setIsEditing(false);
                       if (profile) {
-                        form.reset({
-                          ...profile,
-                           clinicName: clinicName,
-                          certifications: profile.certifications?.map((c) => ({ value: c })) || [],
-                          awards: profile.awards?.map((a) => ({ value: a })) || [],
-                        });
+                        form.reset(formatProfileToFormValues(profile, clinicName, user));
                       }
                     }}
                   >

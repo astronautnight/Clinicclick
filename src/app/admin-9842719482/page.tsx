@@ -11,7 +11,8 @@ import {
   getDocs,
   Timestamp 
 } from 'firebase/firestore';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, initializeFirebase } from '@/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   Card,
   CardContent,
@@ -82,7 +83,8 @@ import {
   KeyRound,
   EyeOff,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 import { format, parseISO, isToday, isYesterday, subDays, isAfter, isValid } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -671,6 +673,40 @@ export default function AdminDashboardPage() {
     document.body.removeChild(link);
   };
 
+  const [isRepairing, setIsRepairing] = useState(false);
+
+  const handleRepairProfiles = async () => {
+    setIsRepairing(true);
+    try {
+      const { firebaseApp } = initializeFirebase();
+      const functions = getFunctions(firebaseApp, 'us-central1');
+      const repairCallable = httpsCallable<
+        void,
+        {
+          success: boolean;
+          scannedCount: number;
+          repairedCount: number;
+          details: Array<{ uid: string; email: string | null; repairedFields: string[] }>;
+        }
+      >(functions, 'repairUserProfiles');
+
+      const result = await repairCallable();
+      toast({
+        title: 'Profile Health Check Complete',
+        description: `Scanned ${result.data.scannedCount} users. Repaired ${result.data.repairedCount} incomplete profiles.`,
+      });
+    } catch (error: any) {
+      console.error('Repair failed:', error);
+      toast({
+        title: 'Repair Failed',
+        description: error.message || 'Could not repair user profiles.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
   const exportUsersCSV = () => {
     const headers = ['User ID', 'Display Name', 'Email', 'Clinic ID', 'Clinic Name', 'Role', 'Acquisition Source'];
     const rows = usersList.map((u) => [
@@ -850,6 +886,17 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs gap-1.5 shadow-sm"
+            >
+              <Link href="/admin-9842719482/send-welcome-email">
+                <Mail className="h-3.5 w-3.5" />
+                Send Welcome Email
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1723,15 +1770,32 @@ export default function AdminDashboardPage() {
               </Select>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportUsersCSV}
-              className="text-xs gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export Users CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRepairProfiles}
+                disabled={isRepairing}
+                className="text-xs gap-1.5"
+                title="Audit and repair missing email, displayName, or core fields from Firebase Auth"
+              >
+                {isRepairing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                )}
+                {isRepairing ? 'Repairing...' : 'Repair Incomplete Profiles'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportUsersCSV}
+                className="text-xs gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export Users CSV
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -1743,13 +1807,14 @@ export default function AdminDashboardPage() {
                   <TableHead>Attached Clinic</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Survey Source</TableHead>
-                  <TableHead className="text-right">Joined Date</TableHead>
+                  <TableHead>Joined Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No users match the search criteria.
                     </TableCell>
                   </TableRow>
@@ -1801,8 +1866,17 @@ export default function AdminDashboardPage() {
                             <span className="text-muted-foreground text-[11px]">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
+                        <TableCell className="text-xs text-muted-foreground">
                           {(u.createdAt as any)?.toDate ? format((u.createdAt as any).toDate(), 'MMM dd, yyyy') : (u.createdAt instanceof Date ? format(u.createdAt, 'MMM dd, yyyy') : 'N/A')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Link
+                            href={`/admin-9842719482/send-welcome-email?uid=${encodeURIComponent(u.uid)}`}
+                            title="Send Welcome Email"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-blue-50 text-slate-400 hover:text-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-400 transition-colors"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                          </Link>
                         </TableCell>
                       </TableRow>
                     );

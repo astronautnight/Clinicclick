@@ -26,6 +26,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
   updateUserProfile,
+  getPostLoginRedirect,
 } from '@/services/auth-service';
 
 /* -------------------------------------------------
@@ -41,7 +42,7 @@ function isStrongPassword(password: string) {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '/dashboard';
+  const returnUrlParam = searchParams.get('returnUrl');
   const { user, loading } = useUser();
   const { toast } = useToast();
 
@@ -63,28 +64,30 @@ function LoginForm() {
 
     // PWA/Android: native account picker via AndroidBridge
     if (isNative) {
-  try {
-    await signInWithGoogleNative();
-    toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
-    router.push(returnUrl);
-  } catch (error) {
-    const err = error as AuthError;
-    toast({
-      title: 'Google Sign-In Failed',
-      description: err.message,
-      variant: 'destructive',
-    });
-  } finally {
-    setIsGoogleSubmitting(false);
-  }
-  return;
-}
+      try {
+        const loggedUser = await signInWithGoogleNative();
+        toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+        const destination = await getPostLoginRedirect(loggedUser.uid, returnUrlParam);
+        router.push(destination);
+      } catch (error) {
+        const err = error as AuthError;
+        toast({
+          title: 'Google Sign-In Failed',
+          description: err.message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsGoogleSubmitting(false);
+      }
+      return;
+    }
 
-    // Web: existing popup flow — untouched
+    // Web: popup flow
     try {
-      await signInWithGoogle();
-      toast({ title: 'Sign- Successful', description: 'Welcome back!' });
-      router.push(returnUrl);
+      const loggedUser = await signInWithGoogle();
+      toast({ title: 'Sign-In Successful', description: 'Welcome back!' });
+      const destination = await getPostLoginRedirect(loggedUser.uid, returnUrlParam);
+      router.push(destination);
     } catch (error) {
       const err = error as AuthError;
       let errorMessage = err.message || 'An unexpected error occurred.';
@@ -117,8 +120,9 @@ function LoginForm() {
     const password = fd.get('password') as string;
 
     try {
-      await signInWithEmail(email, password);
-      router.push(returnUrl);
+      const loggedUser = await signInWithEmail(email, password);
+      const destination = await getPostLoginRedirect(loggedUser.uid, returnUrlParam);
+      router.push(destination);
     } catch (error) {
       const err = error as AuthError;
       toast({ title: 'Login Failed', description: err.message, variant: 'destructive' });
@@ -161,10 +165,11 @@ function LoginForm() {
     }
 
     try {
-      const newUser = await signUpWithEmail(email, password);
+      const newUser = await signUpWithEmail(email, password, fullName);
       await updateUserProfile(newUser.uid, { displayName: fullName });
       toast({ title: 'Account created successfully' });
-      router.push(returnUrl);
+      const destination = await getPostLoginRedirect(newUser.uid, returnUrlParam);
+      router.push(destination);
     } catch (error: any) {
       toast({
         title: 'Sign Up Failed',

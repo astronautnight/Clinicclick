@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import type { Patient, Appointment, Transaction, Doctor, Procedure } from '@/types';
+import type { Patient, Appointment, Transaction, Doctor, Procedure, TransactionCategory } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -119,7 +119,7 @@ export default function ConsultationDashboardPage() {
   const [patientFormData, setPatientFormData] = useState(initialPatientData);
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [appointmentFormData, setAppointmentFormData] = useState(initialAppointmentData);
-  const [transactionFormData, setTransactionFormData] = useState({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning' as 'Earning' | 'Expense', category: 'Consultation', isConsult: true });
+  const [transactionFormData, setTransactionFormData] = useState({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning' as 'Earning' | 'Expense', category: 'Consultation Fee' as TransactionCategory, isConsult: true });
 
   /* ─────────────────────────────────────────────────────────────────── */
   /* Data subscriptions                                                   */
@@ -294,11 +294,11 @@ export default function ConsultationDashboardPage() {
         amount,
         patientName: patient ? `${patient.firstName} ${patient.lastName}` : '',
         isConsult: true,
-        category: 'Consultation',
+        category: 'Consultation Fee',
       });
       toast({ title: "Transaction Added" });
       setIsTransactionFormOpen(false);
-      setTransactionFormData({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning', category: 'Consultation', isConsult: true });
+      setTransactionFormData({ date: new Date().toISOString().split('T')[0], amount: '', description: '', patientId: '', type: 'Earning', category: 'Consultation Fee', isConsult: true });
     } catch {
       toast({ title: "Error", description: "Could not save transaction.", variant: "destructive" });
     }

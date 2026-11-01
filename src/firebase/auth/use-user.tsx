@@ -119,19 +119,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      /* -------------------- LOGGED IN -------------------- */
-      if (isAuthPage || pathname === '/') {
-        let destination = '/dashboard';
-        if (typeof window !== 'undefined') {
-          const params = new URLSearchParams(window.location.search);
-          const returnUrl = params.get('returnUrl');
-          if (returnUrl && returnUrl.startsWith('/')) {
-            destination = returnUrl;
-          }
-        }
-        router.replace(destination);
-      }
-
       /* -------------------- LOAD CLINIC CONTEXT -------------------- */
       setClinicLoading(true);
 
@@ -143,16 +130,50 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           (snap) => {
             if (!active) return;
 
+            let currentClinicId: string | null = null;
+            let currentRole: ClinicRole | null = null;
+
             if (snap.exists()) {
               const data = snap.data();
-              setClinicId(data.clinicId ?? null);
-              setClinicRole((data.role as ClinicRole) ?? null);
+              currentClinicId = data.clinicId ?? null;
+              currentRole = (data.role as ClinicRole) ?? null;
+              setClinicId(currentClinicId);
+              setClinicRole(currentRole);
             } else {
               setClinicId(null);
               setClinicRole(null);
             }
 
             setClinicLoading(false);
+
+            /* -------------------- POST-AUTH REDIRECT -------------------- */
+            if (isAuthPage || pathname === '/') {
+              let returnUrl: string | null = null;
+              if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const r = params.get('returnUrl');
+                if (
+                  r &&
+                  r.startsWith('/') &&
+                  !r.startsWith('/login') &&
+                  !r.startsWith('/signup') &&
+                  r !== '/dashboard'
+                ) {
+                  returnUrl = r;
+                }
+              }
+
+              if (returnUrl) {
+                router.replace(returnUrl);
+              } else if (currentClinicId) {
+                router.replace('/dashboard');
+              } else {
+                router.replace('/clinic?mode=create');
+              }
+            } else if (pathname === '/dashboard' && !currentClinicId) {
+              // Direct navigation to /dashboard without a clinic -> redirect to onboarding
+              router.replace('/clinic?mode=create');
+            }
           },
           (error) => {
             if (!active) return;

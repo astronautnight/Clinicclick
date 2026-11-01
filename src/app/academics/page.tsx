@@ -314,14 +314,20 @@ export default function AcademicsPage() {
                         console.log(`[Step 2] Filesystem.readFile() starting on path: ${photo.path}`);
                         const result = await Filesystem.readFile({ path: photo.path });
                         
-                        console.log(`[Step 3] Base64 received. Data length: ${result.data.length}`);
-                        
-                        const format = photo.format || 'jpeg';
-                        const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-                        console.log(`[Step 4] Converting to Blob using fetch on data URI...`);
-                        const fetchRes = await fetch(`data:${mimeType};base64,${result.data}`);
-                        blob = await fetchRes.blob();
-                        console.log(`[Step 4] Blob created successfully. Size: ${blob.size}, type: ${blob.type}`);
+                        if (result.data instanceof Blob) {
+                            blob = result.data;
+                            console.log(`[Step 3/4] Blob received directly from Filesystem. Size: ${blob.size}`);
+                        } else {
+                            const dataString = result.data;
+                            console.log(`[Step 3] Base64 received. Data length: ${dataString.length}`);
+                            
+                            const format = photo.format || 'jpeg';
+                            const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+                            console.log(`[Step 4] Converting to Blob using fetch on data URI...`);
+                            const fetchRes = await fetch(`data:${mimeType};base64,${dataString}`);
+                            blob = await fetchRes.blob();
+                            console.log(`[Step 4] Blob created successfully. Size: ${blob.size}, type: ${blob.type}`);
+                        }
                     } else if (photo.webPath) {
                         console.log(`[Step 2 WebPath] Fetching blob for: ${photo.webPath}`);
                         const response = await fetch(photo.webPath);

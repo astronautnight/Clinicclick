@@ -1,6 +1,7 @@
 
 
 import type { LucideIcon } from "lucide-react";
+import type { Timestamp, FieldValue } from "firebase/firestore";
 
 export type LucideIconName =
   | 'LayoutDashboard'
@@ -237,6 +238,7 @@ export interface Transaction {
   description?: string;
   amount: number; // in Rupees
   patientId?: string; // Link to patient if it's an earning
+  patientName?: string; // Link to patient name for display
   paymentDate?: string;
   paymentMethod?: PaymentMethod;
   createdAt: Date;
@@ -258,11 +260,11 @@ export interface UserProfile {
   specialization?: string;
   registrationNumber?: string;
   logoUrl?: string; // URL to clinic/doctor logo
-  yearsOfExperience?: number;
+  yearsOfExperience?: number | null;
   certifications?: string[];
   awards?: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date | Timestamp | FieldValue | string | null;
+  updatedAt?: Date | Timestamp | FieldValue | string | null;
   seeded_v1_drugs?: boolean; // Flag to check if initial drug list has been seeded
   seeded_v1_procedures?: boolean; // Flag to check if initial procedure list has been seeded
   seeded_v1_emergencies?: boolean; // Flag to check if initial emergencies list has been seeded
@@ -270,6 +272,9 @@ export interface UserProfile {
   role?: 'owner' | 'admin' | 'member' | null;
   heardAboutAppFrom?: string;
   notificationsEnabled?: boolean;
+  lastActiveAt?: Date | Timestamp | FieldValue | string | null;
+  fcmToken?: string;
+  fcmTokens?: string[];
 }
 
 export interface EducationalVideo {

@@ -10,14 +10,26 @@ admin.initializeApp();
 
 const db = admin.firestore();
 const resendApiKey = defineSecret("RESEND_API_KEY");
+const SENDER_EMAIL =
+  process.env.RESEND_FROM_EMAIL ||
+  "Clinic@Click <hello@mail.clinicatclick.com>";
 
 function getResend() {
-  return new Resend(resendApiKey.value());
+  const key = resendApiKey.value();
+  if (!key) {
+    throw new Error(
+      "RESEND_API_KEY secret is not set. Run 'firebase functions:secrets:set RESEND_API_KEY'."
+    );
+  }
+  return new Resend(key);
 }
 
 // 1. Existing function: notify clinic admins about join requests.
 exports.onNewJoinRequest = onDocumentCreated(
-  "clinics/{clinicId}/pendingRequests/{userId}",
+  {
+    document: "clinics/{clinicId}/pendingRequests/{userId}",
+    region: "us-central1",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
@@ -78,7 +90,7 @@ exports.onNewJoinRequest = onDocumentCreated(
 
 // 2. Existing function: send a test email to the signed-in user.
 exports.sendTestEmail = onCall(
-  { secrets: [resendApiKey] },
+  { secrets: [resendApiKey], region: "us-central1" },
   async (request) => {
     const email = request.auth?.token?.email;
 
@@ -90,7 +102,7 @@ exports.sendTestEmail = onCall(
     }
 
     const { data, error } = await getResend().emails.send({
-      from: "Clinic@Click <hello@mail.clinicatclick.com>",
+      from: SENDER_EMAIL,
       to: [email],
       subject: "Clinic@Click email test",
       html: `
@@ -101,8 +113,11 @@ exports.sendTestEmail = onCall(
     });
 
     if (error) {
-      console.error("Resend test-email error:", error.message);
-      throw new HttpsError("internal", "Unable to send test email.");
+      console.error("Resend test-email error:", error.message || error);
+      throw new HttpsError(
+        "internal",
+        `Unable to send test email: ${error.message || "Unknown error"}`
+      );
     }
 
     return { success: true, id: data?.id };
@@ -114,81 +129,116 @@ exports.sendWelcomeEmail = onDocumentCreated(
   {
     document: "users/{userId}",
     secrets: [resendApiKey],
+    region: "us-central1",
   },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
 
     const user = snapshot.data();
+    const userId = event.params.userId;
 
     if (!user.email) {
-      console.log("New user has no email:", event.params.userId);
+      console.log("New user has no email:", userId);
       return;
     }
 
     // Claim this email before sending, to reduce duplicate sends on retries.
     const statusRef = db
       .collection("emailLogs")
-      .doc(`welcome_${event.params.userId}`);
+      .doc(`welcome_${userId}`);
 
     try {
       await db.runTransaction(async (transaction) => {
         const status = await transaction.get(statusRef);
 
         if (status.exists) {
-          throw new Error("WELCOME_EMAIL_ALREADY_PROCESSED");
+          const statusData = status.data();
+          if (statusData.status === "sent") {
+            throw new Error("WELCOME_EMAIL_ALREADY_SENT");
+          }
+          const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+          const createdAtMs = statusData.createdAt?.toMillis
+            ? statusData.createdAt.toMillis()
+            : 0;
+          if (statusData.status === "sending" && createdAtMs > tenMinutesAgo) {
+            throw new Error("WELCOME_EMAIL_IN_PROGRESS");
+          }
         }
 
-        transaction.create(statusRef, {
-          type: "welcome",
-          userId: event.params.userId,
-          status: "sending",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        transaction.set(
+          statusRef,
+          {
+            type: "welcome",
+            userId,
+            recipientEmail: user.email,
+            status: "sending",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
       });
     } catch (error) {
-      if (error.message === "WELCOME_EMAIL_ALREADY_PROCESSED") {
-        console.log("Welcome email already processed:", event.params.userId);
+      if (
+        error.message === "WELCOME_EMAIL_ALREADY_SENT" ||
+        error.message === "WELCOME_EMAIL_IN_PROGRESS"
+      ) {
+        console.log(`Welcome email for ${userId}: ${error.message}`);
         return;
       }
       throw error;
     }
 
     try {
+      const firstName =
+        typeof user.displayName === "string" && user.displayName.trim()
+          ? user.displayName.trim().split(/\s+/)[0]
+          : "Doctor";
+
       const { data, error } = await getResend().emails.send({
-        from: "Clinic@Click <hello@mail.clinicatclick.com>",
+        from: SENDER_EMAIL,
         to: [user.email],
-        subject: "Welcome to Clinic@Click",
+        subject: "Welcome to Clinic@Click!",
         html: `
-          <h2>Welcome to Clinic@Click!</h2>
-          <p>We're glad you're here.</p>
-          <p>Get started by signing in and setting up your clinic.</p>
-          <p><a href="https://clinicatclick.com">Open Clinic@Click</a></p>
-          <p>If you need help, reply to this email.</p>
-          <p>— Team Clinic@Click</p>
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#333;line-height:1.6">
+            <h2>Welcome to Clinic@Click, ${firstName}!</h2>
+            <p>We're glad you're here.</p>
+            <p>Get started by exploring your clinic dashboard and setting up your workspace to manage appointments, dental charts, and patient records.</p>
+            <p style="margin:24px 0">
+              <a href="https://clinicatclick.com"
+                 style="background:#256AF3;color:white;padding:12px 20px;text-decoration:none;border-radius:8px;display:inline-block">
+                Open Clinic@Click
+              </a>
+            </p>
+            <p>If you need help or have questions, reply to this email.</p>
+            <p>Warm regards,<br><strong>Team Clinic@Click</strong><br>
+            <span style="color:#666">Modern Dentistry Starts Here.</span></p>
+          </div>
         `,
       });
 
       if (error) {
         await statusRef.update({
           status: "failed",
-          error: error.message,
+          error: String(error.message || JSON.stringify(error)).slice(0, 500),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        console.error("Welcome email failed:", error.message);
-        throw new Error("Resend failed to send welcome email");
+        console.error("Welcome email failed for", userId, ":", error.message || error);
+        throw new Error(`Resend failed to send welcome email: ${error.message}`);
       }
 
       await statusRef.update({
         status: "sent",
         resendId: data?.id || null,
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log("Welcome email sent:", data?.id);
+      console.log("Welcome email sent to:", user.email, "Resend ID:", data?.id);
     } catch (error) {
-      console.error("Welcome email processing failed:", error);
+      console.error("Welcome email processing failed for", userId, ":", error);
       throw error;
     }
   }
@@ -207,21 +257,28 @@ exports.sendSetupReminder = onSchedule(
     secrets: [resendApiKey],
   },
   async () => {
-    const cutoff = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 48 * 60 * 60 * 1000)
-    );
+    const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
+    // Fetch users without clinic; filter createdAt <= cutoffDate in-memory to prevent composite index errors
     const usersSnapshot = await db
       .collection("users")
       .where("clinicId", "==", null)
-      .where("createdAt", "<=", cutoff)
       .get();
 
+    const eligibleDocs = usersSnapshot.docs.filter((doc) => {
+      const data = doc.data();
+      if (!data.createdAt) return false;
+      const createdDate = data.createdAt.toDate
+        ? data.createdAt.toDate()
+        : new Date(data.createdAt);
+      return createdDate <= cutoffDate;
+    });
+
     console.log(
-      `Found ${usersSnapshot.size} users with incomplete setup candidates.`
+      `Found ${eligibleDocs.length} users with incomplete setup candidates (of ${usersSnapshot.size} total users with clinicId == null).`
     );
 
-    for (const userDoc of usersSnapshot.docs) {
+    for (const userDoc of eligibleDocs) {
       const user = userDoc.data();
       const userId = userDoc.id;
 
@@ -238,11 +295,18 @@ exports.sendSetupReminder = onSchedule(
       const shouldSend = await db.runTransaction(async (transaction) => {
         const existing = await transaction.get(logRef);
 
-        if (
-          existing.exists &&
-          ["sent", "sending"].includes(existing.data().status)
-        ) {
-          return false;
+        if (existing.exists) {
+          const existingData = existing.data();
+          if (existingData.status === "sent") {
+            return false;
+          }
+          const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+          const updatedAtMs = existingData.updatedAt?.toMillis
+            ? existingData.updatedAt.toMillis()
+            : 0;
+          if (existingData.status === "sending" && updatedAtMs > tenMinutesAgo) {
+            return false;
+          }
         }
 
         transaction.set(
@@ -250,6 +314,7 @@ exports.sendSetupReminder = onSchedule(
           {
             type: "setup_reminder",
             userId,
+            recipientEmail: user.email,
             status: "sending",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
@@ -271,7 +336,7 @@ exports.sendSetupReminder = onSchedule(
             : "Doctor";
 
         const { data, error } = await getResend().emails.send({
-          from: "Clinic@Click <hello@mail.clinicatclick.com>",
+          from: SENDER_EMAIL,
           to: [user.email],
           subject: "Your Clinic@Click setup is waiting for you",
           html: `
@@ -304,9 +369,10 @@ exports.sendSetupReminder = onSchedule(
           status: "sent",
           resendId: data?.id || null,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        console.log("Setup reminder sent to:", user.email);
+        console.log("Setup reminder sent to:", user.email, "Resend ID:", data?.id);
       } catch (error) {
         await logRef.update({
           status: "failed",
@@ -323,3 +389,259 @@ exports.sendSetupReminder = onSchedule(
     }
   }
 );
+
+/**
+ * 5. Admin-only function: manually send a welcome email.
+ */
+exports.sendManualWelcomeEmail = onCall(
+  {
+    secrets: [resendApiKey],
+    region: "us-central1",
+  },
+  async (request) => {
+    // Require authentication.
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Please sign in first."
+      );
+    }
+
+    // Verify that the caller is an admin or owner.
+    const adminDoc = await db
+      .collection("users")
+      .doc(request.auth.uid)
+      .get();
+
+    const callerRole = adminDoc.data()?.role;
+    if (!adminDoc.exists || (callerRole !== "admin" && callerRole !== "owner")) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only clinic administrators can send manual welcome emails."
+      );
+    }
+
+    // Accept a Firebase Authentication UID, not an arbitrary email.
+    const targetUid = request.data?.targetUid;
+
+    if (
+      typeof targetUid !== "string" ||
+      !targetUid.trim()
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A valid recipient user ID is required."
+      );
+    }
+
+    let targetUser;
+
+    try {
+      targetUser = await admin.auth().getUser(targetUid.trim());
+    } catch (error) {
+      throw new HttpsError(
+        "not-found",
+        "The recipient was not found in Firebase Authentication."
+      );
+    }
+
+    const recipientEmail = targetUser.email;
+
+    if (!recipientEmail) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The recipient does not have an email address."
+      );
+    }
+
+    const logRef = db.collection("emailLogs").doc();
+
+    await logRef.set({
+      type: "manual_welcome",
+      targetUid,
+      recipientEmail,
+      requestedBy: request.auth.uid,
+      status: "sending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    try {
+      const { data, error } = await getResend().emails.send({
+        from: SENDER_EMAIL,
+        to: [recipientEmail],
+        subject: "Welcome to Clinic@Click",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#333;line-height:1.6">
+            <h2>Welcome to Clinic@Click!</h2>
+            <p>We're glad you're here.</p>
+            <p>Get started by exploring your clinic dashboard and the tools designed to make managing your dental practice easier.</p>
+            <p><a href="https://clinicatclick.com"
+              style="background:#256AF3;color:white;padding:12px 20px;text-decoration:none;border-radius:8px;display:inline-block">
+              Open Clinic@Click
+            </a></p>
+            <p>If you need any assistance, simply reply to this email. Our team will be happy to help.</p>
+            <p>Regards,<br><strong>Team Clinic@Click</strong><br>
+            Modern Dentistry Starts Here.</p>
+          </div>
+        `,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      await logRef.update({
+        status: "sent",
+        resendId: data?.id || null,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log("Manual welcome email sent:", recipientEmail, "Resend ID:", data?.id);
+
+      return {
+        success: true,
+        recipient: recipientEmail,
+        resendId: data?.id || null,
+      };
+    } catch (error) {
+      await logRef.update({
+        status: "failed",
+        error: String(error.message || error).slice(0, 500),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.error("Manual welcome email failed:", error);
+
+      throw new HttpsError(
+        "internal",
+        `Failed to send welcome email: ${error.message || "Unknown error"}. Check Resend domain verification and API key.`
+      );
+    }
+  }
+);
+
+/**
+ * 6. Admin-only function: Audit and repair incomplete user profiles.
+ * Scans all Firestore users and backfills missing email, displayName, photoURL,
+ * clinicId (default null), role (default null), and notificationsEnabled from Firebase Auth.
+ * NEVER overwrites existing clinic memberships or user data.
+ */
+exports.repairUserProfiles = onCall(
+  {
+    region: "us-central1",
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+
+    const adminDoc = await db.collection("users").doc(request.auth.uid).get();
+    const callerRole = adminDoc.data()?.role;
+    if (!adminDoc.exists || (callerRole !== "admin" && callerRole !== "owner")) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only clinic administrators can run profile audits and repairs."
+      );
+    }
+
+    const usersSnap = await db.collection("users").get();
+    let scannedCount = 0;
+    let repairedCount = 0;
+    const details = [];
+
+    for (const docSnap of usersSnap.docs) {
+      scannedCount++;
+      const data = docSnap.data();
+      const uid = docSnap.id;
+      const updates = {};
+      const missingFields = [];
+
+      let authUser = null;
+      try {
+        authUser = await admin.auth().getUser(uid);
+      } catch (err) {
+        console.warn(`Auth record not found for uid ${uid}:`, err.message);
+      }
+
+      // 1. UID
+      if (!data.uid) {
+        updates.uid = uid;
+        missingFields.push("uid");
+      }
+
+      // 2. Email (repaired from Firebase Auth)
+      if ((!data.email || data.email === null) && authUser?.email) {
+        updates.email = authUser.email;
+        missingFields.push("email");
+      }
+
+      // 3. Display Name (repaired from Firebase Auth if missing)
+      if ((!data.displayName || data.displayName === null) && authUser?.displayName) {
+        updates.displayName = authUser.displayName;
+        missingFields.push("displayName");
+      }
+
+      // 4. Photo URL (repaired from Firebase Auth if missing)
+      if ((!data.photoURL || data.photoURL === null) && authUser?.photoURL) {
+        updates.photoURL = authUser.photoURL;
+        missingFields.push("photoURL");
+      }
+
+      // 5. Clinic ID (default null for solo users, preserve existing)
+      if (data.clinicId === undefined) {
+        updates.clinicId = null;
+        missingFields.push("clinicId");
+      }
+
+      // 6. Role (default null for solo users, preserve existing)
+      if (data.role === undefined) {
+        updates.role = null;
+        missingFields.push("role");
+      }
+
+      // 7. Notifications Enabled
+      if (typeof data.notificationsEnabled !== "boolean") {
+        updates.notificationsEnabled = true;
+        missingFields.push("notificationsEnabled");
+      }
+
+      // 8. Timestamps
+      if (!data.createdAt) {
+        const creationTime = authUser?.metadata?.creationTime
+          ? admin.firestore.Timestamp.fromDate(new Date(authUser.metadata.creationTime))
+          : admin.firestore.FieldValue.serverTimestamp();
+        updates.createdAt = creationTime;
+        missingFields.push("createdAt");
+      }
+
+      if (!data.lastActiveAt && authUser?.metadata?.lastSignInTime) {
+        updates.lastActiveAt = admin.firestore.Timestamp.fromDate(
+          new Date(authUser.metadata.lastSignInTime)
+        );
+        missingFields.push("lastActiveAt");
+      }
+
+      // Apply updates safely with merge: true
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+        await db.collection("users").doc(uid).set(updates, { merge: true });
+        repairedCount++;
+        details.push({
+          uid,
+          email: updates.email || data.email || authUser?.email || null,
+          repairedFields: missingFields,
+        });
+      }
+    }
+
+    console.log(`Profile repair completed: ${repairedCount} of ${scannedCount} users repaired.`);
+
+    return {
+      success: true,
+      scannedCount,
+      repairedCount,
+      details,
+    };
+  }
+);
+

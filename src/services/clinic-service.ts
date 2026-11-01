@@ -20,6 +20,7 @@ import {
 import { initializeFirebase } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import type { AdminClinic } from '@/types';
 import { getUserProfile } from './auth-service';
 import { addDoctor } from './doctor-service';
 import { addStaffMember } from './staff-service';
@@ -105,6 +106,32 @@ export async function createClinic({
   const userSnap = await getDoc(doc(db, 'users', ownerUid));
   if (userSnap.exists() && userSnap.data().clinicId) {
     throw new Error('You are already part of a clinic');
+  }
+
+  // Double-check: if a clinic was already created by this user, re-link to prevent duplicates
+  const existingQuery = query(
+    collection(db, 'clinics'),
+    where('createdBy', '==', ownerUid)
+  );
+  const existingClinics = await getDocs(existingQuery);
+  if (!existingClinics.empty) {
+    const existingClinicDoc = existingClinics.docs[0];
+    const existingId = existingClinicDoc.id;
+    await setDoc(
+      doc(db, 'clinics', existingId, 'members', ownerUid),
+      {
+        role: 'admin',
+        joinedAt: serverTimestamp(),
+        displayName: userSnap.data()?.displayName || 'Owner',
+      },
+      { merge: true }
+    );
+    await updateDoc(doc(db, 'users', ownerUid), {
+      clinicId: existingId,
+      role: 'admin',
+      updatedAt: serverTimestamp(),
+    });
+    return { clinicId: existingId };
   }
 
   try {
@@ -528,7 +555,7 @@ export async function removeClinicMember({
    GET CLINIC
 ============================================================ */
 
-export async function getClinic(clinicId: string) {
+export async function getClinic(clinicId: string): Promise<AdminClinic | null> {
   if (!clinicId) return null;
 
   const snap = await getDoc(doc(db, 'clinics', clinicId));
@@ -536,7 +563,7 @@ export async function getClinic(clinicId: string) {
 
   return {
     id: snap.id,
-    ...snap.data(),
+    ...(snap.data() as Omit<AdminClinic, 'id'>),
   };
 }
 
