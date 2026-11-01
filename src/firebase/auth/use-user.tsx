@@ -12,7 +12,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import {
   doc,
   onSnapshot,
-  setDoc,
+  updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../provider';
@@ -223,14 +223,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       writeInProgress = true;
 
       try {
-        await setDoc(
-          userRef,
-          { lastActiveAt: serverTimestamp() },
-          { merge: true }
-        );
+        // IMPORTANT: Use updateDoc (not setDoc+merge) so we never create a
+        // partial document with only lastActiveAt before ensureUserProfile()
+        // has had a chance to write the complete profile with all core fields.
+        // updateDoc silently fails if the document doesn't exist yet, which
+        // is exactly what we want — the profile writer creates the doc.
+        await updateDoc(userRef, { lastActiveAt: serverTimestamp() });
         lastWriteAt = Date.now();
       } catch (error) {
-        console.error('Failed to update user activity:', error);
+        // Ignore "document not found" errors — profile may not be created yet.
+        // All other errors are logged.
+        const code = (error as any)?.code;
+        if (code !== 'not-found') {
+          console.error('Failed to update user activity:', error);
+        }
       } finally {
         writeInProgress = false;
       }

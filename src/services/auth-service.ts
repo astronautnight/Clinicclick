@@ -96,7 +96,7 @@ export async function ensureUserProfile(
 
   // 2️⃣ Existing user: self-healing for missing fields without overwriting existing data
   const existing = snap.data();
-  const updates: Record<string, any> = {};
+  const updates: Record<string, unknown> = {};
 
   if (!existing.uid) {
     updates.uid = user.uid;
@@ -118,6 +118,10 @@ export async function ensureUserProfile(
   }
   if (existing.role === undefined) {
     updates.role = null;
+  }
+  if (!existing.createdAt) {
+    // Back-fill createdAt for profiles created before this field was written
+    updates.createdAt = serverTimestamp();
   }
   if (!existing.lastActiveAt) {
     updates.lastActiveAt = serverTimestamp();
