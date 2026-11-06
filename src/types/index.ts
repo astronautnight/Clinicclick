@@ -86,7 +86,7 @@ export interface LinkedProcedure {
 export interface Patient {
   id: string; // Firestore document ID
   firstName: string;
-  lastName:string;
+  lastName: string;
   dateOfBirth: string; // Should be string for input, can be Date object after parsing
   gender: 'Male' | 'Female' | 'Other';
   contactNumber: string;
@@ -98,10 +98,10 @@ export interface Patient {
   allergies?: string;
   medicalHistory?: string;
   dentalHistory?: string;
-  diagnosis?: string; 
-  treatmentPlan?: string; 
+  diagnosis?: string;
+  treatmentPlan?: string;
   markedTeeth?: MarkedTooth[];
-  photos?: File[] | string[]; 
+  photos?: File[] | string[];
   videos?: File[] | string[];
   xrays?: File[] | string[];
   scans?: File[] | string[];
@@ -133,15 +133,15 @@ export interface Appointment {
   consultLocation?: string; // Location/clinic of the consult
 }
 
-export type ProcedureCategory = 
-  | 'Consultation' 
-  | 'Restorative' 
-  | 'Endodontic' 
-  | 'Prosthodontic' 
-  | 'Orthodontic' 
-  | 'Surgical' 
-  | 'Periodontic' 
-  | 'Preventive' 
+export type ProcedureCategory =
+  | 'Consultation'
+  | 'Restorative'
+  | 'Endodontic'
+  | 'Prosthodontic'
+  | 'Orthodontic'
+  | 'Surgical'
+  | 'Periodontic'
+  | 'Preventive'
   | 'Cosmetic'
   | 'Pediatric'
   | 'Implantology'
@@ -163,22 +163,22 @@ export interface Procedure {
 }
 
 export type DosageForm = 'Tablet' | 'Capsule' | 'Syrup' | 'Mouthwash' | 'Toothpaste' | 'Gel' | 'Ointment' | 'Injection' | 'Other';
-export type DrugCategory = 
-    | 'Analgesic' 
-    | 'Antibiotic' 
-    | 'Antiseptic' 
-    | 'Anti-inflammatory' 
-    | 'Fluoride' 
-    | 'NSAID' 
-    | 'Local Anesthetic' 
-    | 'Antihistamine' 
-    | 'Steroid'
-    | 'Antifungal'
-    | 'Antiviral'
-    | 'Anxiolytic'
-    | 'Sedative'
-    | 'Emergency'
-    | 'Other';
+export type DrugCategory =
+  | 'Analgesic'
+  | 'Antibiotic'
+  | 'Antiseptic'
+  | 'Anti-inflammatory'
+  | 'Fluoride'
+  | 'NSAID'
+  | 'Local Anesthetic'
+  | 'Antihistamine'
+  | 'Steroid'
+  | 'Antifungal'
+  | 'Antiviral'
+  | 'Anxiolytic'
+  | 'Sedative'
+  | 'Emergency'
+  | 'Other';
 
 
 export interface Drug {
@@ -213,9 +213,9 @@ export interface Prescription {
 }
 
 export type TransactionType = 'Earning' | 'Expense';
-export type TransactionCategory = 
-  | 'Consultation Fee' 
-  | 'Procedure Payment' 
+export type TransactionCategory =
+  | 'Consultation Fee'
+  | 'Procedure Payment'
   | 'Lab Charges'
   | 'Supplies (Dental)'
   | 'Supplies (Office)'
@@ -234,7 +234,7 @@ export interface Transaction {
   id: string;
   date: string; // Date of transaction
   type: TransactionType;
-  category: TransactionCategory; 
+  category: TransactionCategory;
   description?: string;
   amount: number; // in Rupees
   patientId?: string; // Link to patient if it's an earning
@@ -293,7 +293,7 @@ export interface NavItem {
   iconName: LucideIconName;
   color?: string; // For dashboard cards: Tailwind bg color class e.g. "bg-teal-500"
   iconColorClass?: string; // For dashboard card icons: Tailwind text color e.g. "text-teal-500"
-  description: string; 
+  description: string;
   disabled?: boolean;
 }
 
@@ -313,11 +313,11 @@ export interface Doctor {
   contactNumber?: string;
   email?: string;
   description?: string;
-  assignedPatients?: string[]; 
+  assignedPatients?: string[];
   assignedProcedures?: { patientId: string, procedureId: string }[];
   createdAt: Date;
   updatedAt: Date;
-  color?:string;
+  color?: string;
   doctorType?: 'doctor' | 'activedoctor';
 }
 
@@ -396,14 +396,14 @@ export type InventoryCategory =
   | 'Miscellaneous';
 
 export interface InventoryItem {
-    id: string;
-    name: string;
-    category: InventoryCategory;
-    quantity: number;
-    reorderLevel: number;
-    supplier?: string;
-    createdAt: Date;
-    updatedAt: Date;
+  id: string;
+  name: string;
+  category: InventoryCategory;
+  quantity: number;
+  reorderLevel: number;
+  supplier?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface MedicalEmergency {
@@ -417,15 +417,15 @@ export interface MedicalEmergency {
 }
 
 export interface Department {
-    id: string;
-    name: string;
+  id: string;
+  name: string;
 }
 
 export interface Student {
-    id: string;
-    name: string;
-    departmentId?: string;
-    departmentName?: string;
+  id: string;
+  name: string;
+  departmentId?: string;
+  departmentName?: string;
 }
 
 export interface StudentCaseHistory {
@@ -444,7 +444,7 @@ export interface StudentCaseHistory {
   markedTeeth: MarkedTooth[];
   stagedObservations?: string[];
   clinicalPhotos?: string[];
-  createdAt: any; 
+  createdAt: any;
   updatedAt: any;
   departmentId?: string;
   departmentName?: string;

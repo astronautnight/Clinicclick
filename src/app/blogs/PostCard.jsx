@@ -35,6 +35,31 @@ const CATEGORY_COLORS = {
     tag: "bg-[#EAF3DE] text-[#27500A]",
     border: "border-[#C0DD97]",
   },
+  "product-discovery": {
+    art: "bg-[#E6F1FB]",
+    tag: "bg-[#E6F1FB] text-[#185FA5]",
+    border: "border-[#B5D4F4]",
+  },
+  "clinic-growth": {
+    art: "bg-[#EAF3DE]",
+    tag: "bg-[#EAF3DE] text-[#27500A]",
+    border: "border-[#C0DD97]",
+  },
+  "software-comparison": {
+    art: "bg-[#E1F5EE]",
+    tag: "bg-[#E1F5EE] text-[#0F6E56]",
+    border: "border-[#9FE1CB]",
+  },
+  "clinic-operations": {
+    art: "bg-[#FAEEDA]",
+    tag: "bg-[#FAEEDA] text-[#633806]",
+    border: "border-[#FAC775]",
+  },
+  "dental-charts": {
+    art: "bg-[#EEEDFE]",
+    tag: "bg-[#EEEDFE] text-[#3C3489]",
+    border: "border-[#AFA9EC]",
+  },
 };
 
 // Category art illustrations as inline SVGs
@@ -42,6 +67,7 @@ const CategoryArt = ({ category }) => {
   switch (category) {
     case "patient-management":
     case "appointments":
+    case "software-comparison":
       return (
         <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">
           <rect x="10" y="10" width="60" height="50" rx="6" fill="white" stroke="#9FE1CB" strokeWidth="0.8" />
@@ -53,6 +79,8 @@ const CategoryArt = ({ category }) => {
           <rect x="16" y="50" width="20" height="6" rx="3" fill="#9FE1CB" />
         </svg>
       );
+    case "product-discovery":
+    case "clinic-operations":
     case "billing":
       return (
         <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">
@@ -65,6 +93,7 @@ const CategoryArt = ({ category }) => {
           <rect x="20" y="50" width="40" height="3" rx="1.5" fill="#FAC775" fillOpacity="0.5" />
         </svg>
       );
+    case "dental-charts":
     case "clinical":
       return (
         <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">
@@ -93,6 +122,7 @@ const CategoryArt = ({ category }) => {
           <rect x="22" y="52" width="16" height="4" rx="2" fill="#ED93B1" fillOpacity="0.5" />
         </svg>
       );
+    case "clinic-growth":
     case "updates":
       return (
         <svg width="80" height="70" viewBox="0 0 80 70" fill="none" aria-hidden="true">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NEW_POSTS } from "./newBlogPosts";
+import { ADDITIONAL_POSTS } from "./additionalPosts";
 
 export const POSTS = {
   "how-to-manage-patient-records-dental-clinic": {
@@ -1490,7 +1491,7 @@ export const POSTS = {
   },
 };
 
-Object.assign(POSTS, NEW_POSTS);
+Object.assign(POSTS, NEW_POSTS, ADDITIONAL_POSTS);
 
 export async function generateMetadata({ params }) {
   const post = POSTS[params.slug];
@@ -1507,6 +1508,11 @@ const CATEGORY_COLORS = {
   clinical: "bg-[#EEEDFE] text-[#3C3489]",
   students: "bg-[#FBEAF0] text-[#72243E]",
   updates: "bg-[#EAF3DE] text-[#27500A]",
+  "product-discovery": "bg-[#E6F1FB] text-[#185FA5]",
+  "clinic-growth": "bg-[#EAF3DE] text-[#27500A]",
+  "software-comparison": "bg-[#E1F5EE] text-[#0F6E56]",
+  "clinic-operations": "bg-[#FAEEDA] text-[#633806]",
+  "dental-charts": "bg-[#EEEDFE] text-[#3C3489]",
 };
 
 export default async function BlogPostPage({ params }) {

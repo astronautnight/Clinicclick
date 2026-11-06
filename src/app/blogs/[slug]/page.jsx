@@ -32,6 +32,11 @@ const CATEGORY_COLORS = {
   clinical:             { tag: "bg-[#EEEDFE] text-[#3C3489]" },
   students:             { tag: "bg-[#FBEAF0] text-[#72243E]" },
   updates:              { tag: "bg-[#EAF3DE] text-[#27500A]" },
+  "product-discovery":  { tag: "bg-[#E6F1FB] text-[#185FA5]" },
+  "clinic-growth":      { tag: "bg-[#EAF3DE] text-[#27500A]" },
+  "software-comparison": { tag: "bg-[#E1F5EE] text-[#0F6E56]" },
+  "clinic-operations":  { tag: "bg-[#FAEEDA] text-[#633806]" },
+  "dental-charts":      { tag: "bg-[#EEEDFE] text-[#3C3489]" },
 };
 
 export default async function BlogPostPage({ params }) {

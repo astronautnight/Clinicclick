@@ -1,3 +1,5 @@
+import { ADDITIONAL_POSTS } from "./additionalPosts";
+
 export const NEW_POSTS = {
   "how-to-start-a-dental-clinic-in-india": {
     slug: "how-to-start-a-dental-clinic-in-india",
@@ -953,3 +955,5 @@ export const NEW_POSTS = {
       </div>`,
   },
 };
+
+Object.assign(NEW_POSTS, ADDITIONAL_POSTS);
