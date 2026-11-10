@@ -521,6 +521,111 @@ exports.sendManualWelcomeEmail = onCall(
 );
 
 /**
+ * 7. Scheduled: delete stale unverified email/password accounts after 48 hours.
+ *
+ * Safety guarantees:
+ *   - Only removes users whose email is NOT verified.
+ *   - Only removes users who signed up with email/password (providerId === 'password').
+ *   - Only removes users whose account was created more than 48 hours ago.
+ *   - NEVER removes an account that has a clinicId set in Firestore (they have live data).
+ *   - Deletes the Firestore user profile document only if it also has no clinicId.
+ *
+ * Runs daily at 2:00 AM India Standard Time.
+ */
+exports.deleteStaleUnverifiedUsers = onSchedule(
+  {
+    schedule: "0 2 * * *",
+    timeZone: "Asia/Kolkata",
+    region: "us-central1",
+  },
+  async () => {
+    const cutoffMs = Date.now() - 48 * 60 * 60 * 1000; // 48 hours ago
+    let deletedCount = 0;
+    let skippedCount = 0;
+    let pageToken;
+
+    console.log(
+      `deleteStaleUnverifiedUsers: scanning for unverified accounts created before ${new Date(cutoffMs).toISOString()}`
+    );
+
+    // Paginate through all Firebase Auth users
+    do {
+      const listResult = await admin.auth().listUsers(1000, pageToken);
+      pageToken = listResult.pageToken;
+
+      for (const authUser of listResult.users) {
+        // Guard 1: must NOT be verified
+        if (authUser.emailVerified) {
+          continue;
+        }
+
+        // Guard 2: must be email/password provider only
+        const isPasswordUser = authUser.providerData.some(
+          (p) => p.providerId === "password"
+        );
+        if (!isPasswordUser) {
+          continue;
+        }
+
+        // Guard 3: account must be older than 48 hours
+        const creationMs = authUser.metadata.creationTime
+          ? new Date(authUser.metadata.creationTime).getTime()
+          : 0;
+
+        if (creationMs > cutoffMs) {
+          continue; // too recent — still within grace period
+        }
+
+        // Guard 4: check Firestore profile — never delete if clinicId is set
+        const uid = authUser.uid;
+        try {
+          const profileSnap = await db.collection("users").doc(uid).get();
+
+          if (profileSnap.exists) {
+            const profileData = profileSnap.data();
+            if (profileData.clinicId) {
+              // User has clinic data — do not delete under any circumstances
+              console.log(
+                `deleteStaleUnverifiedUsers: skipping uid=${uid} — has clinicId`
+              );
+              skippedCount++;
+              continue;
+            }
+          }
+
+          // Safe to delete — no clinic association
+          // 1. Delete Firestore profile (and sub-collections are cleaned up by the
+          //    Firebase console / extension; we only delete the root doc here to
+          //    avoid the Extension SDK dependency in this function)
+          if (profileSnap.exists) {
+            await db.collection("users").doc(uid).delete();
+            console.log(`deleteStaleUnverifiedUsers: deleted Firestore doc for uid=${uid}`);
+          }
+
+          // 2. Delete the Firebase Auth user record
+          await admin.auth().deleteUser(uid);
+          console.log(
+            `deleteStaleUnverifiedUsers: deleted Auth user uid=${uid} email=${authUser.email || "no-email"}`
+          );
+
+          deletedCount++;
+        } catch (err) {
+          console.error(
+            `deleteStaleUnverifiedUsers: error processing uid=${uid}:`,
+            err.message || err
+          );
+          // Continue processing other users even if one fails
+        }
+      }
+    } while (pageToken);
+
+    console.log(
+      `deleteStaleUnverifiedUsers: completed — deleted=${deletedCount}, skipped=${skippedCount}`
+    );
+  }
+);
+
+/**
  * 6. Admin-only function: Audit and repair incomplete user profiles.
  * Scans all Firestore users and backfills missing email, displayName, photoURL,
  * clinicId (default null), role (default null), and notificationsEnabled from Firebase Auth.

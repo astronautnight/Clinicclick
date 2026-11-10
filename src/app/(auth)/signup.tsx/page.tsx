@@ -93,8 +93,12 @@ export default function SignupPage() {
         });
       }
 
-      toast({ title: 'Account created successfully' });
-      router.push('/dashboard');
+      toast({
+        title: 'Account created!',
+        description: 'Please verify your email address to continue.',
+      });
+      // Always redirect new email/password users to the verification page
+      router.push('/verify-email');
     } catch (err: any) {
       console.error(err);
       toast({

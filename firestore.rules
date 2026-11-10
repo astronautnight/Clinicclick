@@ -3,9 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------------------------------------------------------------
+    // Core Auth Helpers
+    // ---------------------------------------------------------------
+
+    // Returns true if any Firebase user is signed-in (token present).
     function signedIn() {
       return request.auth != null;
     }
+
+    // Returns true when the signed-in user has verified their email address.
+    // Reads from the JWT directly — cannot be spoofed via client data.
+    function emailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    // Convenience: authenticated AND email-verified.
+    // Apply to every clinic-sensitive operation so unverified accounts
+    // cannot read or mutate protected health / clinic data.
+    function verifiedAndSignedIn() {
+      return signedIn() && emailVerified();
+    }
+
+    // ---------------------------------------------------------------
+    // Role / Membership Helpers
+    // ---------------------------------------------------------------
 
     function isClinicAdmin(clinicId) {
       return (
@@ -28,11 +50,14 @@ service cloud.firestore {
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clinicId == clinicId);
     }
 
-    /* ================= USERS ================= */
+    /* ================= USERS =================
+       Kept on plain signedIn() so that newly-registered (unverified)
+       users can complete their profile / onboarding flow.
+    */
     match /users/{userId} {
       allow read: if signedIn();
 
-      // User can update self OR clinic admin can update users in their clinic (adding or removing)
+      // User can update self OR clinic admin can update users in their clinic
       allow update: if signedIn() && (
         request.auth.uid == userId ||
         (resource.data.clinicId != null && isClinicAdmin(resource.data.clinicId)) ||
@@ -42,169 +67,184 @@ service cloud.firestore {
       allow create: if signedIn();
     }
 
-    /* ================= NOTIFICATIONS ================= */
+    /* ================= NOTIFICATIONS =================
+       Also kept on plain signedIn() — notification writes may happen
+       during the onboarding / registration phase.
+    */
     match /users/{userId}/notifications/{notificationId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
-    /* ================= SURVEY RESPONSES ================= */
+    /* ================= SURVEY RESPONSES =================
+       Kept on plain signedIn() — surveys can be filled in before
+       email verification completes.
+    */
     match /survey_responses/{responseId} {
       allow create, read: if signedIn();
     }
 
-    /* ================= CLINICS ================= */
+    /* ================= CLINICS =================
+       Reading clinic info (needed to join via invite code) and creating
+       a new clinic now require email verification to prevent spam /
+       abuse by throwaway unverified accounts.
+    */
     match /clinics/{clinicId} {
+      // Email-verified users can read clinic basic info (e.g., to look up invite codes)
+      allow read: if verifiedAndSignedIn();
 
-      // Anyone signed in can read clinic BASIC info
-      // (needed to join with invite code)
-      allow read: if signedIn();
+      // Only email-verified users may create a clinic
+      allow create: if verifiedAndSignedIn();
 
-      // Anyone signed in can create a clinic
-      allow create: if signedIn();
-
-      // Clinic members / admins can update clinic (e.g., active dates), admins can delete
-      allow update: if signedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
-      allow delete: if signedIn() && isClinicAdmin(clinicId);
+      // Clinic members / admins can update; only admins can delete
+      allow update: if verifiedAndSignedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
+      allow delete: if verifiedAndSignedIn() && isClinicAdmin(clinicId);
     }
 
     /* ================= MEMBERS ================= */
     match /clinics/{clinicId}/members/{uid} {
-      // Anyone in clinic can read members
-      allow read: if signedIn() && isClinicMember(clinicId);
+      allow read: if verifiedAndSignedIn() && isClinicMember(clinicId);
 
-      // ONLY clinic admins can add a member, EXCEPT the creator of the clinic can create their own member doc initially.
-      allow create: if signedIn() && (
+      allow create: if verifiedAndSignedIn() && (
         isClinicAdmin(clinicId) ||
         (request.auth.uid == uid && get(/databases/$(database)/documents/clinics/$(clinicId)).data.createdBy == request.auth.uid)
       );
 
-      // Admin controls members AFTER creation, OR member can remove themselves (leave)
-      allow update: if signedIn() && isClinicAdmin(clinicId);
-      allow delete: if signedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
+      allow update: if verifiedAndSignedIn() && isClinicAdmin(clinicId);
+      allow delete: if verifiedAndSignedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }
 
     /* ================= PATIENTS ================= */
     match /clinics/{clinicId}/patients/{patientId} {
-      allow read, create, update: if signedIn() && isClinicMember(clinicId);
-      allow delete: if signedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
+      allow read, create, update: if verifiedAndSignedIn() && isClinicMember(clinicId);
+      allow delete: if verifiedAndSignedIn() && (isClinicAdmin(clinicId) || isClinicMember(clinicId));
     }
 
     /* ================= DRUGS ================= */
     match /clinics/{clinicId}/drugs/{drugId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= MEDICAL EMERGENCIES ================= */
     match /clinics/{clinicId}/medicalEmergencies/{emergencyId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= PRESCRIPTIONS ================= */
     match /clinics/{clinicId}/prescriptions/{prescriptionId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= INVENTORY ================= */
     match /clinics/{clinicId}/inventoryCategories/{categoryId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     match /clinics/{clinicId}/inventoryCategories/{categoryId}/items/{itemId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= APPOINTMENTS ================= */
     match /clinics/{clinicId}/appointments/{appointmentId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
-    /* ================= PENDING REQUESTS ================= */
+    /* ================= PENDING REQUESTS =================
+       'create' intentionally stays on plain signedIn() so that
+       users who haven't yet verified their email can still submit a
+       join request to a clinic.  Reading and deleting requests require
+       verification (admin-side operation).
+    */
     match /clinics/{clinicId}/pendingRequests/{uid} {
       allow create: if signedIn();
-      allow read, delete: if signedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
+      allow read, delete: if verifiedAndSignedIn() && (isClinicAdmin(clinicId) || request.auth.uid == uid);
     }
-    
+
     /* ================= PROCEDURES ================= */
     match /clinics/{clinicId}/procedures/{procedureId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= DOCTORS ================= */
     match /clinics/{clinicId}/doctors/{doctorId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STAFF ================= */
     match /clinics/{clinicId}/staff/{staffId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STAFF ATTENDANCE ================= */
     match /clinics/{clinicId}/staff/{staffId}/attendance/{dateId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
-     
+
     /* ================= TRANSACTIONS ================= */
     match /clinics/{clinicId}/transactions/{transactionId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENTS ================= */
     match /clinics/{clinicId}/students/{studentId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT ATTENDANCE ================= */
     match /clinics/{clinicId}/students/{studentId}/attendance/{dateId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT FINANCES ================= */
     match /clinics/{clinicId}/students/{studentId}/finances/{financeId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= DEPARTMENTS ================= */
     match /clinics/{clinicId}/departments/{departmentId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= STUDENT CASE HISTORIES ================= */
     match /clinics/{clinicId}/studentCaseHistories/{caseId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= OPERATORIES ================= */
     match /clinics/{clinicId}/operatories/{operatoryId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ================= INVOICES ================= */
     match /clinics/{clinicId}/invoices/{invoiceId} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
-    /* ================= CLINIC DATA (catch-all) ================= */
-    // Recursive wildcard {document=**} matches any nested documents and subcollections,
-    // and correctly permits collection list/query operations (onSnapshot/getDocs).
+    /* ================= CLINIC DATA (catch-all) =================
+       Recursive wildcard matches any nested documents / subcollections
+       not covered by the explicit rules above, and permits collection
+       list / query operations (onSnapshot / getDocs).
+       Email verification is required for all catch-all clinic data.
+    */
     match /clinics/{clinicId}/{document=**} {
-      allow read, create, update, delete: if signedIn() && isClinicMember(clinicId);
+      allow read, create, update, delete: if verifiedAndSignedIn() && isClinicMember(clinicId);
     }
 
     /* ===============================================================
        PERSONAL DATA (no clinic required)
        Users own their personal consultation and academic data.
        No other user — not even clinic members — can access it.
+       Email verification is required so that abandoned / unverified
+       accounts cannot accumulate sensitive personal records.
     =============================================================== */
 
     /* Personal Consultation: patients, appointments, transactions */
     match /users/{userId}/personalConsultation/{document=**} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if verifiedAndSignedIn() && request.auth.uid == userId;
     }
 
     /* Personal Academics: departments, studentCaseHistories, attendance, finances */
     match /users/{userId}/personalAcademics/{document=**} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if verifiedAndSignedIn() && request.auth.uid == userId;
     }
   }
 }

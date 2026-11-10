@@ -26,6 +26,7 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/signup') ||
     pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/verify-email') ||
     pathname.startsWith('/blogs') ||
     pathname.startsWith('/blog');
 

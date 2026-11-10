@@ -121,6 +121,13 @@ function LoginForm() {
 
     try {
       const loggedUser = await signInWithEmail(email, password);
+
+      // Email/password users must verify before accessing the app
+      if (!loggedUser.emailVerified) {
+        router.push('/verify-email');
+        return;
+      }
+
       const destination = await getPostLoginRedirect(loggedUser.uid, returnUrlParam);
       router.push(destination);
     } catch (error) {
@@ -167,9 +174,12 @@ function LoginForm() {
     try {
       const newUser = await signUpWithEmail(email, password, fullName);
       await updateUserProfile(newUser.uid, { displayName: fullName });
-      toast({ title: 'Account created successfully' });
-      const destination = await getPostLoginRedirect(newUser.uid, returnUrlParam);
-      router.push(destination);
+      toast({
+        title: 'Account created!',
+        description: 'Please verify your email address to continue.',
+      });
+      // Always redirect new email/password users to the verification page
+      router.push('/verify-email');
     } catch (error: any) {
       toast({
         title: 'Sign Up Failed',

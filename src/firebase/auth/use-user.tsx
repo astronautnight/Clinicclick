@@ -30,6 +30,8 @@ interface UserContextValue {
   clinicId: string | null;
   clinicRole: ClinicRole | null;
   clinicLoading: boolean;
+  /** True when the authenticated user has a verified email (or uses Google/OAuth). */
+  emailVerified: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -41,6 +43,7 @@ const UserContext = createContext<UserContextValue>({
   clinicId: null,
   clinicRole: null,
   clinicLoading: true,
+  emailVerified: false,
 });
 
 export const useUser = () => {
@@ -57,6 +60,44 @@ export const useUser = () => {
 };
 
 /* ------------------------------------------------------------------ */
+/* Helpers */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Returns true when the user signed in with an email/password provider
+ * (as opposed to Google / OAuth, which are always considered verified).
+ */
+function isPasswordProvider(user: User): boolean {
+  return user.providerData.some((p) => p.providerId === 'password');
+}
+
+/** Public pages that never require auth or email verification. */
+function getIsPublicPage(pathname: string): boolean {
+  return (
+    pathname === '/' ||
+    pathname.startsWith('/features') ||
+    pathname.startsWith('/blogs') ||
+    pathname.startsWith('/blog') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/join') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/verify-email')
+  );
+}
+
+/** Login / signup pages that should redirect away when already authed. */
+function getIsAuthPage(pathname: string): boolean {
+  return (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password')
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Provider */
 /* ------------------------------------------------------------------ */
 export const UserProvider = ({ children }: { children: ReactNode }) => {
@@ -67,13 +108,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   const [clinicId, setClinicId] = useState<string | null>(null);
   const [clinicRole, setClinicRole] = useState<ClinicRole | null>(null);
   const [clinicLoading, setClinicLoading] = useState(true);
 
   /* -------------------------------------------------------------- */
-  /* Auth state listener and clinic context                         */
+  /* Auth state listener, email-verified guard, and clinic context   */
   /* -------------------------------------------------------------- */
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | null = null;
@@ -90,31 +132,41 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         unsubscribeUserDoc = null;
       }
 
-      const isPublicPage =
-        pathname === '/' ||
-        pathname.startsWith('/features') ||
-        pathname.startsWith('/blogs') ||
-        pathname.startsWith('/blog') ||
-        pathname.startsWith('/login') ||
-        pathname.startsWith('/signup') ||
-        pathname.startsWith('/join') ||
-        pathname.startsWith('/forgot-password') ||
-        pathname.startsWith('/reset-password');
-
-      const isAuthPage =
-        pathname.startsWith('/login') ||
-        pathname.startsWith('/signup') ||
-        pathname.startsWith('/forgot-password') ||
-        pathname.startsWith('/reset-password');
+      const isPublicPage = getIsPublicPage(pathname);
+      const isAuthPage = getIsAuthPage(pathname);
 
       /* -------------------- NOT LOGGED IN -------------------- */
       if (!currentUser) {
         setClinicId(null);
         setClinicRole(null);
         setClinicLoading(false);
+        setEmailVerified(false);
 
         if (!isPublicPage) {
           router.replace('/login');
+        }
+        return;
+      }
+
+      /* -------------------- EMAIL VERIFICATION GUARD -------------------- */
+      // Only enforce for email/password users. Google/OAuth are always verified.
+      const needsVerification =
+        isPasswordProvider(currentUser) && !currentUser.emailVerified;
+
+      setEmailVerified(!needsVerification);
+
+      if (needsVerification) {
+        // Not on a public page and not already on /verify-email → redirect
+        if (!pathname.startsWith('/verify-email')) {
+          setClinicId(null);
+          setClinicRole(null);
+          setClinicLoading(false);
+          router.replace('/verify-email');
+        } else {
+          // Already on the verify-email page; don't load clinic context yet
+          setClinicId(null);
+          setClinicRole(null);
+          setClinicLoading(false);
         }
         return;
       }
@@ -171,7 +223,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 router.replace('/clinic?mode=create');
               }
             } else if (pathname === '/dashboard' && !currentClinicId) {
-              // Direct navigation to /dashboard without a clinic -> redirect to onboarding
+              // Direct navigation to /dashboard without a clinic → redirect to onboarding
               router.replace('/clinic?mode=create');
             }
           },
@@ -207,6 +259,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   /* ------------------------------------------------------------------ */
   useEffect(() => {
     if (!user) return;
+    // Don't track activity for unverified users
+    if (isPasswordProvider(user) && !user.emailVerified) return;
 
     const userRef = doc(db, 'users', user.uid);
     let lastWriteAt = 0;
@@ -287,6 +341,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         clinicId,
         clinicRole,
         clinicLoading,
+        emailVerified,
       }}
     >
       {children}
