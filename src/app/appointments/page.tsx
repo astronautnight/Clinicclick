@@ -489,13 +489,21 @@ export default function AppointmentsPage() {
         if (patient && currentAppointment.procedureDetails && currentAppointment.procedureDetails.length > 0) {
           const existingLinked = patient.linkedProcedures || [];
           const updatedLinked = [...existingLinked];
+          const stampDate = currentAppointment.date || new Date().toISOString();
           
           currentAppointment.procedureDetails.forEach(pd => {
             const matchIdx = updatedLinked.findIndex(lp => lp.procedureId === pd.procedureId);
+            const normalizedSteps = pd.subProcedures.map(s => {
+              if (s.completed && !s.completedAt) {
+                return { ...s, completedAt: stampDate };
+              }
+              return s;
+            });
+
             if (matchIdx >= 0) {
               updatedLinked[matchIdx] = {
                 ...updatedLinked[matchIdx],
-                subProcedures: pd.subProcedures,
+                subProcedures: normalizedSteps,
               };
             } else {
               const pObj = procedures.find(p => p.id === pd.procedureId);
@@ -503,9 +511,9 @@ export default function AppointmentsPage() {
                 procedureId: pd.procedureId,
                 procedureName: pd.procedureName,
                 cost: pObj?.cost || 0,
-                date: new Date().toISOString(),
+                date: stampDate,
                 quantity: 1,
-                subProcedures: pd.subProcedures,
+                subProcedures: normalizedSteps,
               });
             }
           });

@@ -14,8 +14,10 @@ import {
   CheckCircle2, 
   History, 
   Stethoscope, 
-  Layers
+  Layers,
+  Calendar
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export interface PreviousProcedureRecord {
@@ -204,10 +206,12 @@ export function ProcedureSubprocedureSelector({
     let nextDetails: AppointmentProcedureDetail[];
     let nextIds = currentProcedureIds;
 
+    const nowIso = new Date().toISOString();
+
     if (!isCurrentlyLinked) {
       // Auto-link procedure if doctor ticks a sub-procedure
       const initialSteps = getSubProceduresForProcedure(proc.id, proc.name).map((step, idx) => {
-        if (idx === stepIndex) return { ...step, completed: true };
+        if (idx === stepIndex) return { ...step, completed: true, completedAt: nowIso };
         return step;
       });
       nextDetails = [...currentProcedureDetails, {
@@ -222,7 +226,12 @@ export function ProcedureSubprocedureSelector({
         if (detail.procedureId !== proc.id) return detail;
         const updatedSteps = detail.subProcedures.map((step, idx) => {
           if (idx !== stepIndex) return step;
-          return { ...step, completed: !step.completed };
+          const nextCompleted = !step.completed;
+          return {
+            ...step,
+            completed: nextCompleted,
+            completedAt: nextCompleted ? (step.completedAt || nowIso) : undefined,
+          };
         });
         return { ...detail, subProcedures: updatedSteps };
       });
@@ -499,6 +508,18 @@ export function ProcedureSubprocedureSelector({
                             {step.isCustom && (
                               <span className="text-[10px] px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/20 shrink-0 font-medium leading-none">
                                 Custom
+                              </span>
+                            )}
+                            {step.completed && step.completedAt && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800/40 ml-auto shrink-0 font-normal">
+                                {(() => {
+                                  try {
+                                    const d = new Date(step.completedAt);
+                                    return isNaN(d.getTime()) ? step.completedAt : format(d, 'dd MMM');
+                                  } catch {
+                                    return step.completedAt;
+                                  }
+                                })()}
                               </span>
                             )}
                           </label>

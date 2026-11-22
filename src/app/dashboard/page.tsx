@@ -358,13 +358,21 @@ export default function DashboardPage() {
             if (patient && appointmentForm.procedureDetails && appointmentForm.procedureDetails.length > 0) {
                 const existingLinked = patient.linkedProcedures || [];
                 const updatedLinked = [...existingLinked];
+                const stampDate = appointmentForm.date || new Date().toISOString();
                 
                 appointmentForm.procedureDetails.forEach(pd => {
                     const matchIdx = updatedLinked.findIndex(lp => lp.procedureId === pd.procedureId);
+                    const normalizedSteps = pd.subProcedures.map(s => {
+                        if (s.completed && !s.completedAt) {
+                            return { ...s, completedAt: stampDate };
+                        }
+                        return s;
+                    });
+
                     if (matchIdx >= 0) {
                         updatedLinked[matchIdx] = {
                             ...updatedLinked[matchIdx],
-                            subProcedures: pd.subProcedures,
+                            subProcedures: normalizedSteps,
                         };
                     } else {
                         const pObj = procedures.find(p => p.id === pd.procedureId);
@@ -372,9 +380,9 @@ export default function DashboardPage() {
                             procedureId: pd.procedureId,
                             procedureName: pd.procedureName,
                             cost: pObj?.cost || 0,
-                            date: new Date().toISOString(),
+                            date: stampDate,
                             quantity: 1,
-                            subProcedures: pd.subProcedures,
+                            subProcedures: normalizedSteps,
                         });
                     }
                 });

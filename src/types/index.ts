@@ -78,6 +78,7 @@ export interface ProcedureSubStep {
   id?: string;
   name: string;
   completed: boolean;
+  completedAt?: string; // ISO date string when step was completed/recorded
   isCustom?: boolean;
 }
 

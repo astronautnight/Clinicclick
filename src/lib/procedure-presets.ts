@@ -290,12 +290,15 @@ export function reconcileSubProcedures(
     }
   }
 
-  // Create a lookup for completed status from existing steps
-  const completedNames = new Set<string>();
+  // Create a lookup for completed status and completedAt from existing steps
+  const completedMap = new Map<string, { completed: boolean; completedAt?: string }>();
   if (existingSteps) {
     for (const s of existingSteps) {
       if (s.completed) {
-        completedNames.add(s.name.trim().toLowerCase());
+        completedMap.set(s.name.trim().toLowerCase(), {
+          completed: true,
+          completedAt: s.completedAt,
+        });
       }
     }
   }
@@ -303,11 +306,12 @@ export function reconcileSubProcedures(
   // Map to the new preset steps
   const baseSteps: ProcedureSubStep[] = preset.map(stepName => {
     const norm = stepName.trim().toLowerCase();
-    const isDone = completedNames.has(norm) ||
-      Array.from(completedNames).some(c => c.includes(norm) || norm.includes(c));
+    const existingEntry = completedMap.get(norm) ||
+      Array.from(completedMap.entries()).find(([k]) => k.includes(norm) || norm.includes(k))?.[1];
     return {
       name: stepName,
-      completed: isDone,
+      completed: !!existingEntry?.completed,
+      completedAt: existingEntry?.completedAt,
     };
   });
 

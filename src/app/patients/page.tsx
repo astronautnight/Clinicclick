@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type ChangeEvent, type FormEvent, useMemo } from "react";
+import React, { useState, useEffect, type ChangeEvent, type FormEvent, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { addPatient, deletePatient, updatePatient, uploadPatientFile, deletePatientPhoto } from "@/services/patient-service";
 import { useUser, useFirestore } from '@/firebase';
@@ -31,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User } from "lucide-react";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
@@ -117,6 +117,67 @@ export default function PatientsPage() {
   const [uploadingForPatientId, setUploadingForPatientId] = useState<string | null>(null);
   const [uploadingFileType, setUploadingFileType] = useState<'photos' | 'xrays' | 'scans' | null>(null);
   const [previewFile, setPreviewFile] = useState<{ url: string, type: 'photos' | 'xrays' | 'scans', index: number, patientId: string } | null>(null);
+  const [expandedBillingProcs, setExpandedBillingProcs] = useState<Record<string, boolean>>({});
+
+  const formatSafeDate = (dateVal?: string | Date) => {
+    if (!dateVal) return '';
+    try {
+      const d = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+      if (isNaN(d.getTime())) return String(dateVal);
+      return format(d, 'dd MMM yyyy');
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const formatSafeDateTime = (dateVal?: string | Date) => {
+    if (!dateVal) return '';
+    try {
+      const d = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+      if (isNaN(d.getTime())) return String(dateVal);
+      return format(d, 'dd MMM yyyy, hh:mm a');
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const handleTogglePatientSubProcedure = async (patient: Patient, procedureIndex: number, stepIndex: number) => {
+    if (!clinicId) return;
+    const currentProcedures = patient.linkedProcedures || [];
+    const targetProc = currentProcedures[procedureIndex];
+    if (!targetProc) return;
+
+    const currentSteps = reconcileSubProcedures(targetProc.subProcedures, targetProc.procedureName);
+    const updatedSteps = currentSteps.map((step, idx) => {
+      if (idx !== stepIndex) return step;
+      const nextCompleted = !step.completed;
+      return {
+        ...step,
+        completed: nextCompleted,
+        completedAt: nextCompleted ? new Date().toISOString() : undefined,
+      };
+    });
+
+    const updatedProcedures = [...currentProcedures];
+    updatedProcedures[procedureIndex] = {
+      ...targetProc,
+      subProcedures: updatedSteps,
+    };
+
+    const success = await updatePatient(clinicId, patient.id, { linkedProcedures: updatedProcedures });
+    if (success) {
+      toast({
+        title: "Sub-procedure Updated",
+        description: `Updated status for "${currentSteps[stepIndex].name}".`,
+      });
+    } else {
+      toast({
+        title: "Update Failed",
+        description: "Could not update sub-procedure status.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>, fileType: 'photos' | 'xrays' | 'scans') => {
     const files = Array.from(e.target.files || []);
@@ -868,11 +929,169 @@ export default function PatientsPage() {
                 </TabsContent>
                 <TabsContent value="history" className="mt-4">
                     <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
-                        <CardContent className="p-0 sm:p-6 space-y-4">
-                            <div><h4 className="font-semibold">Medical History</h4><p className="text-muted-foreground">{patient.medicalHistory || 'No medical history recorded.'}</p></div>
-                            <div><h4 className="font-semibold">Allergies</h4><p className="text-muted-foreground">{patient.allergies || 'No allergies recorded.'}</p></div>
+                        <CardContent className="p-0 sm:p-6 space-y-6">
+                            <div className="space-y-4">
+                                <div><h4 className="font-semibold">Medical History</h4><p className="text-muted-foreground">{patient.medicalHistory || 'No medical history recorded.'}</p></div>
+                                <div><h4 className="font-semibold">Allergies</h4><p className="text-muted-foreground">{patient.allergies || 'No allergies recorded.'}</p></div>
+                                <Separator/>
+                                <div><h4 className="font-semibold">Dental History</h4><p className="text-muted-foreground">{patient.dentalHistory || 'No dental history recorded.'}</p></div>
+                            </div>
+
                             <Separator/>
-                            <div><h4 className="font-semibold">Dental History</h4><p className="text-muted-foreground">{patient.dentalHistory || 'No dental history recorded.'}</p></div>
+
+                            {/* Procedure & Sub-procedure History with Recorded Dates */}
+                            <div className="space-y-4 pt-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                    <div>
+                                        <h4 className="font-semibold text-base flex items-center gap-2 text-foreground">
+                                            <Activity className="h-4 w-4 text-primary" />
+                                            Procedure & Sub-procedure History
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground">
+                                            Clinical milestones and recorded completion dates for this patient.
+                                        </p>
+                                    </div>
+                                    {patient.linkedProcedures && patient.linkedProcedures.length > 0 && (
+                                        <Badge variant="outline" className="self-start sm:self-auto text-xs font-normal">
+                                            {patient.linkedProcedures.length} procedure{patient.linkedProcedures.length === 1 ? '' : 's'} linked
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) ? (
+                                    <div className="text-center py-8 border border-dashed rounded-lg bg-muted/20">
+                                        <Activity className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+                                        <p className="text-sm font-medium text-foreground">No procedures recorded yet</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Link a procedure in the Billing tab or schedule an appointment to track sub-procedures.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {patient.linkedProcedures.map((proc, pIndex) => {
+                                            const subSteps = reconcileSubProcedures(proc.subProcedures, proc.procedureName);
+                                            const stepsTotal = subSteps.length;
+                                            const stepsCompleted = subSteps.filter(s => s.completed).length;
+                                            const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+                                            const procStartDate = proc.date ? formatSafeDate(proc.date) : '';
+
+                                            return (
+                                                <div key={pIndex} className="border rounded-lg bg-card/70 p-4 shadow-sm space-y-3">
+                                                    {/* Procedure Card Header */}
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="font-semibold text-sm sm:text-base text-foreground">
+                                                                    {proc.procedureName}
+                                                                </span>
+                                                                {proc.toothNumber && (
+                                                                    <Badge variant="outline" className="text-3xs px-1.5 py-0 h-4 border-primary/30 text-primary">
+                                                                        Tooth #{proc.toothNumber}
+                                                                    </Badge>
+                                                                )}
+                                                                {procStartDate && (
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        &bull; Initiated {procStartDate}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <span className="text-xs font-medium text-muted-foreground">
+                                                                {stepsCompleted}/{stepsTotal} completed
+                                                            </span>
+                                                            <Badge 
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "text-xs font-semibold px-2 py-0.5",
+                                                                    stepsPct === 100 
+                                                                        ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400" 
+                                                                        : stepsPct >= 50 
+                                                                        ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-400" 
+                                                                        : "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400"
+                                                                )}
+                                                            >
+                                                                {stepsPct}%
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Progress Bar */}
+                                                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                                                        <div 
+                                                            className={cn(
+                                                                "h-full rounded-full transition-all duration-300", 
+                                                                stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500"
+                                                            )} 
+                                                            style={{ width: `${stepsPct}%` }} 
+                                                        />
+                                                    </div>
+
+                                                    {/* Sub-procedures Checklist with Recorded Dates */}
+                                                    <div className="space-y-1.5 pt-1">
+                                                        <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                                                            <span>Sub-procedures & Milestones</span>
+                                                            <span className="font-normal lowercase text-3xs text-muted-foreground/75">click checkbox to toggle status</span>
+                                                        </p>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                            {subSteps.map((step, sIndex) => {
+                                                                const stepDate = step.completedAt || (step.completed ? proc.date : undefined);
+
+                                                                return (
+                                                                    <div 
+                                                                        key={sIndex}
+                                                                        className={cn(
+                                                                            "flex items-center justify-between gap-2 px-3 py-2 rounded-md border text-xs transition-colors",
+                                                                            step.completed 
+                                                                                ? "bg-emerald-500/10 border-emerald-500/30 text-foreground" 
+                                                                                : "bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/40"
+                                                                        )}
+                                                                    >
+                                                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                                            <Checkbox 
+                                                                                checked={step.completed}
+                                                                                onCheckedChange={() => handleTogglePatientSubProcedure(patient, pIndex, sIndex)}
+                                                                                className="h-3.5 w-3.5 shrink-0"
+                                                                            />
+                                                                            <span className={cn(
+                                                                                "truncate font-medium text-xs leading-tight",
+                                                                                step.completed ? "text-foreground" : "text-muted-foreground"
+                                                                            )}>
+                                                                                {step.name}
+                                                                            </span>
+                                                                            {step.isCustom && (
+                                                                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/20 shrink-0">
+                                                                                    Custom
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Recorded Date Display */}
+                                                                        <div className="shrink-0 text-right">
+                                                                            {step.completed ? (
+                                                                                <span 
+                                                                                    title={formatSafeDateTime(stepDate)} 
+                                                                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-full"
+                                                                                >
+                                                                                    <CalendarIcon className="h-3 w-3 shrink-0" />
+                                                                                    Recorded: {formatSafeDate(stepDate)}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-3xs text-muted-foreground/60 italic px-1">
+                                                                                    Pending
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -974,6 +1193,7 @@ export default function PatientsPage() {
                                     const stepsTotal = subSteps.length;
                                     const stepsCompleted = subSteps.filter(s => s.completed).length;
                                     const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+                                    const isExpanded = expandedBillingProcs[`${patient.id}-${index}`];
 
                                     return (
                                         <div key={index} className="py-2 border-b last:border-0 space-y-1">
@@ -989,16 +1209,61 @@ export default function PatientsPage() {
                                             </div>
                                             {stepsTotal > 0 && (
                                                 <div className="pt-0.5">
-                                                    <div className="flex justify-between text-3xs text-muted-foreground font-medium">
-                                                        <span>Sub-procedures: {stepsCompleted}/{stepsTotal} completed</span>
-                                                        <span>{stepsPct}%</span>
-                                                    </div>
-                                                    <div className="w-full bg-muted rounded-full h-1 mt-0.5 overflow-hidden">
-                                                        <div 
-                                                            className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
-                                                            style={{ width: `${stepsPct}%` }} 
-                                                        />
-                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedBillingProcs(prev => ({ ...prev, [`${patient.id}-${index}`]: !prev[`${patient.id}-${index}`] }))}
+                                                        className="w-full text-left"
+                                                    >
+                                                        <div className="flex justify-between text-3xs text-muted-foreground font-medium">
+                                                            <span className="flex items-center gap-1">
+                                                                Sub-procedures: {stepsCompleted}/{stepsTotal} completed
+                                                                {isExpanded ? <ChevronUp className="h-3 w-3 inline text-foreground" /> : <ChevronDown className="h-3 w-3 inline" />}
+                                                            </span>
+                                                            <span>{stepsPct}%</span>
+                                                        </div>
+                                                        <div className="w-full bg-muted rounded-full h-1 mt-0.5 overflow-hidden">
+                                                            <div 
+                                                                className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
+                                                                style={{ width: `${stepsPct}%` }} 
+                                                            />
+                                                        </div>
+                                                    </button>
+                                                    {isExpanded && (
+                                                        <div className="mt-2 space-y-1 pl-1 pr-1 pb-1">
+                                                            {subSteps.map((s, sIdx) => {
+                                                                const sDate = s.completedAt || (s.completed ? proc.date : undefined);
+                                                                return (
+                                                                    <div 
+                                                                        key={sIdx}
+                                                                        className={cn(
+                                                                            "flex items-center justify-between gap-2 px-2 py-1 rounded border text-xs",
+                                                                            s.completed ? "bg-emerald-500/10 border-emerald-500/30" : "bg-muted/30 border-border/40 text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                            <Checkbox 
+                                                                                checked={s.completed}
+                                                                                onCheckedChange={() => handleTogglePatientSubProcedure(patient, index, sIdx)}
+                                                                                className="h-3 w-3 shrink-0"
+                                                                            />
+                                                                            <span className={cn("truncate text-2xs font-medium", s.completed ? "text-foreground" : "text-muted-foreground")}>
+                                                                                {s.name}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="shrink-0">
+                                                                            {s.completed ? (
+                                                                                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                                                                                    {formatSafeDate(sDate)}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-3xs text-muted-foreground/60 italic">Pending</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -1016,32 +1281,100 @@ export default function PatientsPage() {
                                             const stepsTotal = subSteps.length;
                                             const stepsCompleted = subSteps.filter(s => s.completed).length;
                                             const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+                                            const isExpanded = expandedBillingProcs[`${patient.id}-${index}`];
 
                                             return (
-                                                <TableRow key={index}>
-                                                    <TableCell className="font-medium">{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</TableCell>
-                                                    <TableCell className="max-w-[180px]">
-                                                        {stepsTotal > 0 ? (
-                                                            <div>
-                                                                <div className="flex justify-between text-3xs text-muted-foreground font-medium">
-                                                                    <span>{stepsCompleted}/{stepsTotal} steps</span>
-                                                                    <span>{stepsPct}%</span>
-                                                                </div>
-                                                                <div className="w-full bg-muted rounded-full h-1.5 mt-0.5 overflow-hidden">
-                                                                    <div 
-                                                                        className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
-                                                                        style={{ width: `${stepsPct}%` }} 
-                                                                    />
-                                                                </div>
+                                                <React.Fragment key={index}>
+                                                    <TableRow className="group">
+                                                        <TableCell className="font-medium">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {stepsTotal > 0 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setExpandedBillingProcs(prev => ({ ...prev, [`${patient.id}-${index}`]: !prev[`${patient.id}-${index}`] }))}
+                                                                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                                                                        title="Toggle sub-procedure steps"
+                                                                    >
+                                                                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                                                    </button>
+                                                                )}
+                                                                <span>{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</span>
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-xs text-muted-foreground">-</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>{proc.quantity || 1}</TableCell>
-                                                    <TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell>
-                                                    <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell>
-                                                </TableRow>
+                                                        </TableCell>
+                                                        <TableCell className="max-w-[180px]">
+                                                            {stepsTotal > 0 ? (
+                                                                <div 
+                                                                    className="cursor-pointer"
+                                                                    onClick={() => setExpandedBillingProcs(prev => ({ ...prev, [`${patient.id}-${index}`]: !prev[`${patient.id}-${index}`] }))}
+                                                                    title="Click to toggle sub-procedure dates"
+                                                                >
+                                                                    <div className="flex justify-between text-3xs text-muted-foreground font-medium">
+                                                                        <span>{stepsCompleted}/{stepsTotal} steps</span>
+                                                                        <span>{stepsPct}%</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-muted rounded-full h-1.5 mt-0.5 overflow-hidden">
+                                                                        <div 
+                                                                            className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
+                                                                            style={{ width: `${stepsPct}%` }} 
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">-</span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>{proc.quantity || 1}</TableCell>
+                                                        <TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell>
+                                                        <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell>
+                                                    </TableRow>
+                                                    {isExpanded && stepsTotal > 0 && (
+                                                        <TableRow key={`${index}-expanded`} className="bg-muted/15 border-b">
+                                                            <TableCell colSpan={5} className="py-2.5 px-6">
+                                                                <div className="space-y-1.5">
+                                                                    <div className="flex items-center justify-between text-2xs font-semibold uppercase text-muted-foreground">
+                                                                        <span>Sub-procedures & Recorded Dates</span>
+                                                                        <span className="normal-case">{stepsCompleted}/{stepsTotal} completed</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
+                                                                        {subSteps.map((s, sIdx) => {
+                                                                            const sDate = s.completedAt || (s.completed ? proc.date : undefined);
+                                                                            return (
+                                                                                <div 
+                                                                                    key={sIdx}
+                                                                                    className={cn(
+                                                                                        "flex items-center justify-between gap-2 px-2.5 py-1.5 rounded border text-xs",
+                                                                                        s.completed ? "bg-emerald-500/10 border-emerald-500/30" : "bg-background/80 border-border/40 text-muted-foreground"
+                                                                                    )}
+                                                                                >
+                                                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                                        <Checkbox 
+                                                                                            checked={s.completed}
+                                                                                            onCheckedChange={() => handleTogglePatientSubProcedure(patient, index, sIdx)}
+                                                                                            className="h-3.5 w-3.5 shrink-0"
+                                                                                        />
+                                                                                        <span className={cn("truncate font-medium text-2xs", s.completed ? "text-foreground" : "text-muted-foreground")}>
+                                                                                            {s.name}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="shrink-0">
+                                                                                        {s.completed ? (
+                                                                                            <span title={formatSafeDateTime(sDate)} className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-medium border border-emerald-300 dark:border-emerald-800">
+                                                                                                <CalendarIcon className="h-2.5 w-2.5" />
+                                                                                                {formatSafeDate(sDate)}
+                                                                                            </span>
+                                                                                        ) : (
+                                                                                            <span className="text-3xs text-muted-foreground/60 italic">Pending</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </React.Fragment>
                                             );
                                         })}
                                     </TableBody>
