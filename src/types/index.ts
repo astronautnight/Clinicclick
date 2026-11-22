@@ -74,6 +74,21 @@ export interface MarkedTooth {
   notes?: string;
 }
 
+export interface ProcedureSubStep {
+  id?: string;
+  name: string;
+  completed: boolean;
+  isCustom?: boolean;
+}
+
+export interface AppointmentProcedureDetail {
+  procedureId: string;
+  procedureName: string;
+  subProcedures: ProcedureSubStep[];
+  toothNumber?: string;
+  notes?: string;
+}
+
 export interface LinkedProcedure {
   procedureId: string;
   procedureName: string;
@@ -81,6 +96,7 @@ export interface LinkedProcedure {
   cost: number;
   toothNumber?: string;
   quantity?: number;
+  subProcedures?: ProcedureSubStep[];
 }
 
 export interface Patient {
@@ -125,6 +141,7 @@ export interface Appointment {
   startTime: string; // Storing as string HH:mm
   endTime: string; // Storing as string HH:mm
   procedureIds?: string[];
+  procedureDetails?: AppointmentProcedureDetail[]; // Sub-procedure checklists and progress
   notes?: string;
   status: 'Scheduled' | 'Confirmed' | 'Completed' | 'Cancelled' | 'Missed' | 'Postponed';
   createdAt: Date;
@@ -158,6 +175,7 @@ export interface Procedure {
   durationMinutes?: number; // Estimated duration
   videoUrl?: string; // URL for a demo video
   materials?: string[]; // List of required materials/armamentarium
+  subProcedures?: string[]; // Standard preset subprocedure steps
   createdAt: Date;
   updatedAt: Date;
 }

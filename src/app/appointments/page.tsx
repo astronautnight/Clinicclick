@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { Appointment, Patient, Doctor, Procedure } from "@/types";
+import type { Appointment, Patient, Doctor, Procedure, AppointmentProcedureDetail, Transaction } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, BellRing, PlusCircle, Trash2, Edit3, Search, UserPlus, ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react";
+import { CalendarDays, BellRing, PlusCircle, Trash2, Edit3, Search, UserPlus, ChevronLeft, ChevronRight, CalendarIcon, Stethoscope } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter as AlertDialogFooterCustom, AlertDialogHeader as AlertDialogHeaderCustom, AlertDialogTitle as AlertDialogTitleCustom, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,11 +23,14 @@ import { format, isSameDay, startOfWeek, endOfWeek, addDays, addWeeks, addMonths
 import { useUser, useFirestore } from '@/firebase';
 import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, query } from 'firebase/firestore';
-import { addPatient } from '@/services/patient-service';
+import { addPatient, updatePatient } from '@/services/patient-service';
 import { addAppointment, updateAppointment, deleteAppointment } from '@/services/appointment-service';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ProcedureSubprocedureSelector, AppointmentProcedureCardProgress } from '@/components/appointments/procedure-subprocedure-selector';
+import { PatientBillingSummary } from '@/components/appointments/patient-billing-summary';
+import { getPresetSubProcedures, reconcileSubProcedures } from '@/lib/procedure-presets';
 
 const initialAppointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt' | 'patientName' | 'doctorName'> = {
   patientId: "",
@@ -36,6 +39,7 @@ const initialAppointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'
   startTime: "10:00",
   endTime: "10:30",
   procedureIds: [],
+  procedureDetails: [],
   notes: "",
   status: "Scheduled",
   isConsult: false,
@@ -148,7 +152,7 @@ function computeColumnsForDay(appts: Appointment[]) {
   return result;
 }
 
-const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onEdit, onDelete }: { appointments: Appointment[]; title: string; searchQuery: string; onSearchChange: (q: string) => void; onEdit: (app: Appointment) => void; onDelete: (app: Appointment) => void; }) => {
+const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onEdit, onDelete, procedures = [] }: { appointments: Appointment[]; title: string; searchQuery: string; onSearchChange: (q: string) => void; onEdit: (app: Appointment) => void; onDelete: (app: Appointment) => void; procedures?: Procedure[]; }) => {
   return (
     <div className="space-y-3 mt-4">
       {/* Search Input Bar without redundant title banner */}
@@ -197,6 +201,13 @@ const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onE
                   } className="text-2xs shrink-0">{app.status}</Badge>
                 </div>
 
+                {/* Subprocedure Progress Bar on Mobile Card */}
+                <AppointmentProcedureCardProgress
+                  procedureDetails={app.procedureDetails}
+                  procedureIds={app.procedureIds}
+                  allProcedures={procedures}
+                />
+
                 <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center justify-between text-xs">
                   <span className="font-medium text-foreground/90 bg-muted/50 px-2 py-0.5 rounded text-2xs">
                     {app.startTime} - {app.endTime}
@@ -224,6 +235,7 @@ const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onE
                     <TableHead>Time</TableHead>
                     <TableHead>Patient</TableHead>
                     <TableHead>Doctor</TableHead>
+                    <TableHead>Procedure &amp; Progress</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -235,6 +247,14 @@ const AppointmentList = ({ appointments, title, searchQuery, onSearchChange, onE
                       <TableCell>{app.startTime} - {app.endTime}</TableCell>
                       <TableCell className="font-medium">{app.patientName}</TableCell>
                       <TableCell>{app.doctorName}</TableCell>
+                      <TableCell className="max-w-[220px]">
+                        <AppointmentProcedureCardProgress
+                          procedureDetails={app.procedureDetails}
+                          procedureIds={app.procedureIds}
+                          allProcedures={procedures}
+                          className="mt-0 pt-0 border-t-0"
+                        />
+                      </TableCell>
                       <TableCell>
                         <Badge variant={
                           app.status === 'Completed' ? 'secondary' :
@@ -339,6 +359,7 @@ export default function AppointmentsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [procedures, setProcedures] = useState<Procedure[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isQuickAddPatientOpen, setIsQuickAddPatientOpen] = useState(false);
@@ -397,11 +418,20 @@ export default function AppointmentsPage() {
       console.error("Procedures subscription error:", error);
     });
 
+    const transactionsColRef = collection(db, 'clinics', clinicId, 'transactions');
+    const unsubscribeTransactions = onSnapshot(transactionsColRef, (snapshot) => {
+      const transactionsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      setTransactions(transactionsData);
+    }, (error) => {
+      console.error("Transactions subscription error:", error);
+    });
+
     return () => {
       unsubscribeAppointments();
       unsubscribePatients();
       unsubscribeDoctors();
       unsubscribeProcedures();
+      unsubscribeTransactions();
     };
   }, [user, db, clinicId]);
 
@@ -454,6 +484,35 @@ export default function AppointmentsPage() {
           await addAppointment(clinicId, appointmentPayload);
           toast({ title: "Appointment Scheduled", description: "The new appointment has been added to the schedule." });
         }
+
+        // Sync procedure subprocedure progress with patient's linkedProcedures
+        if (patient && currentAppointment.procedureDetails && currentAppointment.procedureDetails.length > 0) {
+          const existingLinked = patient.linkedProcedures || [];
+          const updatedLinked = [...existingLinked];
+          
+          currentAppointment.procedureDetails.forEach(pd => {
+            const matchIdx = updatedLinked.findIndex(lp => lp.procedureId === pd.procedureId);
+            if (matchIdx >= 0) {
+              updatedLinked[matchIdx] = {
+                ...updatedLinked[matchIdx],
+                subProcedures: pd.subProcedures,
+              };
+            } else {
+              const pObj = procedures.find(p => p.id === pd.procedureId);
+              updatedLinked.push({
+                procedureId: pd.procedureId,
+                procedureName: pd.procedureName,
+                cost: pObj?.cost || 0,
+                date: new Date().toISOString(),
+                quantity: 1,
+                subProcedures: pd.subProcedures,
+              });
+            }
+          });
+
+          await updatePatient(clinicId, patient.id, { linkedProcedures: updatedLinked });
+        }
+
         setIsFormOpen(false);
         setEditingAppointmentId(null);
         setCurrentAppointment(initialAppointmentData);
@@ -465,6 +524,24 @@ export default function AppointmentsPage() {
 
   const handleEdit = (appointment: Appointment) => {
     setEditingAppointmentId(appointment.id);
+
+    // If appointment has procedureDetails, use them (reconciled to new smaller preset); if not, build from procedureIds
+    let initialDetails: AppointmentProcedureDetail[] = (appointment.procedureDetails || []).map(pd => ({
+      ...pd,
+      subProcedures: reconcileSubProcedures(pd.subProcedures, pd.procedureName),
+    }));
+    if ((!initialDetails || initialDetails.length === 0) && appointment.procedureIds && appointment.procedureIds.length > 0) {
+      initialDetails = appointment.procedureIds.map(id => {
+        const pObj = procedures.find(p => p.id === id);
+        const name = pObj?.name || "Procedure";
+        return {
+          procedureId: id,
+          procedureName: name,
+          subProcedures: getPresetSubProcedures(name).map(stepName => ({ name: stepName, completed: false })),
+        };
+      });
+    }
+
     setCurrentAppointment({
       patientId: appointment.patientId,
       doctorId: appointment.doctorId || "",
@@ -472,6 +549,7 @@ export default function AppointmentsPage() {
       startTime: appointment.startTime,
       endTime: appointment.endTime,
       procedureIds: appointment.procedureIds || [],
+      procedureDetails: initialDetails,
       notes: appointment.notes || "",
       status: appointment.status,
       isConsult: !!appointment.isConsult,
@@ -701,24 +779,34 @@ export default function AppointmentsPage() {
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <Label className="text-xs sm:text-sm font-medium">Linked Procedures</Label>
-                  <div className="border rounded-md p-2 space-y-1 max-h-32 sm:max-h-40 overflow-y-auto bg-muted/20">
-                    {procedures.length === 0 ? <p className="text-xs text-muted-foreground">No procedures found.</p> : procedures.map(proc => (
-                      <div key={proc.id} className="flex items-center space-x-2 py-0.5">
-                        <Checkbox checked={(currentAppointment.procedureIds || []).includes(proc.id)} onCheckedChange={() => setCurrentAppointment(prev => {
-                          const prevIds = prev.procedureIds || [];
-                          return {
-                            ...prev,
-                            procedureIds: prevIds.includes(proc.id) ? prevIds.filter(id => id !== proc.id) : [...prevIds, proc.id]
-                          };
-                        })} />
-                        <span className="text-xs sm:text-sm">{proc.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <ProcedureSubprocedureSelector
+                  allProcedures={procedures}
+                  selectedPatientId={currentAppointment.patientId}
+                  currentProcedureDetails={currentAppointment.procedureDetails || []}
+                  currentProcedureIds={currentAppointment.procedureIds || []}
+                  appointments={appointments}
+                  currentAppointmentId={editingAppointmentId}
+                  patients={patients}
+                  onProcedureDetailsChange={(details, ids) => {
+                    setCurrentAppointment(prev => ({
+                      ...prev,
+                      procedureDetails: details,
+                      procedureIds: ids,
+                    }));
+                  }}
+                />
                 <div className="space-y-1"><Label htmlFor="notes" className="text-xs sm:text-sm font-medium">Additional Notes (Optional)</Label><Textarea id="notes" name="notes" value={currentAppointment.notes || ''} onChange={handleInputChange} placeholder="Any specific instructions or details for the appointment." className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" /></div>
+
+                {/* Patient Billing Summary: Billable | Paid | Due */}
+                <PatientBillingSummary
+                  patientId={currentAppointment.patientId}
+                  patients={patients}
+                  currentProcedureDetails={currentAppointment.procedureDetails || []}
+                  currentProcedureIds={currentAppointment.procedureIds || []}
+                  allProcedures={procedures}
+                  transactions={transactions}
+                  clinicId={clinicId}
+                />
               </div>
               <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row justify-between items-center w-full bg-background">
                 <div>
@@ -818,14 +906,56 @@ export default function AppointmentsPage() {
                               >
                                 <p className="font-semibold truncate leading-tight">{app.patientName}</p>
                                 <p className="truncate leading-tight text-muted-foreground">{app.doctorName}</p>
-                                <p className="text-[11px] text-muted-foreground">{app.startTime} - {app.endTime}</p>
+                                {app.procedureDetails && app.procedureDetails.length > 0 && (() => {
+                                  const pd0 = app.procedureDetails[0];
+                                  const steps = reconcileSubProcedures(pd0.subProcedures, pd0.procedureName);
+                                  const total = steps.length;
+                                  const done = steps.filter(s => s.completed).length;
+                                  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                                  return (
+                                    <div className="mt-0.5">
+                                      <div className="flex justify-between items-center text-[10px] truncate">
+                                        <span className="truncate font-medium">{pd0.procedureName}</span>
+                                        <span className="shrink-0 font-bold ml-1">{pct}%</span>
+                                      </div>
+                                      <div className="w-full bg-foreground/15 rounded-full h-1 mt-0.5 overflow-hidden">
+                                        <div 
+                                          className="bg-primary h-full rounded-full transition-all" 
+                                          style={{ width: `${pct}%` }} 
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{app.startTime} - {app.endTime}</p>
                               </div>
                             </TooltipTrigger>
-                            <TooltipContent className="text-xs">
+                            <TooltipContent className="text-xs max-w-xs">
                               <p><strong>{app.patientName}</strong></p>
                               <p>{app.startTime} – {app.endTime} with {app.doctorName}</p>
                               <p>Status: {app.status}</p>
                               {app.isConsult && <p>Consult at: {app.consultLocation}</p>}
+                              {app.procedureDetails && app.procedureDetails.length > 0 && (
+                                <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-1">
+                                  {app.procedureDetails.map((pd, i) => {
+                                    const steps = reconcileSubProcedures(pd.subProcedures, pd.procedureName);
+                                    const total = steps.length;
+                                    const done = steps.filter(s => s.completed).length;
+                                    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                                    return (
+                                      <div key={i} className="space-y-0.5">
+                                        <div className="flex justify-between text-2xs font-semibold">
+                                          <span>{pd.procedureName}</span>
+                                          <span>{done}/{total} ({pct}%)</span>
+                                        </div>
+                                        <div className="w-full bg-muted rounded-full h-1 overflow-hidden">
+                                          <div className="bg-primary h-full" style={{ width: `${pct}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         );
@@ -903,11 +1033,32 @@ export default function AppointmentsPage() {
                                     <p className="truncate leading-tight text-muted-foreground">{app.doctorName}</p>
                                   </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs">
+                                <TooltipContent className="text-xs max-w-xs">
                                   <p><strong>{app.patientName}</strong></p>
                                   <p>{app.startTime} – {app.endTime} with {app.doctorName}</p>
                                   <p>Status: {app.status}</p>
                                   {app.isConsult && <p>Consult at: {app.consultLocation}</p>}
+                                  {app.procedureDetails && app.procedureDetails.length > 0 && (
+                                    <div className="mt-1.5 pt-1.5 border-t border-border/40 space-y-1">
+                                      {app.procedureDetails.map((pd, i) => {
+                                        const steps = reconcileSubProcedures(pd.subProcedures, pd.procedureName);
+                                        const total = steps.length;
+                                        const done = steps.filter(s => s.completed).length;
+                                        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                                        return (
+                                          <div key={i} className="space-y-0.5">
+                                            <div className="flex justify-between text-2xs font-semibold">
+                                              <span>{pd.procedureName}</span>
+                                              <span>{done}/{total} ({pct}%)</span>
+                                            </div>
+                                            <div className="w-full bg-muted rounded-full h-1 overflow-hidden">
+                                              <div className="bg-primary h-full" style={{ width: `${pct}%` }} />
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </TooltipContent>
                               </Tooltip>
                             );
@@ -940,7 +1091,7 @@ export default function AppointmentsPage() {
           </TabsContent>
         </Tabs>
 
-        <AppointmentList appointments={visibleAppointments} title={listTitle} searchQuery={searchQuery} onSearchChange={setSearchQuery} onEdit={handleEdit} onDelete={setAppointmentToDelete} />
+        <AppointmentList appointments={visibleAppointments} title={listTitle} searchQuery={searchQuery} onSearchChange={setSearchQuery} onEdit={handleEdit} onDelete={setAppointmentToDelete} procedures={procedures} />
 
         <AlertDialog open={appointmentToDelete !== null} onOpenChange={(open) => { if (!open) setAppointmentToDelete(null); }}>
           <AlertDialogContent>

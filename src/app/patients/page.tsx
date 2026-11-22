@@ -33,6 +33,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
+import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { format, subYears, differenceInYears } from "date-fns";
@@ -566,6 +567,7 @@ export default function PatientsPage() {
       cost: procedure.cost,
       quantity: quantityToLink,
       date: new Date().toISOString(),
+      subProcedures: getPresetSubProcedures(procedure.name).map(name => ({ name, completed: false })),
       ...(toothNumberToLink.trim() && { toothNumber: toothNumberToLink.trim() }),
     }));
 
@@ -967,28 +969,81 @@ export default function PatientsPage() {
                             </div>
                             {/* Mobile-friendly procedure list */}
                             <div className="space-y-2 sm:hidden">
-                                {(patient.linkedProcedures || []).map((proc, index) => (
-                                    <div key={index} className="flex items-center justify-between gap-2 py-2 border-b last:border-0">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{proc.procedureName}</p>
-                                            <p className="text-xs text-muted-foreground">{proc.toothNumber ? `Tooth: ${proc.toothNumber} · ` : ''}Qty: {proc.quantity || 1}</p>
+                                {(patient.linkedProcedures || []).map((proc, index) => {
+                                    const subSteps = reconcileSubProcedures(proc.subProcedures, proc.procedureName);
+                                    const stepsTotal = subSteps.length;
+                                    const stepsCompleted = subSteps.filter(s => s.completed).length;
+                                    const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+
+                                    return (
+                                        <div key={index} className="py-2 border-b last:border-0 space-y-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate">{proc.procedureName}</p>
+                                                    <p className="text-xs text-muted-foreground">{proc.toothNumber ? `Tooth: ${proc.toothNumber} · ` : ''}Qty: {proc.quantity || 1}</p>
+                                                </div>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <span className="text-sm font-semibold">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</span>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-3.5 w-3.5 text-destructive" /></Button>
+                                                </div>
+                                            </div>
+                                            {stepsTotal > 0 && (
+                                                <div className="pt-0.5">
+                                                    <div className="flex justify-between text-3xs text-muted-foreground font-medium">
+                                                        <span>Sub-procedures: {stepsCompleted}/{stepsTotal} completed</span>
+                                                        <span>{stepsPct}%</span>
+                                                    </div>
+                                                    <div className="w-full bg-muted rounded-full h-1 mt-0.5 overflow-hidden">
+                                                        <div 
+                                                            className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
+                                                            style={{ width: `${stepsPct}%` }} 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                            <span className="text-sm font-semibold">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</span>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-3.5 w-3.5 text-destructive" /></Button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground py-4 text-sm">No procedures billed yet.</p>}
                             </div>
                             {/* Desktop table */}
                             <div className="hidden sm:block">
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Procedure</TableHead><TableHead>Qty</TableHead><TableHead className="text-right">Total Cost</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                                    <TableHeader><TableRow><TableHead>Procedure</TableHead><TableHead>Progress</TableHead><TableHead>Qty</TableHead><TableHead className="text-right">Total Cost</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {(patient.linkedProcedures || []).map((proc, index) => (
-                                            <TableRow key={index}><TableCell>{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</TableCell><TableCell>{proc.quantity || 1}</TableCell><TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell><TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell></TableRow>
-                                        ))}
+                                        {(patient.linkedProcedures || []).map((proc, index) => {
+                                            const subSteps = reconcileSubProcedures(proc.subProcedures, proc.procedureName);
+                                            const stepsTotal = subSteps.length;
+                                            const stepsCompleted = subSteps.filter(s => s.completed).length;
+                                            const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+
+                                            return (
+                                                <TableRow key={index}>
+                                                    <TableCell className="font-medium">{proc.procedureName} {proc.toothNumber && `(${proc.toothNumber})`}</TableCell>
+                                                    <TableCell className="max-w-[180px]">
+                                                        {stepsTotal > 0 ? (
+                                                            <div>
+                                                                <div className="flex justify-between text-3xs text-muted-foreground font-medium">
+                                                                    <span>{stepsCompleted}/{stepsTotal} steps</span>
+                                                                    <span>{stepsPct}%</span>
+                                                                </div>
+                                                                <div className="w-full bg-muted rounded-full h-1.5 mt-0.5 overflow-hidden">
+                                                                    <div 
+                                                                        className={cn("h-full rounded-full transition-all", stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500")} 
+                                                                        style={{ width: `${stepsPct}%` }} 
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{proc.quantity || 1}</TableCell>
+                                                    <TableCell className="text-right">₹{(proc.cost * (proc.quantity || 1)).toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); handleUnlinkProcedure(patient, index);}}><X className="h-4 w-4 text-destructive" /></Button></TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                                 {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground pt-4">No procedures billed yet.</p>}

@@ -23,7 +23,7 @@ import { Alert, AlertTitle, AlertDescription as ShadAlertDescription } from "@/c
 import { addProcedure, deleteProcedure, updateProcedure as updateProcedureService, seedInitialProcedures } from '@/services/procedure-service';
 import { updatePatient } from '@/services/patient-service';
 import { getUserProfile } from '@/services/auth-service';
-import { MASTER_PROCEDURE_PRESET } from '@/lib/procedure-presets';
+import { MASTER_PROCEDURE_PRESET, getPresetSubProcedures } from '@/lib/procedure-presets';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
 
@@ -80,6 +80,55 @@ const renderMaterialsFields = (
   );
 };
 
+const renderSubProceduresFields = (
+  subProcedures: string[],
+  setSubProcedures: React.Dispatch<React.SetStateAction<string[]>>,
+  isSubmitting: boolean
+) => {
+  const handleStepChange = (index: number, value: string) => {
+    const newSteps = [...subProcedures];
+    newSteps[index] = value;
+    setSubProcedures(newSteps);
+  };
+
+  const addStep = () => {
+    setSubProcedures([...subProcedures, '']);
+  };
+
+  const removeStep = (index: number) => {
+    setSubProcedures(subProcedures.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs sm:text-sm font-medium">Clinical Sub-procedures</Label>
+        <span className="text-2xs text-muted-foreground">{subProcedures.length} steps</span>
+      </div>
+      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+        {subProcedures.map((step, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <span className="text-2xs text-muted-foreground font-mono w-4 text-right shrink-0">{index + 1}.</span>
+            <Input
+              value={step}
+              onChange={(e) => handleStepChange(index, e.target.value)}
+              placeholder={`Step ${index + 1} (e.g. Access cavity preparation)`}
+              disabled={isSubmitting}
+              className="h-8 text-xs sm:text-sm"
+            />
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeStep(index)} disabled={isSubmitting}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={addStep} disabled={isSubmitting} className="h-7 text-xs gap-1.5">
+        <PlusCircle className="h-3.5 w-3.5" /> Add Step
+      </Button>
+    </div>
+  );
+};
+
 
 export default function ProceduresPage() {
   const { user, clinicId, loading, clinicLoading } = useUser();
@@ -97,6 +146,7 @@ export default function ProceduresPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newProcedure, setNewProcedure] = useState(initialProcedureFormData);
   const [newProcedureMaterials, setNewProcedureMaterials] = useState<string[]>([]);
+  const [newProcedureSubProcedures, setNewProcedureSubProcedures] = useState<string[]>([]);
 
   const [selectedProcedureToLink, setSelectedProcedureToLink] = useState<Procedure | null>(null);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
@@ -110,6 +160,8 @@ export default function ProceduresPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedProcedureData, setEditedProcedureData] = useState(initialProcedureFormData);
   const [editedProcedureMaterials, setEditedProcedureMaterials] = useState<string[]>([]);
+  const [editedProcedureSubProcedures, setEditedProcedureSubProcedures] = useState<string[]>([]);
+  const [expandedProcSubProcedures, setExpandedProcSubProcedures] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!db || !clinicId || !user) {
@@ -134,7 +186,17 @@ export default function ProceduresPage() {
             toast({ title: 'Procedures Ready', description: 'Standard procedures have been added.' });
             // The listener will re-fire with the new data, so we don't need to manually set state here.
         } else {
-             setProcedures(fetchedProcedures.sort((a, b) => a.category && b.category && a.category !== b.category ? a.category.localeCompare(b.category) : a.name.localeCompare(b.name)));
+            // Reconcile and ensure standard procedures have the updated smaller list
+            const updatedProcedures = fetchedProcedures.map(proc => {
+                const presetSteps = getPresetSubProcedures(proc.name);
+                if (presetSteps.length > 0 && (!proc.subProcedures || proc.subProcedures.length !== presetSteps.length)) {
+                    updateProcedureService(clinicId, proc.id, { subProcedures: presetSteps }).catch(console.warn);
+                    return { ...proc, subProcedures: presetSteps };
+                }
+                return proc;
+            });
+
+            setProcedures(updatedProcedures.sort((a, b) => a.category && b.category && a.category !== b.category ? a.category.localeCompare(b.category) : a.name.localeCompare(b.name)));
             setError(null);
             setIsLoading(false);
         }
@@ -151,7 +213,13 @@ export default function ProceduresPage() {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewProcedure(prev => ({ ...prev, [name]: name === 'cost' || name === 'durationMinutes' ? parseFloat(value) || 0 : value }));
-  }, []);
+    if (name === 'name' && newProcedureSubProcedures.length === 0) {
+      const defaultSteps = getPresetSubProcedures(value);
+      if (defaultSteps.length > 0) {
+        setNewProcedureSubProcedures(defaultSteps);
+      }
+    }
+  }, [newProcedureSubProcedures.length]);
 
   const handleSelectChange = useCallback((value: ProcedureCategory) => setNewProcedure(prev => ({ ...prev, category: value })), []);
 
@@ -163,13 +231,18 @@ export default function ProceduresPage() {
     }
     setIsSubmitting(true);
     try {
-      await addProcedure(clinicId, { ...newProcedure, materials: newProcedureMaterials });
+      await addProcedure(clinicId, {
+        ...newProcedure,
+        materials: newProcedureMaterials,
+        subProcedures: newProcedureSubProcedures.filter(s => s.trim().length > 0),
+      });
       toast({ title: "Procedure Added", description: `${newProcedure.name} has been added.` });
       setNewProcedure(initialProcedureFormData);
       setNewProcedureMaterials([]);
+      setNewProcedureSubProcedures([]);
       setIsAddFormOpen(false);
     } catch (err: any) {
-      toast({ title: "Error", description: "Could not add procedure.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not add procedure. Check permissions.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -192,6 +265,7 @@ export default function ProceduresPage() {
       cost: selectedProcedureToLink.cost,
       date: new Date().toISOString(),
       quantity: quantityToLink,
+      subProcedures: getPresetSubProcedures(selectedProcedureToLink.name).map(name => ({ name, completed: false })),
       ...(toothNumberToLink.trim() && { toothNumber: toothNumberToLink.trim() }),
     };
 
@@ -227,6 +301,10 @@ export default function ProceduresPage() {
     setEditingProcedure(procedure);
     setEditedProcedureData({ ...initialProcedureFormData, ...procedure });
     setEditedProcedureMaterials(procedure.materials || []);
+    const existingSteps = (procedure.subProcedures && procedure.subProcedures.length > 0)
+      ? procedure.subProcedures
+      : getPresetSubProcedures(procedure.name);
+    setEditedProcedureSubProcedures(existingSteps);
     setIsEditDialogOpen(true);
   };
 
@@ -242,7 +320,11 @@ export default function ProceduresPage() {
     if (!editingProcedure || !db || !user || !clinicId) return;
     setIsSubmitting(true);
     try {
-      await updateProcedureService(clinicId, editingProcedure.id, { ...editedProcedureData, materials: editedProcedureMaterials });
+      await updateProcedureService(clinicId, editingProcedure.id, {
+        ...editedProcedureData,
+        materials: editedProcedureMaterials,
+        subProcedures: editedProcedureSubProcedures.filter(s => s.trim().length > 0),
+      });
       toast({ title: "Procedure Updated", description: `${editedProcedureData.name} has been updated.` });
       setIsEditDialogOpen(false);
       setEditingProcedure(null);
@@ -337,6 +419,41 @@ export default function ProceduresPage() {
                       )}
                     </div>
 
+                    {(() => {
+                      const steps = (proc.subProcedures && proc.subProcedures.length > 0) ? proc.subProcedures : getPresetSubProcedures(proc.name);
+                      if (!steps || steps.length === 0) return null;
+                      const isExpanded = expandedProcSubProcedures[proc.id] ?? false;
+
+                      return (
+                        <div className="pt-2 border-t border-border/40">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedProcSubProcedures(prev => ({ ...prev, [proc.id]: !prev[proc.id] }))}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-foreground hover:text-primary transition-colors py-1 group cursor-pointer select-none"
+                          >
+                            <span className="text-2xs text-muted-foreground group-hover:text-primary transition-transform">
+                              {isExpanded ? '▼' : '▶'}
+                            </span>
+                            <span className="font-semibold text-xs">{proc.name}</span>
+                            <span className="text-3xs text-muted-foreground font-normal ml-1">
+                              ({steps.length} sub-procedures) {isExpanded ? '— collapse' : '— expand'}
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="ml-3 pl-3 border-l-2 border-primary/40 mt-1 mb-1.5 space-y-1 py-0.5">
+                              {steps.map((step, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs text-foreground/90 py-0.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-primary/70 shrink-0" />
+                                  <span className="font-normal text-xs">{step}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex justify-end gap-1.5 pt-2 border-t border-border/50">
                       <Button variant="ghost" size="sm" onClick={() => handleOpenEditDialog(proc)} className="h-7 sm:h-8 text-xs px-2 sm:px-2.5">
                         <FilePenLine className="mr-1 h-3.5 w-3.5" /> Edit
@@ -379,7 +496,7 @@ export default function ProceduresPage() {
         <Dialog open={isAddFormOpen} onOpenChange={setIsAddFormOpen}>
           <DialogTrigger asChild>
             <Button
-              onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setIsAddFormOpen(true); }}
+              onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setNewProcedureSubProcedures([]); setIsAddFormOpen(true); }}
               disabled={!user || !clinicId}
               className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4"
             >
@@ -388,48 +505,49 @@ export default function ProceduresPage() {
               <span className="hidden sm:inline">Add New Procedure</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-xl max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
-            <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
-              <DialogTitle className="text-base sm:text-xl font-bold">Add New Dental Procedure</DialogTitle>
-              <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">Define a new procedure and its required materials.</CardDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3 sm:space-y-3.5">
-                <div className="space-y-1">
-                  <Label htmlFor="name" className="text-xs sm:text-sm font-medium">Procedure Name *</Label>
-                  <Input id="name" name="name" value={newProcedure.name} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="description" className="text-xs sm:text-sm font-medium">Description (Optional)</Label>
-                  <Textarea id="description" name="description" value={newProcedure.description || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+            <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-xl max-h-[92vh] rounded-2xl sm:rounded-xl p-3 sm:p-6 flex flex-col gap-0 shadow-2xl border border-border/80 overflow-hidden">
+              <DialogHeader className="px-1 pt-0.5 pb-2.5 sm:pb-4 border-b shrink-0">
+                <DialogTitle className="text-base sm:text-xl font-bold">Add New Dental Procedure</DialogTitle>
+                <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">Define a new procedure, clinical sub-procedures, and required materials.</CardDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2.5 sm:py-4 space-y-3 sm:space-y-3.5">
                   <div className="space-y-1">
-                    <Label htmlFor="category" className="text-xs sm:text-sm font-medium">Category</Label>
-                    <Select name="category" value={newProcedure.category} onValueChange={handleSelectChange}><SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
+                    <Label htmlFor="name" className="text-xs sm:text-sm font-medium">Procedure Name *</Label>
+                    <Input id="name" name="name" value={newProcedure.name} onChange={handleInputChange} required disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="cost" className="text-xs sm:text-sm font-medium">Cost (₹) *</Label>
-                    <Input id="cost" name="cost" type="number" value={newProcedure.cost} onChange={handleInputChange} required min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
+                    <Label htmlFor="description" className="text-xs sm:text-sm font-medium">Description (Optional)</Label>
+                    <Textarea id="description" name="description" value={newProcedure.description || ''} onChange={handleInputChange} disabled={isSubmitting} className="min-h-[44px] sm:min-h-[56px] text-xs sm:text-sm py-1.5" />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
+                    <div className="space-y-1">
+                      <Label htmlFor="category" className="text-xs sm:text-sm font-medium">Category</Label>
+                      <Select name="category" value={newProcedure.category} onValueChange={handleSelectChange}><SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{(['Consultation', 'Restorative', 'Endodontic', 'Prosthodontic', 'Orthodontic', 'Surgical', 'Periodontic', 'Preventive', 'Cosmetic', 'Pediatric', 'Implantology', 'Adjunctive', 'Other'] as ProcedureCategory[]).map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="cost" className="text-xs sm:text-sm font-medium">Cost (₹) *</Label>
+                      <Input id="cost" name="cost" type="number" value={newProcedure.cost} onChange={handleInputChange} required min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="durationMinutes" className="text-xs sm:text-sm font-medium">Duration (minutes)</Label>
+                    <Input id="durationMinutes" name="durationMinutes" type="number" value={newProcedure.durationMinutes || 0} onChange={handleInputChange} min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="videoUrl" className="text-xs sm:text-sm font-medium">Demo Video Link (Optional)</Label>
+                    <Input id="videoUrl" name="videoUrl" value={newProcedure.videoUrl || ''} onChange={handleInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
+                  </div>
+                  <div className="border-t border-border/60 pt-3">{renderSubProceduresFields(newProcedureSubProcedures, setNewProcedureSubProcedures, isSubmitting)}</div>
+                  <div className="border-t border-border/60 pt-3">{renderMaterialsFields(newProcedureMaterials, setNewProcedureMaterials, isSubmitting)}</div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="durationMinutes" className="text-xs sm:text-sm font-medium">Duration (minutes)</Label>
-                  <Input id="durationMinutes" name="durationMinutes" type="number" value={newProcedure.durationMinutes || 0} onChange={handleInputChange} min="0" disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="videoUrl" className="text-xs sm:text-sm font-medium">Demo Video Link (Optional)</Label>
-                  <Input id="videoUrl" name="videoUrl" value={newProcedure.videoUrl || ''} onChange={handleInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
-                </div>
-                <div className="border-t border-border/60 pt-3">{renderMaterialsFields(newProcedureMaterials, setNewProcedureMaterials, isSubmitting)}</div>
-              </div>
-              <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">
-                <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
-                <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Adding...</> : 'Add Procedure'}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">
+                  <DialogClose asChild><Button type="button" variant="outline" size="sm" className="h-8 text-xs">Cancel</Button></DialogClose>
+                  <Button type="submit" size="sm" className="h-8 text-xs" disabled={isSubmitting}>{isSubmitting ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Adding...</> : 'Add Procedure'}</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
       </div>
 
       <Dialog open={isLinkDialogOpen} onOpenChange={(open) => { if (!open) setSelectedProcedureToLink(null); setIsLinkDialogOpen(open); }}>
@@ -493,6 +611,7 @@ export default function ProceduresPage() {
                   <Label htmlFor="editVideoUrl" className="text-xs sm:text-sm font-medium">Demo Video Link (Optional)</Label>
                   <Input id="editVideoUrl" name="videoUrl" value={editedProcedureData.videoUrl || ''} onChange={handleEditInputChange} placeholder="e.g., https://youtube.com/watch?v=..." disabled={isSubmitting} className="h-8 sm:h-9 text-xs sm:text-sm" />
                 </div>
+                <div className="border-t border-border/60 pt-3">{renderSubProceduresFields(editedProcedureSubProcedures, setEditedProcedureSubProcedures, isSubmitting)}</div>
                 <div className="border-t border-border/60 pt-3">{renderMaterialsFields(editedProcedureMaterials, setEditedProcedureMaterials, isSubmitting)}</div>
             </div>
             <DialogFooter className="px-1 pt-2.5 pb-0.5 border-t shrink-0 flex flex-row items-center justify-end gap-2 bg-background">

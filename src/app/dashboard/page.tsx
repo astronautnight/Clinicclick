@@ -51,11 +51,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { updateAppointment, addAppointment } from '@/services/appointment-service';
-import { addPatient } from '@/services/patient-service';
+import { addPatient, updatePatient } from '@/services/patient-service';
 import { addDoc, serverTimestamp } from 'firebase/firestore';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Drug, PrescriptionItem, Procedure, TransactionType, PaymentMethod, TransactionCategory } from '@/types';
+import type { Drug, PrescriptionItem, Procedure, TransactionType, PaymentMethod, TransactionCategory, AppointmentProcedureDetail } from '@/types';
 import { CalendarPlus, Trash2, Receipt } from 'lucide-react';
+import { ProcedureSubprocedureSelector, AppointmentProcedureCardProgress } from '@/components/appointments/procedure-subprocedure-selector';
+import { PatientBillingSummary } from '@/components/appointments/patient-billing-summary';
 
 
 // Reusable components from user's example, adapted to TSX and project styles
@@ -93,13 +95,17 @@ function QueueItem({
     name, 
     procedure, 
     status, 
-    onStatusChange 
+    onStatusChange,
+    procedureDetails,
+    allProcedures = []
 }: { 
     time: string, 
     name: string, 
     procedure?: string, 
     status: Appointment['status'], 
-    onStatusChange?: (newStatus: Appointment['status']) => void 
+    onStatusChange?: (newStatus: Appointment['status']) => void,
+    procedureDetails?: AppointmentProcedureDetail[],
+    allProcedures?: Procedure[]
 }) {
     return (
         <div className="flex justify-between items-center py-3 border-b text-sm gap-4">
@@ -108,6 +114,13 @@ function QueueItem({
                 <div className="min-w-0 flex-1">
                     <p className="font-semibold truncate">{name}</p>
                     {procedure && <div className="text-muted-foreground text-xs truncate">{procedure}</div>}
+                    {procedureDetails && procedureDetails.length > 0 && (
+                        <AppointmentProcedureCardProgress
+                            procedureDetails={procedureDetails}
+                            allProcedures={allProcedures}
+                            className="mt-1 pt-1 border-t-0"
+                        />
+                    )}
                 </div>
             </div>
             <div className="shrink-0">
@@ -305,6 +318,7 @@ export default function DashboardPage() {
         isConsult: false,
         consultLocation: '',
         procedureIds: [] as string[],
+        procedureDetails: [] as AppointmentProcedureDetail[],
         notes: '',
     });
 
@@ -336,8 +350,37 @@ export default function DashboardPage() {
                 isConsult: appointmentForm.isConsult,
                 consultLocation: appointmentForm.consultLocation,
                 procedureIds: appointmentForm.procedureIds,
+                procedureDetails: appointmentForm.procedureDetails,
                 notes: appointmentForm.notes,
             });
+
+            // Sync procedure subprocedure progress with patient's linkedProcedures
+            if (patient && appointmentForm.procedureDetails && appointmentForm.procedureDetails.length > 0) {
+                const existingLinked = patient.linkedProcedures || [];
+                const updatedLinked = [...existingLinked];
+                
+                appointmentForm.procedureDetails.forEach(pd => {
+                    const matchIdx = updatedLinked.findIndex(lp => lp.procedureId === pd.procedureId);
+                    if (matchIdx >= 0) {
+                        updatedLinked[matchIdx] = {
+                            ...updatedLinked[matchIdx],
+                            subProcedures: pd.subProcedures,
+                        };
+                    } else {
+                        const pObj = procedures.find(p => p.id === pd.procedureId);
+                        updatedLinked.push({
+                            procedureId: pd.procedureId,
+                            procedureName: pd.procedureName,
+                            cost: pObj?.cost || 0,
+                            date: new Date().toISOString(),
+                            quantity: 1,
+                            subProcedures: pd.subProcedures,
+                        });
+                    }
+                });
+
+                await updatePatient(clinicId, patient.id, { linkedProcedures: updatedLinked });
+            }
 
             toast({ title: 'Appointment Scheduled', description: 'New appointment successfully created.' });
             setIsAppointmentOpen(false);
@@ -351,6 +394,7 @@ export default function DashboardPage() {
                 isConsult: false,
                 consultLocation: '',
                 procedureIds: [],
+                procedureDetails: [],
                 notes: '',
             });
         } catch (error: any) {
@@ -1295,6 +1339,8 @@ export default function DashboardPage() {
                                         procedure={app.notes || (app.procedureIds && app.procedureIds.length > 0 ? `${app.procedureIds.length} procedure(s)` : 'General Consultation')}
                                         status={app.status}
                                         onStatusChange={(newStatus) => handleStatusChange(app.id, newStatus)}
+                                        procedureDetails={app.procedureDetails}
+                                        allProcedures={procedures}
                                     />
                                 ))}
                             </div>
@@ -1673,30 +1719,21 @@ export default function DashboardPage() {
                                     </div>
                                 )}
 
-                                <div className="space-y-1">
-                                    <Label className="text-xs font-medium">Linked Procedures</Label>
-                                    <div className="border rounded-md p-2 space-y-1 max-h-32 overflow-y-auto bg-muted/20">
-                                        {procedures.length === 0 ? (
-                                            <p className="text-xs text-muted-foreground">No procedures registered in clinic.</p>
-                                        ) : (
-                                            procedures.map(proc => (
-                                                <div key={proc.id} className="flex items-center space-x-2 py-0.5">
-                                                    <Checkbox 
-                                                        checked={(appointmentForm.procedureIds || []).includes(proc.id)} 
-                                                        onCheckedChange={() => setAppointmentForm(prev => {
-                                                            const prevIds = prev.procedureIds || [];
-                                                            return {
-                                                                ...prev,
-                                                                procedureIds: prevIds.includes(proc.id) ? prevIds.filter(id => id !== proc.id) : [...prevIds, proc.id]
-                                                            };
-                                                        })} 
-                                                    />
-                                                    <span className="text-xs">{proc.name}</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
+                                <ProcedureSubprocedureSelector
+                                    allProcedures={procedures}
+                                    selectedPatientId={appointmentForm.patientId}
+                                    currentProcedureDetails={appointmentForm.procedureDetails || []}
+                                    currentProcedureIds={appointmentForm.procedureIds || []}
+                                    appointments={appointments}
+                                    patients={patients}
+                                    onProcedureDetailsChange={(details, ids) => {
+                                        setAppointmentForm(prev => ({
+                                            ...prev,
+                                            procedureDetails: details,
+                                            procedureIds: ids,
+                                        }));
+                                    }}
+                                />
 
                                 <div className="space-y-1">
                                     <Label htmlFor="appNotes" className="text-xs font-medium">Additional Notes (Optional)</Label>
@@ -1708,6 +1745,17 @@ export default function DashboardPage() {
                                         className="min-h-[50px] text-xs py-1.5" 
                                     />
                                 </div>
+
+                                {/* Patient Billing Summary: Billable | Paid | Due */}
+                                <PatientBillingSummary
+                                    patientId={appointmentForm.patientId}
+                                    patients={patients}
+                                    currentProcedureDetails={appointmentForm.procedureDetails || []}
+                                    currentProcedureIds={appointmentForm.procedureIds || []}
+                                    allProcedures={procedures}
+                                    transactions={transactions}
+                                    clinicId={clinicId}
+                                />
                             </div>
 
                             <DialogFooter className="pt-3 border-t shrink-0 flex flex-row justify-end gap-2">

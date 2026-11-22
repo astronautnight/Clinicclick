@@ -1,7 +1,318 @@
-
-import type { Procedure } from '@/types';
+import type { Procedure, ProcedureSubStep } from '@/types';
 
 type ProcedurePreset = Omit<Procedure, 'id' | 'createdAt' | 'updatedAt'>;
+
+export const PROCEDURE_SUBPROCEDURES_MAP: Record<string, string[]> = {
+  // 1. Root Canal Treatment – Premolar
+  "Root Canal Treatment – Premolar": [
+    "Access cavity preparation",
+    "Working length determination",
+    "Canal cleaning and shaping",
+    "Obturation",
+    "Temporary restoration"
+  ],
+
+  // 2. Fluoride Varnish
+  "Fluoride Varnish": [
+    "Pre-treatment examination",
+    "Tooth surface preparation",
+    "Fluoride varnish application"
+  ],
+
+  // 3. Single Implant Placement
+  "Single Implant Placement": [
+    "Pre-operative assessment and planning",
+    "Surgical site preparation",
+    "Implant placement",
+    "Healing abutment / cover screw placement",
+    "Post-operative evaluation"
+  ],
+
+  // 4. Pit and Fissure Sealant
+  "Pit and Fissure Sealant": [
+    "Tooth cleaning",
+    "Tooth isolation and etching",
+    "Sealant application",
+    "Light curing",
+    "Occlusal evaluation"
+  ],
+
+  // 5. Bitewing X-Ray (2 Films)
+  "Bitewing X-Ray (2 Films)": [
+    "Patient positioning",
+    "Image exposure",
+    "Image quality assessment",
+    "Image interpretation"
+  ],
+
+  // 6. Bone Grafting
+  "Bone Grafting": [
+    "Pre-operative assessment",
+    "Surgical site preparation",
+    "Bone graft placement",
+    "Membrane placement (if required)",
+    "Suturing and follow-up"
+  ],
+
+  // 7. Root Canal Treatment – Anterior
+  "Root Canal Treatment – Anterior": [
+    "Access cavity preparation",
+    "Working length determination",
+    "Canal cleaning and shaping",
+    "Obturation",
+    "Temporary restoration"
+  ],
+
+  // 8. Ceramic Veneer
+  "Ceramic Veneer": [
+    "Shade selection",
+    "Tooth preparation",
+    "Impression / digital scan",
+    "Veneer try-in",
+    "Veneer bonding"
+  ],
+
+  // 9. Scaling and Polishing (Adult)
+  "Scaling and Polishing (Adult)": [
+    "Oral examination",
+    "Scaling",
+    "Calculus and stain removal",
+    "Polishing",
+    "Post-treatment instructions"
+  ],
+
+  // 10. IOPA X-Ray
+  "IOPA X-Ray": [
+    "Patient positioning",
+    "Image exposure",
+    "Image quality assessment",
+    "Image interpretation"
+  ],
+
+  // 11. Impacted Third Molar Removal
+  "Impacted Third Molar Removal": [
+    "Pre-operative assessment",
+    "Flap elevation",
+    "Bone removal / tooth sectioning (if required)",
+    "Tooth removal",
+    "Suturing and post-operative care"
+  ],
+
+  // 12. Crown Preparation + Temporary Crown
+  "Crown Preparation + Temporary Crown": [
+    "Shade selection",
+    "Tooth preparation",
+    "Impression / digital scan",
+    "Temporary crown fabrication",
+    "Temporary crown cementation"
+  ],
+
+  // 13. Composite Filling – Posterior
+  "Composite Filling – Posterior": [
+    "Tooth isolation",
+    "Caries removal and cavity preparation",
+    "Bonding",
+    "Composite placement and curing",
+    "Finishing and occlusal adjustment"
+  ],
+
+  // 14. Root Canal Treatment – Molar
+  "Root Canal Treatment – Molar": [
+    "Access cavity preparation",
+    "Working length determination",
+    "Canal cleaning and shaping",
+    "Obturation",
+    "Temporary restoration"
+  ],
+
+  // 15. Space Maintainer
+  "Space Maintainer": [
+    "Space assessment",
+    "Impression / digital scan",
+    "Appliance fabrication",
+    "Appliance fitting and placement",
+    "Follow-up evaluation"
+  ],
+
+  // 16. Surgical Extraction
+  "Surgical Extraction": [
+    "Pre-operative assessment",
+    "Flap elevation (if required)",
+    "Bone removal / tooth sectioning (if required)",
+    "Tooth removal",
+    "Suturing and post-operative care"
+  ],
+
+  // 17. Comprehensive Oral Examination
+  "Comprehensive Oral Examination": [
+    "Medical and dental history review",
+    "Extraoral and intraoral examination",
+    "Periodontal examination",
+    "Diagnosis",
+    "Treatment planning"
+  ],
+
+  // 18. Temporary Restoration
+  "Temporary Restoration": [
+    "Tooth examination",
+    "Cavity preparation",
+    "Temporary material placement",
+    "Contouring and occlusal evaluation"
+  ],
+
+  // 19. Periodic Oral Evaluation
+  "Periodic Oral Evaluation": [
+    "Medical and dental history update",
+    "Intraoral examination",
+    "Periodontal assessment",
+    "Diagnosis",
+    "Recommendations"
+  ],
+
+  // 20. Teeth Whitening (In-Office)
+  "Teeth Whitening (In-Office)": [
+    "Pre-treatment examination",
+    "Shade recording",
+    "Soft tissue protection",
+    "Whitening gel application",
+    "Final shade recording"
+  ],
+
+  // 21. Core Buildup
+  "Core Buildup": [
+    "Tooth isolation",
+    "Remaining tooth structure assessment",
+    "Post placement (if required)",
+    "Core material placement",
+    "Finishing and evaluation"
+  ],
+
+  // 22. Crown Re-Cementation
+  "Crown Re-Cementation": [
+    "Crown and tooth examination",
+    "Cleaning and surface preparation",
+    "Cement application",
+    "Crown seating",
+    "Occlusal evaluation"
+  ],
+
+  // 23. Simple Extraction
+  "Simple Extraction": [
+    "Pre-operative examination",
+    "Local anesthesia",
+    "Tooth luxation and extraction",
+    "Socket inspection and hemostasis",
+    "Post-operative instructions"
+  ],
+
+  // 24. Composite Filling – Anterior
+  "Composite Filling – Anterior": [
+    "Shade selection",
+    "Tooth isolation and cavity preparation",
+    "Bonding",
+    "Composite layering and curing",
+    "Finishing and polishing"
+  ],
+
+  // 25. OPG (Panoramic X-Ray)
+  "OPG (Panoramic X-Ray)": [
+    "Patient preparation and positioning",
+    "Panoramic exposure",
+    "Image quality assessment",
+    "Image interpretation",
+    "Report documentation"
+  ]
+};
+
+/**
+ * Normalizes a procedure name and looks up default preset sub-procedures.
+ * Handles slight variations in hyphen, dashes, spacing, or case.
+ */
+export function getPresetSubProcedures(procedureName: string): string[] {
+  if (!procedureName) return [];
+  
+  if (PROCEDURE_SUBPROCEDURES_MAP[procedureName]) {
+    return [...PROCEDURE_SUBPROCEDURES_MAP[procedureName]];
+  }
+
+  const normalize = (str: string) =>
+    str.toLowerCase().replace(/[\u2013\u2014\-]/g, '-').replace(/\s+/g, ' ').trim();
+
+  const target = normalize(procedureName);
+  for (const [key, steps] of Object.entries(PROCEDURE_SUBPROCEDURES_MAP)) {
+    if (normalize(key) === target) {
+      return [...steps];
+    }
+  }
+
+  // Partial match if prefix or root matches
+  for (const [key, steps] of Object.entries(PROCEDURE_SUBPROCEDURES_MAP)) {
+    if (target.includes(normalize(key)) || normalize(key).includes(target)) {
+      return [...steps];
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Reconciles any existing sub-procedure steps with the current official preset.
+ * Ensures old 11-12 step lists are automatically downsized to the new 3-5 step preset,
+ * while preserving any matching completion status AND any doctor-added custom steps for that patient.
+ */
+export function reconcileSubProcedures(
+  existingSteps: ProcedureSubStep[] | undefined | null,
+  procedureName: string
+): ProcedureSubStep[] {
+  const preset = getPresetSubProcedures(procedureName);
+  if (!preset || preset.length === 0) {
+    return existingSteps || [];
+  }
+
+  // Preserve any custom steps added specifically for this patient!
+  const customSteps: ProcedureSubStep[] = [];
+  if (existingSteps) {
+    for (const s of existingSteps) {
+      if (s.isCustom) {
+        customSteps.push(s);
+      }
+    }
+  }
+
+  // If existing steps already match preset length (ignoring custom steps) and step names match, return as-is
+  if (existingSteps) {
+    const nonCustomSteps = existingSteps.filter(s => !s.isCustom);
+    if (nonCustomSteps.length === preset.length) {
+      const isExact = nonCustomSteps.every(
+        (s, i) => s.name.trim().toLowerCase() === preset[i].trim().toLowerCase()
+      );
+      if (isExact) return existingSteps;
+    }
+  }
+
+  // Create a lookup for completed status from existing steps
+  const completedNames = new Set<string>();
+  if (existingSteps) {
+    for (const s of existingSteps) {
+      if (s.completed) {
+        completedNames.add(s.name.trim().toLowerCase());
+      }
+    }
+  }
+
+  // Map to the new preset steps
+  const baseSteps: ProcedureSubStep[] = preset.map(stepName => {
+    const norm = stepName.trim().toLowerCase();
+    const isDone = completedNames.has(norm) ||
+      Array.from(completedNames).some(c => c.includes(norm) || norm.includes(c));
+    return {
+      name: stepName,
+      completed: isDone,
+    };
+  });
+
+  return [...baseSteps, ...customSteps];
+}
 
 export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
   {
@@ -11,7 +322,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 300,
     durationMinutes: 15,
     isTemplate: true,
-    materials: ["Mouth Mirror", "Explorer", "Cotton Pliers", "Patient Bib"]
+    materials: ["Mouth Mirror", "Explorer", "Cotton Pliers", "Patient Bib"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Periodic Oral Evaluation"]
   },
   {
     name: "Comprehensive Oral Examination",
@@ -20,7 +332,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 600,
     durationMinutes: 30,
     isTemplate: true,
-    materials: ["Mouth Mirror", "Explorer", "Periodontal Probe", "Patient Record Form", "Radiograph Viewer"]
+    materials: ["Mouth Mirror", "Explorer", "Periodontal Probe", "Patient Record Form", "Radiograph Viewer"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Comprehensive Oral Examination"]
   },
   {
     name: "IOPA X-Ray",
@@ -29,7 +342,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 150,
     durationMinutes: 7,
     isTemplate: true,
-    materials: ["X-Ray Film/Sensor", "Film/Sensor Holder (RINN)", "Lead Apron", "X-Ray Machine"]
+    materials: ["X-Ray Film/Sensor", "Film/Sensor Holder (RINN)", "Lead Apron", "X-Ray Machine"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["IOPA X-Ray"]
   },
   {
     name: "Bitewing X-Ray (2 Films)",
@@ -38,7 +352,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 250,
     durationMinutes: 10,
     isTemplate: true,
-    materials: ["X-Ray Film/Sensor", "Bitewing Tabs/Holders", "Lead Apron", "X-Ray Machine"]
+    materials: ["X-Ray Film/Sensor", "Bitewing Tabs/Holders", "Lead Apron", "X-Ray Machine"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Bitewing X-Ray (2 Films)"]
   },
   {
     name: "OPG (Panoramic X-Ray)",
@@ -47,7 +362,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 600,
     durationMinutes: 10,
     isTemplate: true,
-    materials: ["OPG Machine", "Lead Apron", "Bite Peg Cover"]
+    materials: ["OPG Machine", "Lead Apron", "Bite Peg Cover"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["OPG (Panoramic X-Ray)"]
   },
   {
     name: "Scaling and Polishing (Adult)",
@@ -56,7 +372,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 1200,
     durationMinutes: 40,
     isTemplate: true,
-    materials: ["Ultrasonic Scaler Tips", "Prophy Paste", "Prophy Cups/Brushes", "Saliva Ejector", "Mouth Mirror"]
+    materials: ["Ultrasonic Scaler Tips", "Prophy Paste", "Prophy Cups/Brushes", "Saliva Ejector", "Mouth Mirror"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Scaling and Polishing (Adult)"]
   },
   {
     name: "Fluoride Varnish",
@@ -65,7 +382,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 400,
     durationMinutes: 10,
     isTemplate: true,
-    materials: ["Fluoride Varnish Unit-dose", "Applicator Brush", "Cotton Rolls", "Saliva Ejector"]
+    materials: ["Fluoride Varnish Unit-dose", "Applicator Brush", "Cotton Rolls", "Saliva Ejector"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Fluoride Varnish"]
   },
   {
     name: "Pit and Fissure Sealant",
@@ -74,7 +392,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 600,
     durationMinutes: 15,
     isTemplate: true,
-    materials: ["Sealant Material", "Etchant Gel", "Bonding Agent", "Applicator Tips", "Curing Light"]
+    materials: ["Sealant Material", "Etchant Gel", "Bonding Agent", "Applicator Tips", "Curing Light"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Pit and Fissure Sealant"]
   },
   {
     name: "Composite Filling – Anterior",
@@ -83,7 +402,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 1400,
     durationMinutes: 45,
     isTemplate: true,
-    materials: ["Local Anesthetic", "Composite Resin (Shade-matched)", "Etchant", "Bonding Agent", "Finishing & Polishing Discs/Strips"]
+    materials: ["Local Anesthetic", "Composite Resin (Shade-matched)", "Etchant", "Bonding Agent", "Finishing & Polishing Discs/Strips"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Composite Filling – Anterior"]
   },
   {
     name: "Composite Filling – Posterior",
@@ -92,7 +412,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 1600,
     durationMinutes: 50,
     isTemplate: true,
-    materials: ["Local Anesthetic", "Composite Resin", "Etchant", "Bonding Agent", "Matrix Bands & Wedges", "Curing Light"]
+    materials: ["Local Anesthetic", "Composite Resin", "Etchant", "Bonding Agent", "Matrix Bands & Wedges", "Curing Light"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Composite Filling – Posterior"]
   },
   {
     name: "Temporary Restoration",
@@ -101,7 +422,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 400,
     durationMinutes: 20,
     isTemplate: true,
-    materials: ["Temporary Filling Material (e.g., ZOE, GIC)", "Excavator", "Condenser", "Mixing Pad & Spatula"]
+    materials: ["Temporary Filling Material (e.g., ZOE, GIC)", "Excavator", "Condenser", "Mixing Pad & Spatula"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Temporary Restoration"]
   },
   {
     name: "Core Buildup",
@@ -110,7 +432,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 1200,
     durationMinutes: 30,
     isTemplate: true,
-    materials: ["Core Buildup Material (Composite/GIC)", "Matrix Band", "Bonding Agent", "Curing Light"]
+    materials: ["Core Buildup Material (Composite/GIC)", "Matrix Band", "Bonding Agent", "Curing Light"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Core Buildup"]
   },
   {
     name: "Crown Preparation + Temporary Crown",
@@ -119,7 +442,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 9000,
     durationMinutes: 90,
     isTemplate: true,
-    materials: ["Diamond Burs for Crown Prep", "Retraction Cord", "Impression Material (e.g., PVS)", "Temporary Crown Material", "Temporary Cement"]
+    materials: ["Diamond Burs for Crown Prep", "Retraction Cord", "Impression Material (e.g., PVS)", "Temporary Crown Material", "Temporary Cement"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Crown Preparation + Temporary Crown"]
   },
   {
     name: "Crown Re-Cementation",
@@ -128,7 +452,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 500,
     durationMinutes: 15,
     isTemplate: true,
-    materials: ["Permanent or Temporary Cement", "Mixing Pad & Spatula", "Explorer", "Scaler"]
+    materials: ["Permanent or Temporary Cement", "Mixing Pad & Spatula", "Explorer", "Scaler"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Crown Re-Cementation"]
   },
   {
     name: "Root Canal Treatment – Anterior",
@@ -137,7 +462,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 3500,
     durationMinutes: 90,
     isTemplate: true,
-    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"]
+    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Root Canal Treatment – Anterior"]
   },
   {
     name: "Root Canal Treatment – Premolar",
@@ -146,7 +472,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 4500,
     durationMinutes: 90,
     isTemplate: true,
-    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"]
+    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Root Canal Treatment – Premolar"]
   },
   {
     name: "Root Canal Treatment – Molar",
@@ -155,7 +482,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 6000,
     durationMinutes: 120,
     isTemplate: true,
-    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"]
+    materials: ["Rubber Dam Kit", "Endo Access Burs", "Hand & Rotary Files", "Gutta Percha & Paper Points", "Root Canal Sealer", "NaOCl, EDTA"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Root Canal Treatment – Molar"]
   },
   {
     name: "Simple Extraction",
@@ -164,7 +492,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 900,
     durationMinutes: 20,
     isTemplate: true,
-    materials: ["Local Anesthetic", "Extraction Forceps", "Elevators", "Sterile Gauze"]
+    materials: ["Local Anesthetic", "Extraction Forceps", "Elevators", "Sterile Gauze"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Simple Extraction"]
   },
   {
     name: "Surgical Extraction",
@@ -173,7 +502,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 3000,
     durationMinutes: 40,
     isTemplate: true,
-    materials: ["Local Anesthetic", "Surgical Handpiece & Burs", "Scalpel & Blade", "Sutures", "Bone File", "Sterile Saline"]
+    materials: ["Local Anesthetic", "Surgical Handpiece & Burs", "Scalpel & Blade", "Sutures", "Bone File", "Sterile Saline"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Surgical Extraction"]
   },
   {
     name: "Impacted Third Molar Removal",
@@ -182,7 +512,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 7000,
     durationMinutes: 60,
     isTemplate: true,
-    materials: ["Local Anesthetic", "Surgical Kit", "Sutures", "Sterile Gauze", "Irrigation Syringe", "Painkillers Prescription"]
+    materials: ["Local Anesthetic", "Surgical Kit", "Sutures", "Sterile Gauze", "Irrigation Syringe", "Painkillers Prescription"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Impacted Third Molar Removal"]
   },
   {
     name: "Single Implant Placement",
@@ -191,7 +522,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 30000,
     durationMinutes: 90,
     isTemplate: true,
-    materials: ["Implant Surgical Kit", "Dental Implant & Healing Abutment", "Surgical Handpiece", "Sterile Drapes & Saline", "Sutures"]
+    materials: ["Implant Surgical Kit", "Dental Implant & Healing Abutment", "Surgical Handpiece", "Sterile Drapes & Saline", "Sutures"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Single Implant Placement"]
   },
   {
     name: "Bone Grafting",
@@ -200,7 +532,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 8000,
     durationMinutes: 45,
     isTemplate: true,
-    materials: ["Bone Graft Material", "Membrane", "Surgical Instruments", "Sutures"]
+    materials: ["Bone Graft Material", "Membrane", "Surgical Instruments", "Sutures"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Bone Grafting"]
   },
   {
     name: "Teeth Whitening (In-Office)",
@@ -209,7 +542,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 8000,
     durationMinutes: 60,
     isTemplate: true,
-    materials: ["Whitening Gel (Hydrogen Peroxide)", "Gingival Barrier", "Retractors", "Curing Light/Laser"]
+    materials: ["Whitening Gel (Hydrogen Peroxide)", "Gingival Barrier", "Retractors", "Curing Light/Laser"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Teeth Whitening (In-Office)"]
   },
   {
     name: "Ceramic Veneer",
@@ -218,7 +552,8 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 15000,
     durationMinutes: 90,
     isTemplate: true,
-    materials: ["Veneer Preparation Kit", "Impression Material", "Shade Guide", "Temporary Veneer Material", "Bonding & Cementation Kit"]
+    materials: ["Veneer Preparation Kit", "Impression Material", "Shade Guide", "Temporary Veneer Material", "Bonding & Cementation Kit"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Ceramic Veneer"]
   },
   {
     name: "Space Maintainer",
@@ -227,6 +562,7 @@ export const MASTER_PROCEDURE_PRESET: ProcedurePreset[] = [
     cost: 3000,
     durationMinutes: 30,
     isTemplate: true,
-    materials: ["Impression Material (Alginate)", "Band & Loop Components", "Cement (for fixed type)"]
+    materials: ["Impression Material (Alginate)", "Band & Loop Components", "Cement (for fixed type)"],
+    subProcedures: PROCEDURE_SUBPROCEDURES_MAP["Space Maintainer"]
   }
 ];
