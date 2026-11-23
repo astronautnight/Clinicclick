@@ -85,7 +85,26 @@ export const sidebarNavItems: NavItem[] = [
     color: 'bg-warning',
     iconColorClass: 'text-warning-foreground',
   },
-   {
+  {
+    title: 'Consults / Academics',
+    href: '/consults',
+    iconName: 'UsersRound',
+    description: 'Manage external consults and student academics.',
+    color: 'bg-indigo-500',
+    iconColorClass: 'text-accent-foreground',
+  },
+  {
+    title: 'Settings',
+    href: '/settings',
+    iconName: 'Settings',
+    description: 'Configure application settings.',
+    color: 'bg-neutral', 
+    iconColorClass: 'text-neutral-foreground', 
+  },
+];
+
+export const upcomingNavItems: NavItem[] = [
+  {
     title: 'AI EHR',
     href: '/ai-ehr',
     iconName: 'BookOpen',
@@ -100,14 +119,6 @@ export const sidebarNavItems: NavItem[] = [
     description: 'AI-powered diagnostic assistant.',
     color: 'bg-special1', 
     iconColorClass: 'text-special1-foreground',
-  },
-  {
-    title: 'Consults / Academics',
-    href: '/consults',
-    iconName: 'UsersRound',
-    description: 'Manage external consults and student academics.',
-    color: 'bg-indigo-500',
-    iconColorClass: 'text-accent-foreground',
   },
   {
     title: 'Communication',
@@ -125,14 +136,6 @@ export const sidebarNavItems: NavItem[] = [
     disabled: false, 
     color: 'bg-special2',
     iconColorClass: 'text-special2-foreground',
-  },
-  {
-    title: 'Settings',
-    href: '/settings',
-    iconName: 'Settings',
-    description: 'Configure application settings.',
-    color: 'bg-neutral', 
-    iconColorClass: 'text-neutral-foreground', 
   },
 ];
 

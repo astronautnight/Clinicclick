@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Header } from '@/components/layout/header';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
-import { sidebarNavItems } from '@/config/nav';
+import { sidebarNavItems, upcomingNavItems } from '@/config/nav';
 
 import { LogoCC } from '@/components/icons';
 import Link from 'next/link';
@@ -63,7 +63,7 @@ export function AppLayoutContent({ children }: { children: React.ReactNode }) {
             </ShadSidebarHeader>
 
             <SidebarContent className="p-2 pt-3">
-              <SidebarNav items={sidebarNavItems} />
+              <SidebarNav items={sidebarNavItems} upcomingItems={upcomingNavItems} />
             </SidebarContent>
 
             <SidebarFooter className="p-2" />

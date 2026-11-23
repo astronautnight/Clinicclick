@@ -954,8 +954,8 @@ export default function ProceduresPage() {
         <div className="space-y-3 no-print pb-3 border-b border-border/70">
           {/* Top Row: Procedures Title on Left, Actions on Right */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center">
-              <ClipboardList className="mr-2 h-6 w-6 sm:h-7 sm:w-7 text-special3" />
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+              <ClipboardList className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special3" />
               Procedures
             </h1>
 
@@ -965,11 +965,11 @@ export default function ProceduresPage() {
               <Button
                 onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setNewProcedureSubProcedures([]); setIsAddFormOpen(true); }}
                 disabled={!user || !clinicId}
-                className="h-8 text-xs px-3 sm:px-4 font-medium"
+                className="h-9 sm:h-10 text-xs sm:text-sm px-3 sm:px-4"
               >
-                <ListPlus className="mr-1.5 h-4 w-4" />
+                <ListPlus className="mr-1.5 sm:mr-2 h-4 w-4" />
                 <span className="sm:hidden">Add</span>
-                <span className="hidden sm:inline">Add Procedure</span>
+                <span className="hidden sm:inline">Add New Procedure</span>
               </Button>
             </div>
           </div>
