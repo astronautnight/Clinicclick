@@ -80,6 +80,7 @@ export interface ProcedureSubStep {
   completed: boolean;
   completedAt?: string; // ISO date string when step was completed/recorded
   isCustom?: boolean;
+  notes?: string; // Clinical notes or observations for this sub-procedure
 }
 
 export interface AppointmentProcedureDetail {

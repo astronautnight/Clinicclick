@@ -147,10 +147,10 @@ export function PatientBillingSummary({
       <div className="grid grid-cols-3 gap-2 items-center text-center">
         {/* Billable Column */}
         <div className="flex flex-col items-center">
-          <span className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">
+          <span className="text-xs font-medium text-muted-foreground mb-0.5">
             Billable
           </span>
-          <span className="text-sm sm:text-base font-bold text-foreground tracking-tight">
+          <span className="text-xs sm:text-sm font-bold text-foreground tracking-tight">
             ₹{totalBillable.toLocaleString()}
           </span>
           {discountAmount > 0 && (
@@ -162,11 +162,11 @@ export function PatientBillingSummary({
 
         {/* Paid Column (Editable Input with Green Currency Symbol) */}
         <div className="flex flex-col items-center">
-          <span className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">
+          <span className="text-xs font-medium text-muted-foreground mb-0.5">
             Paid
           </span>
           <div className="flex items-center justify-center gap-1">
-            <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs sm:text-sm">
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
               ₹
             </span>
             <Input
@@ -183,7 +183,7 @@ export function PatientBillingSummary({
                 }
               }}
               disabled={!patient}
-              className="w-20 sm:w-24 h-7 sm:h-8 text-center text-xs sm:text-sm font-semibold border-border/80 bg-background text-emerald-700 dark:text-emerald-300 rounded-md focus-visible:ring-1"
+              className="w-16 sm:w-20 h-7 text-center text-xs font-semibold border-border/80 bg-background text-emerald-700 dark:text-emerald-300 rounded-md focus-visible:ring-1"
               placeholder="0"
             />
           </div>
@@ -191,11 +191,11 @@ export function PatientBillingSummary({
 
         {/* Due Column (Highlighted in Red) */}
         <div className="flex flex-col items-center">
-          <span className="text-xs sm:text-sm font-medium text-muted-foreground mb-1">
+          <span className="text-xs font-medium text-muted-foreground mb-0.5">
             Due
           </span>
           <span className={cn(
-            "text-sm sm:text-base font-bold tracking-tight",
+            "text-xs sm:text-sm font-bold tracking-tight",
             balanceDue > 0 ? "text-red-600 dark:text-red-500" : "text-emerald-600 dark:text-emerald-400"
           )}>
             ₹{balanceDue.toLocaleString()}

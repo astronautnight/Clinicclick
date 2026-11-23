@@ -349,6 +349,44 @@ const QuickAddPatientForm = ({ onPatientAdded, user, clinicId }: { onPatientAdde
   )
 }
 
+/**
+ * Red line indicator showing the current time in the schedule grid.
+ * Advances smoothly with time, measuring every minute.
+ */
+const CurrentTimeIndicator = ({ currentTime }: { currentTime: Date | null }) => {
+  if (!currentTime) return null;
+
+  const dayStartMinutes = 8 * 60; // 8:00 AM (480)
+  const totalDayMinutes = 12 * 60; // 12 hours (720)
+  const dayEndMinutes = dayStartMinutes + totalDayMinutes; // 20:00 (1200)
+
+  const currentMinutes = currentTime.getHours() * 60 + currentTime.getMinutes() + currentTime.getSeconds() / 60;
+
+  if (currentMinutes < dayStartMinutes || currentMinutes > dayEndMinutes) {
+    return null;
+  }
+
+  const topPercent = ((currentMinutes - dayStartMinutes) / totalDayMinutes) * 100;
+
+  return (
+    <div
+      className="absolute left-0 right-0 z-20 pointer-events-none flex items-center -translate-y-1/2"
+      style={{
+        top: `${topPercent}%`,
+        transition: 'top 1s linear',
+      }}
+    >
+      {/* Red circular dot centered on the vertical grid line */}
+      <div 
+        className="w-2.5 h-2.5 rounded-full bg-red-600 dark:bg-red-500 -ml-[5px] shrink-0 shadow-xs pointer-events-auto cursor-pointer"
+        title={`Current time: ${format(currentTime, 'hh:mm a')}`}
+      />
+      {/* Red horizontal line extending across the grid */}
+      <div className="w-full h-[2px] bg-red-600 dark:bg-red-500" />
+    </div>
+  );
+};
+
 export default function AppointmentsPage() {
   const { user, clinicId, loading, clinicLoading } = useUser();
   const noClinic = user && !clinicId && !loading && !clinicLoading;
@@ -370,6 +408,15 @@ export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState('day');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setCurrentTime(new Date());
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000); // 10-second ticker to smoothly measure every minute
+    return () => clearInterval(interval);
+  }, []);
 
   const { toast } = useToast();
 
@@ -870,6 +917,11 @@ export default function AppointmentsPage() {
                     {/* hour separators */}
                     {workingHours.map(hour => <div key={hour} className="h-[50px] border-t -mt-px" />)}
 
+                    {/* Current Time Indicator (Red line showing current time, advancing every minute) */}
+                    {isToday(currentDate) && (
+                      <CurrentTimeIndicator currentTime={currentTime} />
+                    )}
+
                     {/* appointments for this day */}
                     {(() => {
                       const dayKey = format(currentDate, 'yyyy-MM-dd');
@@ -987,6 +1039,7 @@ export default function AppointmentsPage() {
                 <div className="grid grid-cols-[60px_repeat(7,1fr)] min-w-[1200px]">
                   {/* Time column */}
                   <div className="border-r">
+                    <div className="sticky top-0 z-10 bg-muted/50 backdrop-blur-sm h-[29px] border-b" />
                     {workingHours.map(hour => (
                       <div key={hour} className="h-[50px] text-right pr-2 text-xs text-muted-foreground border-t -mt-px pt-1">{format(new Date(0).setHours(hour), 'ha')}</div>
                     ))}
@@ -1003,6 +1056,11 @@ export default function AppointmentsPage() {
                         <h3 className={cn("sticky top-0 z-10 bg-muted/50 backdrop-blur-sm text-center font-semibold text-sm py-1 border-b", isToday(day) && "text-primary bg-primary/10")}>{format(day, 'EEE d')}</h3>
                         <div className="relative h-full">
                           {workingHours.map(hour => <div key={hour} className="h-[50px] border-t -mt-px" />)}
+
+                          {/* Current Time Indicator for Today in Week View */}
+                          {isToday(day) && (
+                            <CurrentTimeIndicator currentTime={currentTime} />
+                          )}
 
                           {(arr || []).map(app => {
                             const color = getDoctorColor(app.doctorId);

@@ -15,7 +15,8 @@ import {
   History, 
   Stethoscope, 
   Layers,
-  Calendar
+  Calendar,
+  StickyNote
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -56,6 +57,8 @@ export function ProcedureSubprocedureSelector({
   const [expandedProcedureIds, setExpandedProcedureIds] = useState<Record<string, boolean>>({});
   // Track custom step input per procedure
   const [customStepInputs, setCustomStepInputs] = useState<Record<string, string>>({});
+  // Track inline note editing for a step
+  const [editingNoteStep, setEditingNoteStep] = useState<{ procId: string; stepIdx: number; stepName: string; currentNote: string } | null>(null);
   // Search filter
   const [filterText, setFilterText] = useState('');
 
@@ -293,6 +296,25 @@ export function ProcedureSubprocedureSelector({
     onProcedureDetailsChange(nextDetails, currentProcedureIds);
   };
 
+  // Save clinical note on a subprocedure step
+  const handleSaveStepNote = (procId: string, stepIndex: number, note: string) => {
+    const nextDetails = currentProcedureDetails.map(detail => {
+      if (detail.procedureId !== procId) return detail;
+      const updatedSteps = [...detail.subProcedures];
+      if (updatedSteps[stepIndex]) {
+        updatedSteps[stepIndex] = {
+          ...updatedSteps[stepIndex],
+          notes: note.trim() ? note.trim() : undefined,
+        };
+      }
+      return {
+        ...detail,
+        subProcedures: updatedSteps,
+      };
+    });
+    onProcedureDetailsChange(nextDetails, currentProcedureIds);
+  };
+
   // Filtered available procedures list
   const filteredProcedures = useMemo(() => {
     if (!filterText.trim()) return allProcedures;
@@ -486,9 +508,9 @@ export function ProcedureSubprocedureSelector({
                   {isExpanded && (
                     <div className="ml-4 pl-2.5 border-l-2 border-border/40 mt-1 mb-1.5 space-y-0.5">
                       {subSteps.map((step, stepIdx) => (
-                        <div 
-                          key={stepIdx} 
-                          className={cn(
+                        <React.Fragment key={stepIdx}>
+                          <div 
+                            className={cn(
                             "flex items-center justify-between py-0.5 px-1 rounded transition-colors group text-xs",
                             step.completed ? "bg-emerald-500/10 text-emerald-900 dark:text-emerald-100" : "hover:bg-muted/40"
                           )}
@@ -524,21 +546,100 @@ export function ProcedureSubprocedureSelector({
                             )}
                           </label>
 
-                          {/* Delete step button for doctor manipulation */}
-                          {isChecked && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveSubStep(proc.id, stepIdx);
-                              }}
-                              className="text-muted-foreground/50 hover:text-destructive p-0.5 rounded transition-colors"
-                              title="Remove step"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0 ml-1">
+                            {/* Note button */}
+                            {isChecked && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingNoteStep(prev => 
+                                    prev?.procId === proc.id && prev?.stepIdx === stepIdx 
+                                      ? null 
+                                      : { procId: proc.id, stepIdx, stepName: step.name, currentNote: step.notes || '' }
+                                  );
+                                }}
+                                className={cn(
+                                  "p-0.5 rounded transition-colors",
+                                  step.notes 
+                                    ? "text-amber-600 dark:text-amber-400 hover:text-amber-700" 
+                                    : "text-muted-foreground/40 hover:text-muted-foreground"
+                                )}
+                                title={step.notes ? `Note: ${step.notes} (Click to edit)` : "Add note for this step"}
+                              >
+                                <StickyNote className={cn("h-3 w-3", step.notes ? "fill-amber-500/20" : "")} />
+                              </button>
+                            )}
+
+                            {/* Delete step button for doctor manipulation */}
+                            {isChecked && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveSubStep(proc.id, stepIdx);
+                                }}
+                                className="text-muted-foreground/50 hover:text-destructive p-0.5 rounded transition-colors"
+                                title="Remove step"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Note display / inline editor */}
+                        {editingNoteStep?.procId === proc.id && editingNoteStep?.stepIdx === stepIdx ? (
+                          <div className="flex items-center gap-1.5 my-1 ml-5 px-1 py-1 rounded bg-muted/60 border border-border/60" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              value={editingNoteStep.currentNote}
+                              onChange={(e) => setEditingNoteStep(prev => prev ? ({ ...prev, currentNote: e.target.value }) : null)}
+                              placeholder={`Note for ${step.name} (e.g. MB 21mm, shade A2)...`}
+                              className="h-6 text-3xs flex-1 bg-background"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSaveStepNote(proc.id, stepIdx, editingNoteStep.currentNote);
+                                  setEditingNoteStep(null);
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-6 text-3xs px-2"
+                              onClick={() => {
+                                handleSaveStepNote(proc.id, stepIdx, editingNoteStep.currentNote);
+                                setEditingNoteStep(null);
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-3xs px-1.5"
+                              onClick={() => setEditingNoteStep(null)}
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ) : step.notes ? (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNoteStep({ procId: proc.id, stepIdx, stepName: step.name, currentNote: step.notes || '' });
+                            }}
+                            className="ml-5 my-0.5 flex items-start gap-1 text-3xs italic text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/20 px-1.5 py-0.5 rounded border border-amber-200/60 dark:border-amber-900/40 cursor-pointer hover:bg-amber-100/70 transition-colors"
+                            title="Click to edit note"
+                          >
+                            <StickyNote className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <span className="break-words font-normal">{step.notes}</span>
+                          </div>
+                        ) : null}
+                      </React.Fragment>
                       ))}
 
                       {/* Doctor Manipulation: Quick inline Add Step specifically for this patient */}

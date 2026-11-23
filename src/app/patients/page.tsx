@@ -31,7 +31,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
@@ -769,6 +769,7 @@ export default function PatientsPage() {
   }, [patients, searchQuery, activeTab]);
 
   const PatientDetailView = ({ patient }: { patient: Patient }) => {
+    const [showAllDetails, setShowAllDetails] = useState(false);
     const patientTransactions = useMemo(() => transactions.filter(t => t.patientId === patient.id && t.type === 'Earning'), [transactions, patient.id]);
     const patientPrescriptions = useMemo(() => prescriptions.filter(p => p.patientId === patient.id), [prescriptions, patient.id]);
     
@@ -846,58 +847,108 @@ export default function PatientsPage() {
                     </div>
                 </div>
 
-                {/* Key-Value Details Grid */}
-                <div className="mt-4 pt-3.5 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs sm:text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                        <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">DOB:</span>
-                        <span className="truncate">{patient.dateOfBirth ? `${format(new Date(patient.dateOfBirth), 'dd/MM/yyyy')} (${differenceInYears(new Date(), new Date(patient.dateOfBirth))} yrs)` : 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                        <Phone className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">Phone:</span>
-                        <span className="truncate">{patient.contactNumber || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                        <MessageSquare className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-medium text-foreground">WhatsApp:</span>
-                        <span className="truncate">{patient.whatsappId || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                        <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">Email:</span>
-                        <span className="truncate">{patient.email || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                        <User className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">Gender:</span>
-                        <span className="truncate">{patient.gender || 'N/A'}</span>
-                    </div>
-                    {patient.bloodGroup && (
-                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                            <span className="font-medium text-foreground">Blood:</span>
-                            <span className="truncate">{patient.bloodGroup}</span>
+                {/* Key-Value Details Grid - Collapsible */}
+                {showAllDetails ? (
+                    <div className="mt-3.5 pt-3 border-t border-border/60 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs sm:text-sm">
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                <CalendarIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="font-medium text-foreground">DOB:</span>
+                                <span className="truncate">{patient.dateOfBirth ? `${format(new Date(patient.dateOfBirth), 'dd/MM/yyyy')} (${differenceInYears(new Date(), new Date(patient.dateOfBirth))} yrs)` : 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                <Phone className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="font-medium text-foreground">Phone:</span>
+                                <span className="truncate">{patient.contactNumber || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                <MessageSquare className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <span className="font-medium text-foreground">WhatsApp:</span>
+                                <span className="truncate">{patient.whatsappId || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="font-medium text-foreground">Email:</span>
+                                <span className="truncate">{patient.email || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                <User className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="font-medium text-foreground">Gender:</span>
+                                <span className="truncate">{patient.gender || 'N/A'}</span>
+                            </div>
+                            {patient.bloodGroup && (
+                                <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                    <span className="font-medium text-foreground">Blood:</span>
+                                    <span className="truncate">{patient.bloodGroup}</span>
+                                </div>
+                            )}
+                            {patient.occupation && (
+                                <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
+                                    <span className="font-medium text-foreground">Occupation:</span>
+                                    <span className="truncate">{patient.occupation}</span>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md sm:col-span-2 lg:col-span-3">
+                                <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="font-medium text-foreground">Address:</span>
+                                <span className="truncate">{patient.address || 'N/A'}</span>
+                            </div>
                         </div>
-                    )}
-                    {patient.occupation && (
-                        <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md">
-                            <span className="font-medium text-foreground">Occupation:</span>
-                            <span className="truncate">{patient.occupation}</span>
+                        <div className="flex justify-end pt-0.5">
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 text-xs text-muted-foreground hover:text-foreground gap-1 px-2"
+                                onClick={() => setShowAllDetails(false)}
+                            >
+                                <span>Collapse</span>
+                                <ChevronUp className="h-3 w-3" />
+                            </Button>
                         </div>
-                    )}
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/40 dark:bg-muted/20 px-2.5 py-1.5 rounded-md sm:col-span-2 lg:col-span-3">
-                        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">Address:</span>
-                        <span className="truncate">{patient.address || 'N/A'}</span>
                     </div>
-                </div>
+                ) : (
+                    <div className="mt-3 pt-2.5 border-t border-border/50 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap overflow-hidden">
+                            {patient.contactNumber && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <Phone className="h-3 w-3 text-primary shrink-0" />
+                                    <span className="truncate">{patient.contactNumber}</span>
+                                </span>
+                            )}
+                            {patient.dateOfBirth && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <CalendarIcon className="h-3 w-3 text-primary shrink-0" />
+                                    <span>{differenceInYears(new Date(), new Date(patient.dateOfBirth))} yrs</span>
+                                </span>
+                            )}
+                            {patient.gender && patient.gender !== 'Other' && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <User className="h-3 w-3 text-primary shrink-0" />
+                                    <span>{patient.gender}</span>
+                                </span>
+                            )}
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 text-xs text-primary hover:text-primary/80 gap-1 px-2 font-medium shrink-0 ml-auto"
+                            onClick={() => setShowAllDetails(true)}
+                        >
+                            <span>See all</span>
+                            <ChevronDown className="h-3 w-3" />
+                        </Button>
+                    </div>
+                )}
             </div>
 
-            <Tabs defaultValue="dental-chart">
+            <Tabs defaultValue="procedures">
                 {/* Tabs on full width on mobile with Print below. Side-by-side on laptop */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 no-print mb-4">
                     <div className="w-full sm:w-auto overflow-x-auto whitespace-nowrap pb-1 sm:pb-0">
                         <TabsList className="inline-flex w-max sm:w-auto">
+                            <TabsTrigger value="procedures">
+                                <ClipboardList className="mr-1.5 h-4 w-4" />Procedures
+                            </TabsTrigger>
                             <TabsTrigger value="dental-chart">Dental Chart</TabsTrigger>
                             <TabsTrigger value="history">
                                 <BriefcaseMedical className="mr-1 h-4 w-4" />History
@@ -919,6 +970,205 @@ export default function PatientsPage() {
                         </Button>
                     </div>
                 </div>
+
+                {/* Dedicated Procedures & Sub-procedures Tab */}
+                <TabsContent value="procedures" className="mt-4">
+                    <Card className="border-0 sm:border shadow-none sm:shadow-sm bg-transparent sm:bg-card">
+                        <CardContent className="p-0 sm:p-6 space-y-5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b">
+                                <div>
+                                    <h4 className="font-semibold text-base sm:text-lg flex items-center gap-2 text-foreground">
+                                        <ClipboardList className="h-5 w-5 text-primary" />
+                                        Procedures & Sub-procedures
+                                    </h4>
+                                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                                        All procedures performed on {patient.firstName} {patient.lastName} along with completion dates and clinical notes.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {patient.linkedProcedures && patient.linkedProcedures.length > 0 && (
+                                        <Badge variant="outline" className="text-xs font-normal">
+                                            {patient.linkedProcedures.length} procedure{patient.linkedProcedures.length === 1 ? '' : 's'}
+                                        </Badge>
+                                    )}
+                                    <Button 
+                                        size="sm" 
+                                        className="gap-1.5 text-xs font-medium h-8"
+                                        onClick={() => {
+                                            setPatientToLink(patient);
+                                            setProceduresToLink([]);
+                                            setToothNumberToLink('');
+                                            setQuantityToLink(1);
+                                            setIsLinkDialogOpen(true);
+                                        }}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Link Procedure
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) ? (
+                                <div className="text-center py-12 border border-dashed rounded-xl bg-muted/20">
+                                    <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+                                    <p className="text-sm font-semibold text-foreground">No procedures recorded for this patient yet</p>
+                                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                                        Add or link a procedure to start tracking individual sub-procedures, milestones, and notes.
+                                    </p>
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="mt-4 gap-1.5 text-xs"
+                                        onClick={() => {
+                                            setPatientToLink(patient);
+                                            setProceduresToLink([]);
+                                            setToothNumberToLink('');
+                                            setQuantityToLink(1);
+                                            setIsLinkDialogOpen(true);
+                                        }}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Link First Procedure
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {patient.linkedProcedures.map((proc, pIndex) => {
+                                        const subSteps = reconcileSubProcedures(proc.subProcedures, proc.procedureName);
+                                        const stepsTotal = subSteps.length;
+                                        const stepsCompleted = subSteps.filter(s => s.completed).length;
+                                        const stepsPct = stepsTotal > 0 ? Math.round((stepsCompleted / stepsTotal) * 100) : 0;
+                                        const procStartDate = proc.date ? formatSafeDate(proc.date) : '';
+
+                                        return (
+                                            <div key={pIndex} className="border rounded-xl bg-card/80 p-4 sm:p-5 shadow-sm space-y-3.5">
+                                                {/* Procedure Card Header */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-border/60">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-semibold text-base text-foreground">
+                                                                {proc.procedureName}
+                                                            </span>
+                                                            {proc.toothNumber && (
+                                                                <Badge variant="outline" className="text-3xs px-1.5 py-0 h-4 border-primary/30 text-primary">
+                                                                    Tooth #{proc.toothNumber}
+                                                                </Badge>
+                                                            )}
+                                                            {procStartDate && (
+                                                                <span className="text-xs font-medium text-muted-foreground">
+                                                                    &bull; Date: {procStartDate}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <span className="text-xs font-medium text-muted-foreground">
+                                                            {stepsCompleted}/{stepsTotal} completed
+                                                        </span>
+                                                        <Badge 
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "text-xs font-semibold px-2 py-0.5",
+                                                                stepsPct === 100 
+                                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400" 
+                                                                    : stepsPct >= 50 
+                                                                    ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-400" 
+                                                                    : "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400"
+                                                            )}
+                                                        >
+                                                            {stepsPct}%
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+
+                                                {/* Progress Bar */}
+                                                <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                                                    <div 
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all duration-300", 
+                                                            stepsPct === 100 ? "bg-emerald-500" : stepsPct >= 50 ? "bg-blue-500" : "bg-amber-500"
+                                                        )} 
+                                                        style={{ width: `${stepsPct}%` }} 
+                                                    />
+                                                </div>
+
+                                                {/* Sub-procedures Checklist with Recorded Dates */}
+                                                <div className="space-y-1.5 pt-1">
+                                                    <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                                                        <span>Sub-procedures & Milestones</span>
+                                                        <span className="font-normal lowercase text-3xs text-muted-foreground/75">click checkbox to toggle status</span>
+                                                    </p>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                        {subSteps.map((step, sIndex) => {
+                                                            const stepDate = step.completedAt || (step.completed ? proc.date : undefined);
+
+                                                            return (
+                                                                <div 
+                                                                    key={sIndex}
+                                                                    className={cn(
+                                                                        "flex items-center justify-between gap-2 px-3 py-2 rounded-md border text-xs transition-colors",
+                                                                        step.completed 
+                                                                            ? "bg-emerald-500/10 border-emerald-500/30 text-foreground" 
+                                                                            : "bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/40"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <Checkbox 
+                                                                                checked={step.completed}
+                                                                                onCheckedChange={() => handleTogglePatientSubProcedure(patient, pIndex, sIndex)}
+                                                                                className="h-3.5 w-3.5 shrink-0"
+                                                                            />
+                                                                            <span className={cn(
+                                                                                "truncate font-medium text-xs leading-tight",
+                                                                                step.completed ? "text-foreground" : "text-muted-foreground"
+                                                                            )}>
+                                                                                {step.name}
+                                                                            </span>
+                                                                            {step.isCustom && (
+                                                                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/20 shrink-0">
+                                                                                    Custom
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                        {step.notes && (
+                                                                            <div className="ml-6 mt-1 flex items-start gap-1 text-2xs italic text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/20 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-900/40">
+                                                                                <span>📝</span>
+                                                                                <span className="break-words font-normal">{step.notes}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Recorded Date Display */}
+                                                                    <div className="shrink-0 text-right">
+                                                                        {step.completed ? (
+                                                                            <span 
+                                                                                title={formatSafeDateTime(stepDate)} 
+                                                                                className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-full"
+                                                                            >
+                                                                                <CalendarIcon className="h-3 w-3 shrink-0" />
+                                                                                Recorded: {formatSafeDate(stepDate)}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-3xs text-muted-foreground/60 italic px-1">
+                                                                                Pending
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
                 <TabsContent value="dental-chart" className="mt-4">
                     <DentalChart
                         markedTeeth={patient.markedTeeth || []}
@@ -1046,22 +1296,30 @@ export default function PatientsPage() {
                                                                                 : "bg-muted/20 border-border/50 text-muted-foreground hover:bg-muted/40"
                                                                         )}
                                                                     >
-                                                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                                                            <Checkbox 
-                                                                                checked={step.completed}
-                                                                                onCheckedChange={() => handleTogglePatientSubProcedure(patient, pIndex, sIndex)}
-                                                                                className="h-3.5 w-3.5 shrink-0"
-                                                                            />
-                                                                            <span className={cn(
-                                                                                "truncate font-medium text-xs leading-tight",
-                                                                                step.completed ? "text-foreground" : "text-muted-foreground"
-                                                                            )}>
-                                                                                {step.name}
-                                                                            </span>
-                                                                            {step.isCustom && (
-                                                                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/20 shrink-0">
-                                                                                    Custom
-                                                                                </Badge>
+                                                                        <div className="flex flex-col min-w-0 flex-1">
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <Checkbox 
+                                                                                    checked={step.completed}
+                                                                                    onCheckedChange={() => handleTogglePatientSubProcedure(patient, pIndex, sIndex)}
+                                                                                    className="h-3.5 w-3.5 shrink-0"
+                                                                                />
+                                                                                <span className={cn(
+                                                                                    "truncate font-medium text-xs leading-tight",
+                                                                                    step.completed ? "text-foreground" : "text-muted-foreground"
+                                                                                )}>
+                                                                                    {step.name}
+                                                                                </span>
+                                                                                {step.isCustom && (
+                                                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-primary/10 text-primary border-primary/20 shrink-0">
+                                                                                        Custom
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </div>
+                                                                            {step.notes && (
+                                                                                <div className="ml-6 mt-1 flex items-start gap-1 text-2xs italic text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/20 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-900/40">
+                                                                                    <span>📝</span>
+                                                                                    <span className="break-words font-normal">{step.notes}</span>
+                                                                                </div>
                                                                             )}
                                                                         </div>
 
