@@ -961,26 +961,6 @@ export default function ProceduresPage() {
 
             {/* Action buttons on the right side */}
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-              {activeTab === 'today' ? (
-                /* Date Navigation for Procedure Performed Overview */
-                <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(prev => subDays(prev, 1))} title="Previous day">
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="text-xs font-semibold px-2.5 h-8 flex items-center justify-center rounded-md bg-muted/60 min-w-[125px] text-center">
-                    {isToday(selectedDate) ? `Today (${format(selectedDate, 'dd MMM')})` : format(selectedDate, 'dd MMM yyyy')}
-                  </div>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedDate(prev => addDays(prev, 1))} title="Next day">
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  {!isToday(selectedDate) && (
-                    <Button variant="outline" size="sm" className="h-8 text-xs px-2.5 font-medium" onClick={() => setSelectedDate(new Date())}>
-                      Today
-                    </Button>
-                  )}
-                </div>
-              ) : null}
-
               {/* Add Procedure Button */}
               <Button
                 onClick={() => { setNewProcedure(initialProcedureFormData); setNewProcedureMaterials([]); setNewProcedureSubProcedures([]); setIsAddFormOpen(true); }}
@@ -1007,6 +987,26 @@ export default function ProceduresPage() {
         {/* TAB 1: PROCEDURE PERFORMED TODAY (BRIEF OVERVIEW TOGGLE) */}
         {/* ========================================================================= */}
         <TabsContent value="today" className="mt-4 space-y-4">
+          {/* Date Changing Menu right under Procedure Performed Today tab */}
+          <div className="flex items-center justify-center gap-2 pb-1">
+            <div className="flex items-center gap-1.5 bg-muted/40 p-1 rounded-lg border border-border/60">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedDate(prev => subDays(prev, 1))} title="Previous day">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="text-xs font-semibold px-3 h-7 flex items-center justify-center rounded-md bg-background shadow-2xs min-w-[130px] text-center">
+                {isToday(selectedDate) ? `Today (${format(selectedDate, 'dd MMM')})` : format(selectedDate, 'dd MMM yyyy')}
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedDate(prev => addDays(prev, 1))} title="Next day">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {!isToday(selectedDate) && (
+                <Button variant="outline" size="sm" className="h-7 text-xs px-2.5 font-medium ml-1" onClick={() => setSelectedDate(new Date())}>
+                  Today
+                </Button>
+              )}
+            </div>
+          </div>
+
           {/* Search bar & summary actions */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
