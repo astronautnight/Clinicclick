@@ -66,11 +66,39 @@ export function ProcedureSubprocedureSelector({
   const previousProcedures: PreviousProcedureRecord[] = useMemo(() => {
     if (!selectedPatientId) return [];
 
+    const map = new Map<string, PreviousProcedureRecord>();
+
+    // Priority 1: Check patient's actual master linkedProcedures from their profile
+    // This ensures any progress/notes made in "Procedures Performed Today" or "Patients Tab" are immediately reflected!
+    const patientObj = patients.find(p => p.id === selectedPatientId);
+    if (patientObj?.linkedProcedures) {
+      for (const lp of patientObj.linkedProcedures) {
+        // Find standard procedure if available to match ID
+        const matchedProc = allProcedures.find(p => p.id === lp.procedureId || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
+        const canonicalProcId = matchedProc ? matchedProc.id : lp.procedureId;
+
+        if (!map.has(canonicalProcId)) {
+          const steps = reconcileSubProcedures(lp.subProcedures, lp.procedureName);
+          const total = steps.length;
+          const completed = steps.filter(s => s.completed).length;
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          map.set(canonicalProcId, {
+            procedureId: canonicalProcId,
+            procedureName: lp.procedureName,
+            subProcedures: steps,
+            lastDate: lp.date ? lp.date.split('T')[0] : undefined,
+            completedCount: completed,
+            totalCount: total,
+            progressPercentage: pct,
+          });
+        }
+      }
+    }
+
+    // Priority 2: Fallback to historical appointments for procedures not explicitly in linkedProcedures
     const patientAppts = appointments
       .filter(a => a.patientId === selectedPatientId && a.id !== currentAppointmentId)
       .sort((a, b) => new Date(`${b.date}T${b.startTime}`).getTime() - new Date(`${a.date}T${a.startTime}`).getTime());
-
-    const map = new Map<string, PreviousProcedureRecord>();
 
     for (const app of patientAppts) {
       if (app.procedureDetails && app.procedureDetails.length > 0) {
@@ -113,27 +141,6 @@ export function ProcedureSubprocedureSelector({
       }
     }
 
-    const patientObj = patients.find(p => p.id === selectedPatientId);
-    if (patientObj?.linkedProcedures) {
-      for (const lp of patientObj.linkedProcedures) {
-        if (!map.has(lp.procedureId)) {
-          const steps = reconcileSubProcedures(lp.subProcedures, lp.procedureName);
-          const total = steps.length;
-          const completed = steps.filter(s => s.completed).length;
-          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-          map.set(lp.procedureId, {
-            procedureId: lp.procedureId,
-            procedureName: lp.procedureName,
-            subProcedures: steps,
-            lastDate: lp.date ? lp.date.split('T')[0] : undefined,
-            completedCount: completed,
-            totalCount: total,
-            progressPercentage: pct,
-          });
-        }
-      }
-    }
-
     return Array.from(map.values());
   }, [selectedPatientId, appointments, currentAppointmentId, allProcedures, patients]);
 
@@ -147,11 +154,19 @@ export function ProcedureSubprocedureSelector({
 
   // Helper to get or build subprocedures for a procedure
   const getSubProceduresForProcedure = (procId: string, procName: string): ProcedureSubStep[] => {
-    const existing = currentProcedureDetails.find(d => d.procedureId === procId);
-    if (existing && existing.subProcedures) {
+    // 1. If currently in form state with modified steps, use those
+    const existing = currentProcedureDetails.find(d => d.procedureId === procId || d.procedureName.trim().toLowerCase() === procName.trim().toLowerCase());
+    if (existing && existing.subProcedures && existing.subProcedures.length > 0) {
       return existing.subProcedures;
     }
-    const prevRecord = previousProcedures.find(p => p.procedureId === procId);
+    // 2. Check patient profile's linkedProcedures first (ensures Procedure Performed Today & Patients tab changes are used)
+    const patientObj = patients.find(p => p.id === selectedPatientId);
+    const patientLinked = patientObj?.linkedProcedures?.find(lp => lp.procedureId === procId || lp.procedureName.trim().toLowerCase() === procName.trim().toLowerCase());
+    if (patientLinked && patientLinked.subProcedures && patientLinked.subProcedures.length > 0) {
+      return reconcileSubProcedures(patientLinked.subProcedures, procName).map(s => ({ ...s }));
+    }
+    // 3. Fallback to previous appointments records
+    const prevRecord = previousProcedures.find(p => p.procedureId === procId || p.procedureName.trim().toLowerCase() === procName.trim().toLowerCase());
     if (prevRecord && prevRecord.subProcedures.length > 0) {
       return prevRecord.subProcedures.map(s => ({ ...s }));
     }
@@ -226,15 +241,23 @@ export function ProcedureSubprocedureSelector({
       setExpandedProcedureIds(prev => ({ ...prev, [proc.id]: true }));
     } else {
       nextDetails = currentProcedureDetails.map(detail => {
-        if (detail.procedureId !== proc.id) return detail;
+        if (detail.procedureId !== proc.id && detail.procedureName.trim().toLowerCase() !== proc.name.trim().toLowerCase()) return detail;
         const updatedSteps = detail.subProcedures.map((step, idx) => {
           if (idx !== stepIndex) return step;
           const nextCompleted = !step.completed;
-          return {
-            ...step,
-            completed: nextCompleted,
-            completedAt: nextCompleted ? (step.completedAt || nowIso) : undefined,
-          };
+          if (nextCompleted) {
+            return {
+              ...step,
+              completed: true,
+              completedAt: step.completedAt || nowIso,
+            };
+          } else {
+            const { completedAt, ...rest } = step;
+            return {
+              ...rest,
+              completed: false,
+            };
+          }
         });
         return { ...detail, subProcedures: updatedSteps };
       });

@@ -960,14 +960,17 @@ export default function PharmacyPage() {
         </DialogContent>
       </Dialog>
       
-      <Tabs defaultValue="inventory" className="w-full">
+      <Tabs defaultValue="prescriptions" className="w-full">
         <div className="flex justify-center">
             <TabsList>
-              <TabsTrigger value="inventory">Drug Inventory</TabsTrigger>
               <TabsTrigger value="prescriptions">Saved Prescriptions</TabsTrigger>
+              <TabsTrigger value="inventory">Drug Inventory</TabsTrigger>
               <TabsTrigger value="emergencies">Emergencies</TabsTrigger>
             </TabsList>
         </div>
+        <TabsContent value="prescriptions" className="mt-6">
+            {renderSavedPrescriptions()}
+        </TabsContent>
         <TabsContent value="inventory" className="mt-6">
             <Card className="shadow-lg">
                 <CardHeader>
@@ -978,9 +981,6 @@ export default function PharmacyPage() {
                     {renderDrugInventory()}
                 </CardContent>
             </Card>
-        </TabsContent>
-        <TabsContent value="prescriptions" className="mt-6">
-            {renderSavedPrescriptions()}
         </TabsContent>
         <TabsContent value="emergencies" className="mt-6">
             {renderEmergencies()}

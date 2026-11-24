@@ -259,6 +259,7 @@ export function getPresetSubProcedures(procedureName: string): string[] {
  * Reconciles any existing sub-procedure steps with the current official preset.
  * Ensures old 11-12 step lists are automatically downsized to the new 3-5 step preset,
  * while preserving any matching completion status AND any doctor-added custom steps for that patient.
+ * Respects deleted steps specifically removed for this patient (marked isDeleted).
  */
 export function reconcileSubProcedures(
   existingSteps: ProcedureSubStep[] | undefined | null,
@@ -266,54 +267,55 @@ export function reconcileSubProcedures(
 ): ProcedureSubStep[] {
   const preset = getPresetSubProcedures(procedureName);
   if (!preset || preset.length === 0) {
-    return existingSteps || [];
+    return (existingSteps || []).filter(s => !(s as any).isDeleted);
   }
 
   // Preserve any custom steps added specifically for this patient!
   const customSteps: ProcedureSubStep[] = [];
   if (existingSteps) {
     for (const s of existingSteps) {
-      if (s.isCustom) {
+      if (s.isCustom && !(s as any).isDeleted) {
         customSteps.push(s);
       }
     }
   }
 
-  // If existing steps already match preset length (ignoring custom steps) and step names match, return as-is
-  if (existingSteps) {
-    const nonCustomSteps = existingSteps.filter(s => !s.isCustom);
-    if (nonCustomSteps.length === preset.length) {
-      const isExact = nonCustomSteps.every(
-        (s, i) => s.name.trim().toLowerCase() === preset[i].trim().toLowerCase()
-      );
-      if (isExact) return existingSteps;
-    }
-  }
-
-  // Create a lookup for status, completedAt, and notes from existing steps
-  const existingStepMap = new Map<string, { completed: boolean; completedAt?: string; notes?: string }>();
+  // Create a lookup for status, completedAt, notes, and deletion status from existing steps
+  const existingStepMap = new Map<string, { completed: boolean; completedAt?: string; notes?: string; isDeleted?: boolean }>();
   if (existingSteps) {
     for (const s of existingSteps) {
       existingStepMap.set(s.name.trim().toLowerCase(), {
         completed: !!s.completed,
-        completedAt: s.completedAt,
+        completedAt: s.completed ? s.completedAt : undefined,
         notes: s.notes,
+        isDeleted: !!(s as any).isDeleted,
       });
     }
   }
 
-  // Map to the new preset steps
-  const baseSteps: ProcedureSubStep[] = preset.map(stepName => {
+  // Map preset steps and respect if explicitly deleted or completed
+  const baseSteps: ProcedureSubStep[] = [];
+  for (const stepName of preset) {
     const norm = stepName.trim().toLowerCase();
     const existingEntry = existingStepMap.get(norm) ||
       Array.from(existingStepMap.entries()).find(([k]) => k.includes(norm) || norm.includes(k))?.[1];
-    return {
+
+    if (existingEntry?.isDeleted) {
+      continue; // Doctor explicitly deleted this step for this patient
+    }
+
+    const stepObj: ProcedureSubStep = {
       name: stepName,
       completed: !!existingEntry?.completed,
-      completedAt: existingEntry?.completedAt,
-      notes: existingEntry?.notes,
     };
-  });
+    if (existingEntry?.completed && existingEntry?.completedAt) {
+      stepObj.completedAt = existingEntry.completedAt;
+    }
+    if (existingEntry?.notes) {
+      stepObj.notes = existingEntry.notes;
+    }
+    baseSteps.push(stepObj);
+  }
 
   return [...baseSteps, ...customSteps];
 }

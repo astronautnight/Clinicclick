@@ -157,6 +157,22 @@ export async function addPatient(
   }
 }
 
+function cleanFirestoreData(data: any): any {
+  if (Array.isArray(data)) {
+    return data.map(cleanFirestoreData);
+  }
+  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned;
+  }
+  return data;
+}
+
 /**
  * -----------------------------
  * UPDATE PATIENT (CLINIC SCOPED)
@@ -180,8 +196,9 @@ export async function updatePatient(
     patientId
   );
 
+  const cleanedPatientData = cleanFirestoreData(patientData);
   const payload = {
-    ...patientData,
+    ...cleanedPatientData,
     updatedAt: serverTimestamp(),
   };
 

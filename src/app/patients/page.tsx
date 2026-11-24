@@ -31,7 +31,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus, MoreVertical } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
@@ -141,6 +142,56 @@ export default function PatientsPage() {
     }
   };
 
+  const [subStepToDelete, setSubStepToDelete] = useState<{
+    patient: Patient;
+    procedureIndex: number;
+    stepIndex: number;
+    stepName: string;
+    procedureName: string;
+  } | null>(null);
+
+  const confirmDeletePatientSubProcedure = async () => {
+    if (!clinicId || !subStepToDelete) return;
+    const { patient, procedureIndex, stepIndex, stepName } = subStepToDelete;
+    const currentProcedures = patient.linkedProcedures || [];
+    const targetProc = currentProcedures[procedureIndex];
+    if (!targetProc) return;
+
+    const currentSteps = reconcileSubProcedures(targetProc.subProcedures, targetProc.procedureName);
+    const updatedSteps = currentSteps.map((step, idx) => {
+      if (idx === stepIndex) {
+        const { completedAt, ...rest } = step;
+        return {
+          ...rest,
+          completed: false,
+          isDeleted: true,
+        };
+      }
+      return step;
+    });
+
+    const updatedProcedures = [...currentProcedures];
+    updatedProcedures[procedureIndex] = {
+      ...targetProc,
+      subProcedures: updatedSteps,
+    };
+
+    const success = await updatePatient(clinicId, patient.id, { linkedProcedures: updatedProcedures });
+    if (success) {
+      toast({
+        title: "Sub-procedure Deleted",
+        description: `"${stepName}" removed from this patient's procedure.`,
+      });
+      setSubStepToDelete(null);
+    } else {
+      toast({
+        title: "Delete Failed",
+        description: "Could not delete sub-procedure.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleTogglePatientSubProcedure = async (patient: Patient, procedureIndex: number, stepIndex: number) => {
     if (!clinicId) return;
     const currentProcedures = patient.linkedProcedures || [];
@@ -151,11 +202,19 @@ export default function PatientsPage() {
     const updatedSteps = currentSteps.map((step, idx) => {
       if (idx !== stepIndex) return step;
       const nextCompleted = !step.completed;
-      return {
-        ...step,
-        completed: nextCompleted,
-        completedAt: nextCompleted ? new Date().toISOString() : undefined,
-      };
+      if (nextCompleted) {
+        return {
+          ...step,
+          completed: true,
+          completedAt: new Date().toISOString(),
+        };
+      } else {
+        const { completedAt, ...rest } = step;
+        return {
+          ...rest,
+          completed: false,
+        };
+      }
     });
 
     const updatedProcedures = [...currentProcedures];
@@ -1079,6 +1138,15 @@ export default function PatientsPage() {
                                                         >
                                                             {stepsPct}%
                                                         </Badge>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            title={`Remove ${proc.procedureName} from patient record`}
+                                                            onClick={() => handleUnlinkProcedure(patient, pIndex)}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
                                                     </div>
                                                 </div>
 
@@ -1140,8 +1208,8 @@ export default function PatientsPage() {
                                                                         )}
                                                                     </div>
 
-                                                                    {/* Recorded Date Display */}
-                                                                    <div className="shrink-0 text-right">
+                                                                    {/* Recorded Date Display & Actions */}
+                                                                    <div className="shrink-0 flex items-center gap-1.5 text-right">
                                                                         {step.completed ? (
                                                                             <span 
                                                                                 title={formatSafeDateTime(stepDate)} 
@@ -1155,6 +1223,32 @@ export default function PatientsPage() {
                                                                                 Pending
                                                                             </span>
                                                                         )}
+                                                                        <DropdownMenu>
+                                                                            <DropdownMenuTrigger asChild>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                                                                                    title="More options"
+                                                                                >
+                                                                                    <MoreVertical className="h-3.5 w-3.5" />
+                                                                                </button>
+                                                                            </DropdownMenuTrigger>
+                                                                            <DropdownMenuContent align="end" className="text-xs">
+                                                                                <DropdownMenuItem
+                                                                                    className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                                                    onClick={() => setSubStepToDelete({
+                                                                                        patient,
+                                                                                        procedureIndex: pIndex,
+                                                                                        stepIndex: sIndex,
+                                                                                        stepName: step.name,
+                                                                                        procedureName: proc.procedureName,
+                                                                                    })}
+                                                                                >
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                    <span>Delete subprocedure for this patient</span>
+                                                                                </DropdownMenuItem>
+                                                                            </DropdownMenuContent>
+                                                                        </DropdownMenu>
                                                                     </div>
                                                                 </div>
                                                             );
@@ -1323,8 +1417,8 @@ export default function PatientsPage() {
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Recorded Date Display */}
-                                                                        <div className="shrink-0 text-right">
+                                                                        {/* Recorded Date Display & Actions */}
+                                                                        <div className="shrink-0 flex items-center gap-1.5 text-right">
                                                                             {step.completed ? (
                                                                                 <span 
                                                                                     title={formatSafeDateTime(stepDate)} 
@@ -1338,6 +1432,32 @@ export default function PatientsPage() {
                                                                                     Pending
                                                                                 </span>
                                                                             )}
+                                                                            <DropdownMenu>
+                                                                                <DropdownMenuTrigger asChild>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                                                                                        title="More options"
+                                                                                    >
+                                                                                        <MoreVertical className="h-3.5 w-3.5" />
+                                                                                    </button>
+                                                                                </DropdownMenuTrigger>
+                                                                                <DropdownMenuContent align="end" className="text-xs">
+                                                                                    <DropdownMenuItem
+                                                                                        className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                                                        onClick={() => setSubStepToDelete({
+                                                                                            patient,
+                                                                                            procedureIndex: pIndex,
+                                                                                            stepIndex: sIndex,
+                                                                                            stepName: step.name,
+                                                                                            procedureName: proc.procedureName,
+                                                                                        })}
+                                                                                    >
+                                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                                        <span>Delete subprocedure for this patient</span>
+                                                                                    </DropdownMenuItem>
+                                                                                </DropdownMenuContent>
+                                                                            </DropdownMenu>
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -1614,7 +1734,7 @@ export default function PatientsPage() {
                                                                                             {s.name}
                                                                                         </span>
                                                                                     </div>
-                                                                                    <div className="shrink-0">
+                                                                                    <div className="shrink-0 flex items-center gap-1">
                                                                                         {s.completed ? (
                                                                                             <span title={formatSafeDateTime(sDate)} className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-medium border border-emerald-300 dark:border-emerald-800">
                                                                                                 <CalendarIcon className="h-2.5 w-2.5" />
@@ -1623,6 +1743,32 @@ export default function PatientsPage() {
                                                                                         ) : (
                                                                                             <span className="text-3xs text-muted-foreground/60 italic">Pending</span>
                                                                                         )}
+                                                                                        <DropdownMenu>
+                                                                                            <DropdownMenuTrigger asChild>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                                                                                                    title="More options"
+                                                                                                >
+                                                                                                    <MoreVertical className="h-3 w-3" />
+                                                                                                </button>
+                                                                                            </DropdownMenuTrigger>
+                                                                                            <DropdownMenuContent align="end" className="text-xs">
+                                                                                                <DropdownMenuItem
+                                                                                                    className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                                                                    onClick={() => setSubStepToDelete({
+                                                                                                        patient,
+                                                                                                        procedureIndex: index,
+                                                                                                        stepIndex: sIdx,
+                                                                                                        stepName: s.name,
+                                                                                                        procedureName: proc.procedureName,
+                                                                                                    })}
+                                                                                                >
+                                                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                                                    <span>Delete subprocedure for this patient</span>
+                                                                                                </DropdownMenuItem>
+                                                                                            </DropdownMenuContent>
+                                                                                        </DropdownMenu>
                                                                                     </div>
                                                                                 </div>
                                                                             );
@@ -2138,6 +2284,27 @@ export default function PatientsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Dialog to Delete Sub-procedure for this patient */}
+      <AlertDialog open={!!subStepToDelete} onOpenChange={(open) => { if (!open) setSubStepToDelete(null); }}>
+        <AlertDialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base sm:text-lg">Delete subprocedure for this patient?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground">
+              Are you sure you want to delete <span className="font-semibold text-foreground">"{subStepToDelete?.stepName}"</span> from {subStepToDelete?.patient?.firstName} {subStepToDelete?.patient?.lastName}'s {subStepToDelete?.procedureName} record? This step will be removed specifically for this patient.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-2">
+            <AlertDialogCancel onClick={() => setSubStepToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeletePatientSubProcedure}
+            >
+              Delete Subprocedure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

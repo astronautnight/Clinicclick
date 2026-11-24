@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Procedure, ProcedureCategory, Patient, LinkedProcedure, Transaction, Appointment, ProcedureSubStep } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { ListPlus, Link2, ClipboardList, Trash2, FilePenLine, Loader2, ServerCrash, Video, PlusCircle, X, Search, CalendarCheck, CheckCircle2, Circle, History, Wallet, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Check, Stethoscope, User, Phone, StickyNote, FileText } from "lucide-react";
+import { ListPlus, Link2, ClipboardList, Trash2, FilePenLine, Loader2, ServerCrash, Video, PlusCircle, X, Search, CalendarCheck, CheckCircle2, Circle, History, Wallet, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Check, Stethoscope, User, Phone, StickyNote, FileText, MoreVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestore, useUser } from '@/firebase';
 import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, doc } from 'firebase/firestore';
@@ -187,6 +188,14 @@ export default function ProceduresPage() {
   } | null>(null);
   const [subStepNoteInput, setSubStepNoteInput] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [subStepToDelete, setSubStepToDelete] = useState<{
+    patientId: string;
+    patientName: string;
+    procedureId: string;
+    procedureName: string;
+    toothNumber?: string;
+    stepName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!db || !clinicId || !user) {
@@ -457,33 +466,29 @@ export default function ProceduresPage() {
     }
   };
 
-  const handleTogglePatientSubStep = async (
-    patientId: string,
-    procedureId: string,
-    toothNumber: string | undefined,
-    stepName: string,
-    currentCompleted: boolean
-  ) => {
-    if (!clinicId) return;
+  const confirmDeletePatientSubStep = async () => {
+    if (!clinicId || !subStepToDelete) return;
     try {
+      const { patientId, procedureId, procedureName, toothNumber, stepName, patientName } = subStepToDelete;
       const patient = patients.find(p => p.id === patientId);
       if (!patient) return;
 
-      const newCompleted = !currentCompleted;
-      const now = new Date().toISOString();
-
       const updatedLinked = (patient.linkedProcedures || []).map(lp => {
-        const matchesProc = lp.procedureId === procedureId &&
-          (toothNumber ? lp.toothNumber === toothNumber : true);
+        const matchesProc = (
+          (procedureId && lp.procedureId === procedureId) ||
+          (procedureName && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureName.trim().toLowerCase()) ||
+          (procedureId && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureId.trim().toLowerCase())
+        ) && (toothNumber ? lp.toothNumber === toothNumber : true);
         if (!matchesProc) return lp;
 
         const currentSteps = reconcileSubProcedures(lp.subProcedures, lp.procedureName);
         const updatedSteps = currentSteps.map(step => {
           if (step.name.trim().toLowerCase() === stepName.trim().toLowerCase()) {
+            const { completedAt, ...rest } = step;
             return {
-              ...step,
-              completed: newCompleted,
-              completedAt: newCompleted ? now : undefined,
+              ...rest,
+              completed: false,
+              isDeleted: true,
             };
           }
           return step;
@@ -497,11 +502,125 @@ export default function ProceduresPage() {
 
       await updatePatient(clinicId, patient.id, { linkedProcedures: updatedLinked });
       toast({
-        title: newCompleted ? "Step Completed" : "Step Reopened",
-        description: `"${stepName}" marked as ${newCompleted ? "completed" : "pending"}.`,
+        title: "Sub-procedure Deleted",
+        description: `"${stepName}" deleted for ${patientName}.`,
+      });
+      setSubStepToDelete(null);
+    } catch (err) {
+      console.error("Could not delete sub-procedure:", err);
+      toast({
+        title: "Error",
+        description: "Failed to delete sub-procedure.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUnlinkProcedureForPatient = async (
+    patientId: string,
+    procedureId: string,
+    procedureName?: string,
+    toothNumber?: string
+  ) => {
+    if (!clinicId) return;
+    try {
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return;
+
+      const updatedLinked = (patient.linkedProcedures || []).filter(lp => {
+        const matchesProc = (
+          (procedureId && lp.procedureId === procedureId) ||
+          (procedureName && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureName.trim().toLowerCase()) ||
+          (procedureId && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureId.trim().toLowerCase())
+        ) && (toothNumber ? lp.toothNumber === toothNumber : true);
+        return !matchesProc;
+      });
+
+      await updatePatient(clinicId, patient.id, { linkedProcedures: updatedLinked });
+      toast({
+        title: "Procedure Removed",
+        description: `Procedure removed from ${patient.firstName}'s record.`,
       });
     } catch (err) {
+      console.error("Could not remove procedure:", err);
+      toast({
+        title: "Error",
+        description: "Failed to remove procedure.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTogglePatientSubStep = async (
+    patientId: string,
+    procedureId: string,
+    procedureName: string,
+    toothNumber: string | undefined,
+    stepName: string,
+    currentCompleted: boolean
+  ) => {
+    if (!clinicId) return;
+    try {
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return;
+
+      const newCompleted = !currentCompleted;
+      const now = new Date().toISOString();
+
+      const updatedLinked = (patient.linkedProcedures || []).map(lp => {
+        const matchesProc = (
+          (procedureId && lp.procedureId === procedureId) ||
+          (procedureName && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureName.trim().toLowerCase()) ||
+          (procedureId && lp.procedureName && lp.procedureName.trim().toLowerCase() === procedureId.trim().toLowerCase())
+        ) && (toothNumber ? lp.toothNumber === toothNumber : true);
+        if (!matchesProc) return lp;
+
+        const currentSteps = reconcileSubProcedures(lp.subProcedures, lp.procedureName);
+        const updatedSteps = currentSteps.map(step => {
+          if (step.name.trim().toLowerCase() === stepName.trim().toLowerCase()) {
+            if (newCompleted) {
+              return {
+                ...step,
+                completed: true,
+                completedAt: now,
+              };
+            } else {
+              const { completedAt, ...rest } = step;
+              return {
+                ...rest,
+                completed: false,
+              };
+            }
+          }
+          return step;
+        });
+
+        return {
+          ...lp,
+          subProcedures: updatedSteps,
+        };
+      });
+
+      const success = await updatePatient(clinicId, patient.id, { linkedProcedures: updatedLinked });
+      if (success) {
+        toast({
+          title: newCompleted ? "Step Completed" : "Step Reopened",
+          description: `"${stepName}" marked as ${newCompleted ? "completed" : "pending"}.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Could not update sub-procedure status.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
       console.error("Could not toggle sub-procedure status:", err);
+      toast({
+        title: "Error",
+        description: "Failed to toggle sub-procedure status.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -948,6 +1067,27 @@ export default function ProceduresPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Confirmation Dialog to Delete Sub-procedure for this patient */}
+      <AlertDialog open={!!subStepToDelete} onOpenChange={(open) => { if (!open) setSubStepToDelete(null); }}>
+        <AlertDialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base sm:text-lg">Delete subprocedure for this patient?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground">
+              Are you sure you want to delete <span className="font-semibold text-foreground">"{subStepToDelete?.stepName}"</span> from <span className="font-semibold text-foreground">{subStepToDelete?.patientName}</span>'s {subStepToDelete?.procedureName} record? This step will be removed specifically for this patient.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-2">
+            <AlertDialogCancel onClick={() => setSubStepToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeletePatientSubStep}
+            >
+              Delete Subprocedure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Main Tabs Container: Procedure Performed Today / Brief Overview vs Procedures Catalogue */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'today' | 'catalogue')} className="w-full space-y-4">
         {/* Top Header with Title, Actions, and Switch Tabs Menu */}
@@ -1154,9 +1294,20 @@ export default function ProceduresPage() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <span className="text-xs font-semibold text-foreground">
-                                    ₹{tp.cost.toLocaleString()}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-foreground">
+                                      ₹{tp.cost.toLocaleString()}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      title={`Remove ${tp.procedureName} from ${patient.firstName}'s record`}
+                                      onClick={() => handleUnlinkProcedureForPatient(patient.id, tp.procedureId, tp.procedureName, tp.toothNumber)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 </div>
 
                                 {/* Completed Sub-procedures Today */}
@@ -1172,9 +1323,9 @@ export default function ProceduresPage() {
                                             <div className="flex items-center gap-1.5 min-w-0">
                                               <button
                                                 type="button"
-                                                onClick={() => handleTogglePatientSubStep(patient.id, tp.procedureId, tp.toothNumber, step.name, true)}
-                                                className="shrink-0 text-emerald-600 hover:text-emerald-700"
-                                                title="Click to reopen this step"
+                                                onClick={() => handleTogglePatientSubStep(patient.id, tp.procedureId, tp.procedureName, tp.toothNumber, step.name, true)}
+                                                className="shrink-0 text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                                                title="Click to untick / reopen this step"
                                               >
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                               </button>
@@ -1199,6 +1350,33 @@ export default function ProceduresPage() {
                                               <span className="text-3xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950 px-1.5 py-0.5 rounded-full shrink-0">
                                                 {step.completedAt ? format(new Date(step.completedAt), 'hh:mm a') : 'Today'}
                                               </span>
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                                                    title="More options"
+                                                  >
+                                                    <MoreVertical className="h-3 w-3" />
+                                                  </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="text-xs">
+                                                  <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                    onClick={() => setSubStepToDelete({
+                                                      patientId: patient.id,
+                                                      patientName: `${patient.firstName} ${patient.lastName}`,
+                                                      procedureId: tp.procedureId,
+                                                      procedureName: tp.procedureName,
+                                                      toothNumber: tp.toothNumber,
+                                                      stepName: step.name,
+                                                    })}
+                                                  >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    <span>Delete subprocedure for this patient</span>
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
                                             </div>
                                           </div>
 
@@ -1229,29 +1407,67 @@ export default function ProceduresPage() {
                                     </p>
                                     <div className="flex flex-wrap gap-1.5">
                                       {tp.stepsCompletedEarlier.map((step, sIdx) => (
-                                        <button
+                                        <div
                                           key={sIdx}
-                                          type="button"
-                                          onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, tp.procedureId, tp.procedureName, tp.toothNumber, step.name, step.notes)}
                                           className={cn(
-                                            "inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded-md border transition-colors group cursor-pointer text-left",
+                                            "inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded-md border transition-colors group text-left",
                                             step.notes
                                               ? "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border-amber-300/80 dark:border-amber-800"
                                               : "bg-muted/70 text-muted-foreground border-border/60 hover:bg-muted hover:text-foreground"
                                           )}
-                                          title={step.notes ? `Note: ${step.notes} (Click to edit)` : "Click to view or add note"}
                                         >
-                                          <Check className="h-3 w-3 text-primary shrink-0" />
+                                          <button
+                                            type="button"
+                                            onClick={() => handleTogglePatientSubStep(patient.id, tp.procedureId, tp.procedureName, tp.toothNumber, step.name, true)}
+                                            className="text-emerald-600 hover:text-emerald-700 cursor-pointer p-0.5"
+                                            title="Click to untick / reopen this step"
+                                          >
+                                            <Check className="h-3 w-3 shrink-0" />
+                                          </button>
                                           <span>{step.name}</span>
-                                          {step.notes ? (
-                                            <StickyNote className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 fill-amber-500/20 shrink-0" />
-                                          ) : (
-                                            <span className="text-[10px] text-muted-foreground/60 group-hover:text-primary transition-colors">+note</span>
-                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, tp.procedureId, tp.procedureName, tp.toothNumber, step.name, step.notes)}
+                                            title={step.notes ? `Note: ${step.notes} (Click to edit)` : "Click to view or add note"}
+                                            className="inline-flex items-center"
+                                          >
+                                            {step.notes ? (
+                                              <StickyNote className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 fill-amber-500/20 shrink-0" />
+                                            ) : (
+                                              <span className="text-[10px] text-muted-foreground/60 group-hover:text-primary transition-colors">+note</span>
+                                            )}
+                                          </button>
                                           {step.completedAt && (
                                             <span className="opacity-75 font-mono text-[10px]">({format(new Date(step.completedAt), 'dd MMM')})</span>
                                           )}
-                                        </button>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors ml-0.5"
+                                                title="More options"
+                                              >
+                                                <MoreVertical className="h-2.5 w-2.5" />
+                                              </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="text-xs">
+                                              <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                onClick={() => setSubStepToDelete({
+                                                  patientId: patient.id,
+                                                  patientName: `${patient.firstName} ${patient.lastName}`,
+                                                  procedureId: tp.procedureId,
+                                                  procedureName: tp.procedureName,
+                                                  toothNumber: tp.toothNumber,
+                                                  stepName: step.name,
+                                                })}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                <span>Delete subprocedure for this patient</span>
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
                                       ))}
                                     </div>
                                   </div>
@@ -1268,8 +1484,8 @@ export default function ProceduresPage() {
                                         <div key={sIdx} className="inline-flex items-center gap-1 rounded bg-muted/40 border border-dashed border-border/60 pr-1.5 pl-1 py-0.5">
                                           <button
                                             type="button"
-                                            onClick={() => handleTogglePatientSubStep(patient.id, tp.procedureId, tp.toothNumber, step.name, false)}
-                                            className="text-muted-foreground hover:text-emerald-600 transition-colors p-0.5"
+                                            onClick={() => handleTogglePatientSubStep(patient.id, tp.procedureId, tp.procedureName, tp.toothNumber, step.name, false)}
+                                            className="text-muted-foreground hover:text-emerald-600 transition-colors p-0.5 cursor-pointer"
                                             title="Click to mark this step as completed"
                                           >
                                             <Circle className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />
@@ -1289,6 +1505,33 @@ export default function ProceduresPage() {
                                             <StickyNote className={cn("h-2.5 w-2.5", step.notes ? "text-amber-500 fill-amber-500/20" : "text-muted-foreground/60")} />
                                             {step.notes ? "note" : "+"}
                                           </button>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <button
+                                                type="button"
+                                                className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors ml-0.5"
+                                                title="More options"
+                                              >
+                                                <MoreVertical className="h-2.5 w-2.5" />
+                                              </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="text-xs">
+                                              <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                onClick={() => setSubStepToDelete({
+                                                  patientId: patient.id,
+                                                  patientName: `${patient.firstName} ${patient.lastName}`,
+                                                  procedureId: tp.procedureId,
+                                                  procedureName: tp.procedureName,
+                                                  toothNumber: tp.toothNumber,
+                                                  stepName: step.name,
+                                                })}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                <span>Delete subprocedure for this patient</span>
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
                                         </div>
                                       ))}
                                     </div>
@@ -1329,7 +1572,18 @@ export default function ProceduresPage() {
                                         </span>
                                       )}
                                     </div>
-                                    <span className="text-xs font-medium text-muted-foreground">₹{pp.cost.toLocaleString()}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium text-muted-foreground">₹{pp.cost.toLocaleString()}</span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                        title={`Remove ${pp.procedureName} from ${patient.firstName}'s record`}
+                                        onClick={() => handleUnlinkProcedureForPatient(patient.id, pp.procedureId, pp.procedureName, pp.toothNumber)}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
                                   </div>
 
                                   {pp.stepsCompleted.length > 0 && (
@@ -1337,27 +1591,65 @@ export default function ProceduresPage() {
                                       <p className="text-3xs text-muted-foreground font-medium uppercase">Completed Steps:</p>
                                       <div className="flex flex-wrap gap-1.5">
                                         {pp.stepsCompleted.map((s, sIdx) => (
-                                          <button
+                                          <div
                                             key={sIdx}
-                                            type="button"
-                                            onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, s.notes)}
                                             className={cn(
-                                              "inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded border transition-colors cursor-pointer text-left",
+                                              "inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded border transition-colors text-left",
                                               s.notes
                                                 ? "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border-amber-300/80 dark:border-amber-800"
                                                 : "bg-muted/50 border-border/50 text-foreground hover:bg-muted"
                                             )}
-                                            title={s.notes ? `Note: ${s.notes} (Click to edit)` : "Click to view or add note"}
                                           >
-                                            <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTogglePatientSubStep(patient.id, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, true)}
+                                              className="text-emerald-600 hover:text-emerald-700 cursor-pointer p-0.5"
+                                              title="Click to untick / reopen this step"
+                                            >
+                                              <Check className="h-3 w-3 shrink-0" />
+                                            </button>
                                             <span>{s.name}</span>
-                                            {s.notes && <StickyNote className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 fill-amber-500/20 shrink-0" />}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, s.notes)}
+                                              title={s.notes ? `Note: ${s.notes} (Click to edit)` : "Click to view or add note"}
+                                              className="inline-flex items-center"
+                                            >
+                                              {s.notes && <StickyNote className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 fill-amber-500/20 shrink-0" />}
+                                            </button>
                                             {s.completedAt && (
                                               <span className="text-muted-foreground text-[10px]">
                                                 ({format(new Date(s.completedAt), 'dd/MM/yyyy')})
                                               </span>
                                             )}
-                                          </button>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors ml-0.5"
+                                                  title="More options"
+                                                >
+                                                  <MoreVertical className="h-2.5 w-2.5" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="text-xs">
+                                                <DropdownMenuItem
+                                                  className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                  onClick={() => setSubStepToDelete({
+                                                    patientId: patient.id,
+                                                    patientName: `${patient.firstName} ${patient.lastName}`,
+                                                    procedureId: pp.procedureId,
+                                                    procedureName: pp.procedureName,
+                                                    toothNumber: pp.toothNumber,
+                                                    stepName: s.name,
+                                                  })}
+                                                >
+                                                  <Trash2 className="h-3.5 w-3.5" />
+                                                  <span>Delete subprocedure for this patient</span>
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
                                         ))}
                                       </div>
                                     </div>
@@ -1368,22 +1660,58 @@ export default function ProceduresPage() {
                                       <p className="text-3xs text-muted-foreground font-medium uppercase">Remaining Steps:</p>
                                       <div className="flex flex-wrap gap-1.5">
                                         {pp.stepsPending.map((s, sIdx) => (
-                                          <button
-                                            key={sIdx}
-                                            type="button"
-                                            onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, s.notes)}
-                                            className={cn(
-                                              "inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded border border-dashed transition-colors cursor-pointer text-left",
-                                              s.notes
-                                                ? "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800"
-                                                : "bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                            )}
-                                            title={s.notes ? `Note: ${s.notes} (Click to edit)` : "Click to add note"}
-                                          >
-                                            <Circle className="h-2.5 w-2.5 opacity-40 shrink-0" />
-                                            <span>{s.name}</span>
-                                            {s.notes && <StickyNote className="h-2.5 w-2.5 text-amber-500 fill-amber-500/20 shrink-0" />}
-                                          </button>
+                                          <div key={sIdx} className="inline-flex items-center gap-1 rounded bg-muted/40 border border-dashed border-border/60 pr-1.5 pl-1 py-0.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTogglePatientSubStep(patient.id, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, false)}
+                                              className="text-muted-foreground hover:text-emerald-600 transition-colors p-0.5 cursor-pointer"
+                                              title="Click to mark this step as completed"
+                                            >
+                                              <Circle className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />
+                                            </button>
+                                            <span className="text-2xs text-muted-foreground/90">{s.name}</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenNoteDialog(patient.id, `${patient.firstName} ${patient.lastName}`, pp.procedureId, pp.procedureName, pp.toothNumber, s.name, s.notes)}
+                                              className={cn(
+                                                "inline-flex items-center gap-0.5 text-3xs px-1 py-0.2 rounded transition-colors ml-0.5",
+                                                s.notes
+                                                  ? "text-amber-700 dark:text-amber-300 bg-amber-100/60 dark:bg-amber-950 font-medium"
+                                                  : "text-muted-foreground/60 hover:text-foreground"
+                                              )}
+                                              title={s.notes ? `Note: ${s.notes}` : "Add note for this step"}
+                                            >
+                                              <StickyNote className={cn("h-2.5 w-2.5", s.notes ? "text-amber-500 fill-amber-500/20" : "text-muted-foreground/60")} />
+                                              {s.notes ? "note" : "+"}
+                                            </button>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors ml-0.5"
+                                                  title="More options"
+                                                >
+                                                  <MoreVertical className="h-2.5 w-2.5" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="text-xs">
+                                                <DropdownMenuItem
+                                                  className="text-destructive focus:text-destructive text-xs cursor-pointer gap-2"
+                                                  onClick={() => setSubStepToDelete({
+                                                    patientId: patient.id,
+                                                    patientName: `${patient.firstName} ${patient.lastName}`,
+                                                    procedureId: pp.procedureId,
+                                                    procedureName: pp.procedureName,
+                                                    toothNumber: pp.toothNumber,
+                                                    stepName: s.name,
+                                                  })}
+                                                >
+                                                  <Trash2 className="h-3.5 w-3.5" />
+                                                  <span>Delete subprocedure for this patient</span>
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
                                         ))}
                                       </div>
                                     </div>

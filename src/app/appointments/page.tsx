@@ -499,7 +499,32 @@ export default function AppointmentsPage() {
   };
 
   const handleSelectChange = (name: keyof Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>, value: string) => {
-    setCurrentAppointment(prev => ({ ...prev, [name]: value }));
+    setCurrentAppointment(prev => {
+      // If changing patientId when scheduling a new appointment (not editing an existing appointment),
+      // auto-populate ongoing/active procedures from the patient's linkedProcedures
+      if (name === 'patientId' && value && !editingAppointmentId) {
+        const patientObj = patients.find(p => p.id === value);
+        if (patientObj?.linkedProcedures && patientObj.linkedProcedures.length > 0) {
+          const autoDetails: AppointmentProcedureDetail[] = patientObj.linkedProcedures.map(lp => {
+            const matchedProc = procedures.find(p => p.id === lp.procedureId || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
+            return {
+              procedureId: matchedProc ? matchedProc.id : lp.procedureId,
+              procedureName: lp.procedureName,
+              subProcedures: reconcileSubProcedures(lp.subProcedures, lp.procedureName).map(s => ({ ...s })),
+              toothNumber: lp.toothNumber,
+            };
+          });
+          const autoIds = autoDetails.map(ad => ad.procedureId);
+          return {
+            ...prev,
+            patientId: value,
+            procedureDetails: autoDetails,
+            procedureIds: autoIds,
+          };
+        }
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -539,12 +564,24 @@ export default function AppointmentsPage() {
           const stampDate = currentAppointment.date || new Date().toISOString();
           
           currentAppointment.procedureDetails.forEach(pd => {
-            const matchIdx = updatedLinked.findIndex(lp => lp.procedureId === pd.procedureId);
+            const matchIdx = updatedLinked.findIndex(lp =>
+              (lp.procedureId === pd.procedureId) ||
+              (lp.procedureName && pd.procedureName && lp.procedureName.trim().toLowerCase() === pd.procedureName.trim().toLowerCase())
+            );
             const normalizedSteps = pd.subProcedures.map(s => {
-              if (s.completed && !s.completedAt) {
-                return { ...s, completedAt: stampDate };
+              if (s.completed) {
+                return {
+                  ...s,
+                  completed: true,
+                  completedAt: s.completedAt || stampDate,
+                };
+              } else {
+                const { completedAt, ...rest } = s;
+                return {
+                  ...rest,
+                  completed: false,
+                };
               }
-              return s;
             });
 
             if (matchIdx >= 0) {
