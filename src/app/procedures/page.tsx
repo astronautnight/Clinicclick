@@ -220,12 +220,14 @@ export default function ProceduresPage() {
         toast({ title: 'Procedures Ready', description: 'Standard procedures have been added.' });
         // The listener will re-fire with the new data, so we don't need to manually set state here.
       } else {
-        // Reconcile and ensure standard procedures have the updated smaller list
+        // Reconcile and ensure standard template procedures have the updated smaller list
         const updatedProcedures = fetchedProcedures.map(proc => {
-          const presetSteps = getPresetSubProcedures(proc.name);
-          if (presetSteps.length > 0 && (!proc.subProcedures || proc.subProcedures.length !== presetSteps.length)) {
-            updateProcedureService(clinicId, proc.id, { subProcedures: presetSteps }).catch(console.warn);
-            return { ...proc, subProcedures: presetSteps };
+          if (proc.isTemplate) {
+            const presetSteps = getPresetSubProcedures(proc.name);
+            if (presetSteps.length > 0 && (!proc.subProcedures || proc.subProcedures.length !== presetSteps.length)) {
+              updateProcedureService(clinicId, proc.id, { subProcedures: presetSteps }).catch(console.warn);
+              return { ...proc, subProcedures: presetSteps };
+            }
           }
           return proc;
         });
@@ -262,13 +264,7 @@ export default function ProceduresPage() {
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewProcedure(prev => ({ ...prev, [name]: name === 'cost' || name === 'durationMinutes' ? parseFloat(value) || 0 : value }));
-    if (name === 'name' && newProcedureSubProcedures.length === 0) {
-      const defaultSteps = getPresetSubProcedures(value);
-      if (defaultSteps.length > 0) {
-        setNewProcedureSubProcedures(defaultSteps);
-      }
-    }
-  }, [newProcedureSubProcedures.length]);
+  }, []);
 
   const handleSelectChange = useCallback((value: ProcedureCategory) => setNewProcedure(prev => ({ ...prev, category: value })), []);
 
@@ -352,7 +348,7 @@ export default function ProceduresPage() {
     setEditedProcedureMaterials(procedure.materials || []);
     const existingSteps = (procedure.subProcedures && procedure.subProcedures.length > 0)
       ? procedure.subProcedures
-      : getPresetSubProcedures(procedure.name);
+      : (procedure.isTemplate ? getPresetSubProcedures(procedure.name) : []);
     setEditedProcedureSubProcedures(existingSteps);
     setIsEditDialogOpen(true);
   };

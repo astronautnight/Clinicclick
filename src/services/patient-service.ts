@@ -159,7 +159,9 @@ export async function addPatient(
 
 function cleanFirestoreData(data: any): any {
   if (Array.isArray(data)) {
-    return data.map(cleanFirestoreData);
+    return data
+      .filter(item => item !== undefined)
+      .map(cleanFirestoreData);
   }
   if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
     const cleaned: any = {};

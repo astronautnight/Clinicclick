@@ -245,10 +245,13 @@ export function getPresetSubProcedures(procedureName: string): string[] {
     }
   }
 
-  // Partial match if prefix or root matches
-  for (const [key, steps] of Object.entries(PROCEDURE_SUBPROCEDURES_MAP)) {
-    if (target.includes(normalize(key)) || normalize(key).includes(target)) {
-      return [...steps];
+  // Exact full name containment only for long strings (e.g. "Root Canal Treatment - Anterior (Tooth 11)")
+  if (target.length >= 6) {
+    for (const [key, steps] of Object.entries(PROCEDURE_SUBPROCEDURES_MAP)) {
+      const normKey = normalize(key);
+      if (target.includes(normKey)) {
+        return [...steps];
+      }
     }
   }
 

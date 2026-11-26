@@ -17,6 +17,24 @@ import { FirestorePermissionError } from "@/firebase/errors";
 
 const { firestore: db } = initializeFirebase();
 
+export function cleanFirestoreData<T = any>(data: T): T {
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => cleanFirestoreData(item)) as any;
+  }
+  if (data !== null && typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned;
+  }
+  return data;
+}
+
 type CreatableAppointmentData = Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>;
 type UpdatableAppointmentData = Partial<Omit<Appointment, 'id' | 'createdAt'>>;
 
@@ -27,8 +45,9 @@ export async function addAppointment(clinicId: string, appointmentData: Creatabl
   
   const appointmentsColRef = collection(db, "clinics", clinicId, "appointments");
   
+  const cleanedData = cleanFirestoreData(appointmentData);
   const payload = {
-    ...appointmentData,
+    ...cleanedData,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -57,8 +76,9 @@ export async function updateAppointment(clinicId: string, appointmentId: string,
 
     const appointmentDocRef = doc(db, "clinics", clinicId, "appointments", appointmentId);
 
+    const cleanedData = cleanFirestoreData(appointmentData);
     const payload = {
-        ...appointmentData,
+        ...cleanedData,
         updatedAt: serverTimestamp(),
     };
 

@@ -74,10 +74,10 @@ export function ProcedureSubprocedureSelector({
     if (patientObj?.linkedProcedures) {
       for (const lp of patientObj.linkedProcedures) {
         // Find standard procedure if available to match ID
-        const matchedProc = allProcedures.find(p => p.id === lp.procedureId || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
-        const canonicalProcId = matchedProc ? matchedProc.id : lp.procedureId;
+        const matchedProc = allProcedures.find(p => (lp.procedureId && p.id === lp.procedureId) || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
+        const canonicalProcId = matchedProc ? matchedProc.id : (lp.procedureId || lp.procedureName);
 
-        if (!map.has(canonicalProcId)) {
+        if (canonicalProcId && !map.has(canonicalProcId)) {
           const steps = reconcileSubProcedures(lp.subProcedures, lp.procedureName);
           const total = steps.length;
           const completed = steps.filter(s => s.completed).length;
@@ -209,11 +209,20 @@ export function ProcedureSubprocedureSelector({
     const newDetail: AppointmentProcedureDetail = {
       procedureId: prevProc.procedureId,
       procedureName: prevProc.procedureName,
-      subProcedures: prevProc.subProcedures.map(s => ({ ...s })),
+      subProcedures: prevProc.subProcedures.map(s => {
+        const step: ProcedureSubStep = {
+          name: s.name,
+          completed: !!s.completed,
+        };
+        if (s.completed && s.completedAt) step.completedAt = s.completedAt;
+        if (s.notes) step.notes = s.notes;
+        if (s.isCustom) step.isCustom = true;
+        return step;
+      }),
     };
 
     const nextDetails = [...currentProcedureDetails, newDetail];
-    const nextIds = [...currentProcedureIds, prevProc.procedureId];
+    const nextIds = [...currentProcedureIds, prevProc.procedureId].filter(Boolean);
     setExpandedProcedureIds(prev => ({ ...prev, [prevProc.procedureId]: true }));
     onProcedureDetailsChange(nextDetails, nextIds);
   };

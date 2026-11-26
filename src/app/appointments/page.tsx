@@ -506,20 +506,39 @@ export default function AppointmentsPage() {
         const patientObj = patients.find(p => p.id === value);
         if (patientObj?.linkedProcedures && patientObj.linkedProcedures.length > 0) {
           const autoDetails: AppointmentProcedureDetail[] = patientObj.linkedProcedures.map(lp => {
-            const matchedProc = procedures.find(p => p.id === lp.procedureId || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
-            return {
-              procedureId: matchedProc ? matchedProc.id : lp.procedureId,
-              procedureName: lp.procedureName,
-              subProcedures: reconcileSubProcedures(lp.subProcedures, lp.procedureName).map(s => ({ ...s })),
-              toothNumber: lp.toothNumber,
+            const matchedProc = procedures.find(p => (lp.procedureId && p.id === lp.procedureId) || p.name.trim().toLowerCase() === lp.procedureName.trim().toLowerCase());
+            const procId = matchedProc ? matchedProc.id : (lp.procedureId || lp.procedureName || `proc-${Date.now()}`);
+            const steps = reconcileSubProcedures(lp.subProcedures, lp.procedureName).map(s => {
+              const cleanedStep: ProcedureSubStep = {
+                name: s.name,
+                completed: !!s.completed,
+              };
+              if (s.completed && s.completedAt) cleanedStep.completedAt = s.completedAt;
+              if (s.notes) cleanedStep.notes = s.notes;
+              if (s.isCustom) cleanedStep.isCustom = true;
+              return cleanedStep;
+            });
+            const detail: AppointmentProcedureDetail = {
+              procedureId: procId,
+              procedureName: lp.procedureName || matchedProc?.name || 'Procedure',
+              subProcedures: steps,
             };
+            if (lp.toothNumber) detail.toothNumber = lp.toothNumber;
+            return detail;
           });
-          const autoIds = autoDetails.map(ad => ad.procedureId);
+          const autoIds = autoDetails.map(ad => ad.procedureId).filter(Boolean);
           return {
             ...prev,
             patientId: value,
             procedureDetails: autoDetails,
             procedureIds: autoIds,
+          };
+        } else {
+          return {
+            ...prev,
+            patientId: value,
+            procedureDetails: [],
+            procedureIds: [],
           };
         }
       }
@@ -541,11 +560,40 @@ export default function AppointmentsPage() {
     const patient = patients.find(p => p.id === currentAppointment.patientId);
     const doctor = doctors.find(d => d.id === currentAppointment.doctorId);
 
+    // Sanitize procedure details & IDs so there are never undefined keys or array elements
+    const sanitizedProcedureDetails: AppointmentProcedureDetail[] = (currentAppointment.procedureDetails || []).map(pd => {
+      const pObj = procedures.find(p => (pd.procedureId && p.id === pd.procedureId) || p.name.trim().toLowerCase() === pd.procedureName?.trim().toLowerCase());
+      const procId = pObj ? pObj.id : (pd.procedureId || pd.procedureName || `proc-${Date.now()}`);
+      const detail: AppointmentProcedureDetail = {
+        procedureId: procId,
+        procedureName: pd.procedureName || pObj?.name || 'Procedure',
+        subProcedures: (pd.subProcedures || []).map(s => {
+          const step: ProcedureSubStep = {
+            name: s.name,
+            completed: !!s.completed,
+          };
+          if (s.completed && s.completedAt) step.completedAt = s.completedAt;
+          if (s.notes) step.notes = s.notes;
+          if (s.isCustom) step.isCustom = true;
+          return step;
+        }),
+      };
+      if (pd.toothNumber) detail.toothNumber = pd.toothNumber;
+      if (pd.notes) detail.notes = pd.notes;
+      return detail;
+    });
+
+    const sanitizedProcedureIds = (currentAppointment.procedureIds || [])
+      .concat(sanitizedProcedureDetails.map(d => d.procedureId))
+      .filter((id, index, self) => Boolean(id) && self.indexOf(id) === index);
+
     const appointmentPayload: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'> & { clinicId: string } = {
       ...currentAppointment,
       clinicId: clinicId,
       patientName: patient ? `${patient.firstName} ${patient.lastName}` : 'N/A',
       doctorName: doctor ? doctor.name : 'N/A',
+      procedureDetails: sanitizedProcedureDetails,
+      procedureIds: sanitizedProcedureIds,
     };
 
     try {
@@ -558,30 +606,27 @@ export default function AppointmentsPage() {
         }
 
         // Sync procedure subprocedure progress with patient's linkedProcedures
-        if (patient && currentAppointment.procedureDetails && currentAppointment.procedureDetails.length > 0) {
+        if (patient && sanitizedProcedureDetails.length > 0) {
           const existingLinked = patient.linkedProcedures || [];
           const updatedLinked = [...existingLinked];
           const stampDate = currentAppointment.date || new Date().toISOString();
           
-          currentAppointment.procedureDetails.forEach(pd => {
+          sanitizedProcedureDetails.forEach(pd => {
             const matchIdx = updatedLinked.findIndex(lp =>
-              (lp.procedureId === pd.procedureId) ||
+              (lp.procedureId && pd.procedureId && lp.procedureId === pd.procedureId) ||
               (lp.procedureName && pd.procedureName && lp.procedureName.trim().toLowerCase() === pd.procedureName.trim().toLowerCase())
             );
-            const normalizedSteps = pd.subProcedures.map(s => {
+            const normalizedSteps: ProcedureSubStep[] = (pd.subProcedures || []).map(s => {
+              const step: ProcedureSubStep = {
+                name: s.name,
+                completed: !!s.completed,
+              };
               if (s.completed) {
-                return {
-                  ...s,
-                  completed: true,
-                  completedAt: s.completedAt || stampDate,
-                };
-              } else {
-                const { completedAt, ...rest } = s;
-                return {
-                  ...rest,
-                  completed: false,
-                };
+                step.completedAt = s.completedAt || stampDate;
               }
+              if (s.notes) step.notes = s.notes;
+              if (s.isCustom) step.isCustom = true;
+              return step;
             });
 
             if (matchIdx >= 0) {
@@ -590,15 +635,17 @@ export default function AppointmentsPage() {
                 subProcedures: normalizedSteps,
               };
             } else {
-              const pObj = procedures.find(p => p.id === pd.procedureId);
-              updatedLinked.push({
-                procedureId: pd.procedureId,
-                procedureName: pd.procedureName,
+              const pObj = procedures.find(p => (pd.procedureId && p.id === pd.procedureId) || p.name.trim().toLowerCase() === pd.procedureName?.trim().toLowerCase());
+              const newLinked: LinkedProcedure = {
+                procedureId: pd.procedureId || `proc-${Date.now()}`,
+                procedureName: pd.procedureName || pObj?.name || 'Procedure',
                 cost: pObj?.cost || 0,
                 date: stampDate,
                 quantity: 1,
                 subProcedures: normalizedSteps,
-              });
+              };
+              if (pd.toothNumber) newLinked.toothNumber = pd.toothNumber;
+              updatedLinked.push(newLinked);
             }
           });
 
