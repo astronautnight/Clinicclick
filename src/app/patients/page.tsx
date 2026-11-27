@@ -31,8 +31,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus, MoreVertical } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus, MoreVertical, ArrowUpDown } from "lucide-react";
 import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
 import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
@@ -69,6 +69,27 @@ interface EditingProcedureState {
     procedureIndex: number;
 }
 
+type PatientSortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+
+const sortLabels: Record<PatientSortOption, string> = {
+  'date-desc': 'Date Added (Newest)',
+  'date-asc': 'Date Added (Oldest)',
+  'name-asc': 'Name (A to Z)',
+  'name-desc': 'Name (Z to A)',
+};
+
+const getPatientTime = (p: Patient): number => {
+  if (!p.createdAt) return 0;
+  if (typeof (p.createdAt as any).toDate === 'function') {
+    return (p.createdAt as any).toDate().getTime();
+  }
+  if (p.createdAt instanceof Date) {
+    return p.createdAt.getTime();
+  }
+  const t = new Date(p.createdAt as any).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
 
 function isPatient(docData: any): docData is Omit<Patient, "id"> {
   return (
@@ -103,6 +124,7 @@ export default function PatientsPage() {
   const [quantityToLink, setQuantityToLink] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('primary');
+  const [sortBy, setSortBy] = useState<PatientSortOption>('date-desc');
   const [editingProcedure, setEditingProcedure] = useState<EditingProcedureState | null>(null);
   const [age, setAge] = useState<number | string>('');
 
@@ -463,7 +485,7 @@ export default function PatientsPage() {
             } as Patient);
           }
         });
-        setPatients(fetched.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0)));
+        setPatients(fetched.sort((a, b) => getPatientTime(b) - getPatientTime(a)));
         setIsLoading(false);
         setError(null);
       },
@@ -817,7 +839,7 @@ export default function PatientsPage() {
 
   const filteredPatients = useMemo(() => {
     const isConsultList = activeTab === 'consults';
-    return patients
+    const list = patients
       .filter(p => (p.isConsult || false) === isConsultList)
       .filter(p => {
         if (!searchQuery) return true;
@@ -825,7 +847,27 @@ export default function PatientsPage() {
         const fullName = `${p.firstName.toLowerCase()} ${p.lastName.toLowerCase()}`;
         return fullName.includes(query) || (p.contactNumber && p.contactNumber.toLowerCase().includes(query));
       });
-  }, [patients, searchQuery, activeTab]);
+
+    return list.slice().sort((a, b) => {
+      if (sortBy === 'date-desc') {
+        return getPatientTime(b) - getPatientTime(a);
+      }
+      if (sortBy === 'date-asc') {
+        return getPatientTime(a) - getPatientTime(b);
+      }
+      if (sortBy === 'name-asc') {
+        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+      if (sortBy === 'name-desc') {
+        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        return nameB.localeCompare(nameA);
+      }
+      return 0;
+    });
+  }, [patients, searchQuery, activeTab, sortBy]);
 
   const PatientDetailView = ({ patient }: { patient: Patient }) => {
     const [showAllDetails, setShowAllDetails] = useState(false);
@@ -1924,12 +1966,13 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 no-print">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
-          <Users className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special1" />
-          Patient Management
-        </h1>
-        <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
+      <div className="space-y-3 no-print">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center">
+            <Users className="mr-2 sm:mr-3 h-7 w-7 sm:h-8 sm:w-8 text-special1" />
+            Patient Management
+          </h1>
+          <Dialog open={isFormOpen} onOpenChange={(isOpen) => {
           setIsFormOpen(isOpen);
           if (!isOpen) {
             setEditingPatientId(null);
@@ -2127,6 +2170,40 @@ export default function PatientsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Sort By Dropdown placed below header on the left side */}
+      <div className="flex items-center justify-start pt-3.5 sm:pt-5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 bg-background shadow-xs hover:bg-muted/60">
+              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Sort by: {sortLabels[sortBy]}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Sort Patients</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setSortBy('date-desc')} className="text-xs flex items-center justify-between cursor-pointer">
+              <span>Date Added (Newest first)</span>
+              {sortBy === 'date-desc' && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSortBy('date-asc')} className="text-xs flex items-center justify-between cursor-pointer">
+              <span>Date Added (Oldest first)</span>
+              {sortBy === 'date-asc' && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setSortBy('name-asc')} className="text-xs flex items-center justify-between cursor-pointer">
+              <span>Name (A to Z)</span>
+              {sortBy === 'name-asc' && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSortBy('name-desc')} className="text-xs flex items-center justify-between cursor-pointer">
+              <span>Name (Z to A)</span>
+              {sortBy === 'name-desc' && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
       
       <Dialog open={isLinkDialogOpen} onOpenChange={(open) => {
         if (!open) {
