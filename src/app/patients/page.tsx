@@ -3,6 +3,7 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { addPatient, deletePatient, updatePatient, uploadPatientFile, deletePatientPhoto } from "@/services/patient-service";
+import { updateTransaction, deleteTransaction, addTransaction } from "@/services/transaction-service";
 import { useUser, useFirestore } from '@/firebase';
 import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { Capacitor } from '@capacitor/core';
@@ -32,8 +33,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus, MoreVertical, ArrowUpDown } from "lucide-react";
-import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription } from "@/types";
+import { Loader2, Trash2, UserPlus, ServerCrash, Users, Pencil, Link2, X, MapPin, Search, Check, Edit, Save, CalendarIcon, Upload, BriefcaseMedical, Wallet, FileText, Printer, Percent, Camera, ImagePlus, Eye, Phone, Mail, MessageSquare, User, CheckCircle2, Circle, Activity, ChevronDown, ChevronUp, Clock, ClipboardList, Plus, MoreVertical, ArrowUpDown, History, PlusCircle } from "lucide-react";
+import type { Patient, MarkedTooth, Procedure, ProcedureCategory, LinkedProcedure, Transaction, Prescription, PaymentMethod, TransactionCategory } from "@/types";
 import { getPresetSubProcedures, reconcileSubProcedures } from "@/lib/procedure-presets";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -68,6 +69,9 @@ interface EditingProcedureState {
     patientId: string;
     procedureIndex: number;
 }
+
+const paymentMethodsList: PaymentMethod[] = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Other'];
+const paymentCategoriesList: TransactionCategory[] = ['Procedure Payment', 'Consultation Fee', 'Lab Charges', 'Miscellaneous Income'];
 
 type PatientSortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 
@@ -132,6 +136,26 @@ export default function PatientsPage() {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   const [discountValueState, setDiscountValueState] = useState<string>('');
   const [isDiscountDialogOpen, setIsDiscountDialogOpen] = useState(false);
+
+  // Payment Transaction States
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+  const [isEditTransactionOpen, setIsEditTransactionOpen] = useState(false);
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editPaymentDate, setEditPaymentDate] = useState<string>('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [editCategory, setEditCategory] = useState<TransactionCategory>('Procedure Payment');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
+
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+
+  const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
+  const [recordPaymentPatient, setRecordPaymentPatient] = useState<Patient | null>(null);
+  const [recordAmount, setRecordAmount] = useState<string>('');
+  const [recordPaymentDate, setRecordPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [recordPaymentMethod, setRecordPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [recordCategory, setRecordCategory] = useState<TransactionCategory>('Procedure Payment');
+  const [recordDescription, setRecordDescription] = useState<string>('');
 
   // File Upload States
   const [pendingFiles, setPendingFiles] = useState<{ photos: File[], xrays: File[], scans: File[] }>({ photos: [], xrays: [], scans: [] });
@@ -837,6 +861,110 @@ export default function PatientsPage() {
       }
   };
 
+  // Payment Transaction Handlers
+  const handleOpenEditTransaction = (trans: Transaction) => {
+    setTransactionToEdit(trans);
+    setEditAmount(String(trans.amount || ''));
+    setEditPaymentDate(trans.paymentDate || trans.date || new Date().toISOString().split('T')[0]);
+    setEditPaymentMethod(trans.paymentMethod || 'Cash');
+    setEditCategory(trans.category || 'Procedure Payment');
+    setEditDescription(trans.description || '');
+    setIsEditTransactionOpen(true);
+  };
+
+  const handleSaveEditTransaction = async () => {
+    if (!user || !clinicId || !transactionToEdit) return;
+    const numAmount = parseFloat(editAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive" });
+      return;
+    }
+    if (!editPaymentDate) {
+      toast({ title: "Date Required", description: "Please select a payment date.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmittingTransaction(true);
+    const success = await updateTransaction(clinicId, transactionToEdit.id, {
+      amount: numAmount,
+      paymentDate: editPaymentDate,
+      date: editPaymentDate,
+      paymentMethod: editPaymentMethod,
+      category: editCategory,
+      description: editDescription.trim(),
+    });
+    setIsSubmittingTransaction(false);
+
+    if (success) {
+      toast({ title: "Payment Updated", description: `Updated payment of ₹${numAmount.toLocaleString()}.` });
+      setIsEditTransactionOpen(false);
+      setTransactionToEdit(null);
+    } else {
+      toast({ title: "Update Failed", description: "Could not update the payment transaction.", variant: "destructive" });
+    }
+  };
+
+  const handleConfirmDeleteTransaction = async () => {
+    if (!user || !clinicId || !transactionToDelete) return;
+    setIsSubmittingTransaction(true);
+    const success = await deleteTransaction(clinicId, transactionToDelete.id);
+    setIsSubmittingTransaction(false);
+
+    if (success) {
+      toast({ title: "Payment Deleted", description: `Payment of ₹${transactionToDelete.amount.toLocaleString()} was deleted.` });
+      setTransactionToDelete(null);
+    } else {
+      toast({ title: "Delete Failed", description: "Could not delete the payment transaction.", variant: "destructive" });
+    }
+  };
+
+  const handleOpenRecordPayment = (patient: Patient, defaultAmount?: number) => {
+    setRecordPaymentPatient(patient);
+    setRecordAmount(defaultAmount && defaultAmount > 0 ? String(defaultAmount) : '');
+    setRecordPaymentDate(new Date().toISOString().split('T')[0]);
+    setRecordPaymentMethod('Cash');
+    setRecordCategory('Procedure Payment');
+    setRecordDescription('');
+    setIsRecordPaymentOpen(true);
+  };
+
+  const handleSaveRecordPayment = async () => {
+    if (!user || !clinicId || !recordPaymentPatient) return;
+    const numAmount = parseFloat(recordAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive" });
+      return;
+    }
+    if (!recordPaymentDate) {
+      toast({ title: "Date Required", description: "Please select a payment date.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmittingTransaction(true);
+    const id = await addTransaction(clinicId, {
+      type: 'Earning',
+      amount: numAmount,
+      paymentDate: recordPaymentDate,
+      date: recordPaymentDate,
+      paymentMethod: recordPaymentMethod,
+      category: recordCategory,
+      description: recordDescription.trim() || `Payment from ${recordPaymentPatient.firstName} ${recordPaymentPatient.lastName}`,
+      patientId: recordPaymentPatient.id,
+      patientName: `${recordPaymentPatient.firstName} ${recordPaymentPatient.lastName}`.trim(),
+      isConsult: recordPaymentPatient.isConsult || false,
+      consultLocation: recordPaymentPatient.consultLocation || '',
+    } as any);
+    setIsSubmittingTransaction(false);
+
+    if (id) {
+      toast({ title: "Payment Recorded", description: `Recorded payment of ₹${numAmount.toLocaleString()}.` });
+      setIsRecordPaymentOpen(false);
+      setRecordPaymentPatient(null);
+    } else {
+      toast({ title: "Error", description: "Could not record payment.", variant: "destructive" });
+    }
+  };
+
   const filteredPatients = useMemo(() => {
     const isConsultList = activeTab === 'consults';
     const list = patients
@@ -871,7 +999,15 @@ export default function PatientsPage() {
 
   const PatientDetailView = ({ patient }: { patient: Patient }) => {
     const [showAllDetails, setShowAllDetails] = useState(false);
-    const patientTransactions = useMemo(() => transactions.filter(t => t.patientId === patient.id && t.type === 'Earning'), [transactions, patient.id]);
+    const patientTransactions = useMemo(() => 
+      transactions
+        .filter(t => t.patientId === patient.id && t.type === 'Earning')
+        .sort((a, b) => {
+          const dateA = new Date(a.paymentDate || a.date || 0).getTime();
+          const dateB = new Date(b.paymentDate || b.date || 0).getTime();
+          return dateB - dateA;
+        })
+    , [transactions, patient.id]);
     const patientPrescriptions = useMemo(() => prescriptions.filter(p => p.patientId === patient.id), [prescriptions, patient.id]);
     
     const financials = useMemo(() => {
@@ -1827,6 +1963,129 @@ export default function PatientsPage() {
                                 </Table>
                                 {(!patient.linkedProcedures || patient.linkedProcedures.length === 0) && <p className="text-center text-muted-foreground pt-4">No procedures billed yet.</p>}
                             </div>
+
+                            {/* Previous Payment Transactions */}
+                            <div className="mt-6 pt-5 border-t">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground">
+                                        <History className="h-4 w-4 text-primary" />
+                                        Payment Transactions ({patientTransactions.length})
+                                    </h4>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-xs h-7 sm:h-8 gap-1.5"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenRecordPayment(patient, financials.balanceDue > 0 ? financials.balanceDue : undefined);
+                                        }}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Record Payment
+                                    </Button>
+                                </div>
+
+                                {patientTransactions.length > 0 ? (
+                                    <>
+                                        {/* Mobile View */}
+                                        <div className="space-y-2 sm:hidden">
+                                            {patientTransactions.map((trans) => (
+                                                <div key={trans.id} className="p-2.5 rounded-lg border bg-card/60 space-y-1.5 text-xs">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-semibold text-sm text-green-600">₹{trans.amount.toLocaleString()}</span>
+                                                        <Badge variant="outline" className="text-3xs">{trans.paymentMethod || 'Other'}</Badge>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-muted-foreground text-3xs">
+                                                        <span>{trans.paymentDate ? format(new Date(trans.paymentDate), 'dd/MM/yyyy') : 'N/A'}</span>
+                                                        <span className="truncate max-w-[150px]">{trans.description || trans.category}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-end gap-1 pt-1.5 border-t border-border/40">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                                            onClick={(e) => { e.stopPropagation(); handleOpenEditTransaction(trans); }}
+                                                        >
+                                                            <Pencil className="h-3 w-3 mr-1" /> Edit
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm" 
+                                                            className="h-6 px-2 text-xs text-destructive hover:text-destructive/90"
+                                                            onClick={(e) => { e.stopPropagation(); setTransactionToDelete(trans); }}
+                                                        >
+                                                            <Trash2 className="h-3 w-3 mr-1" /> Delete
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Desktop Table */}
+                                        <div className="hidden sm:block">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Payment Date</TableHead>
+                                                        <TableHead>Method</TableHead>
+                                                        <TableHead>Category / Description</TableHead>
+                                                        <TableHead className="text-right">Amount (₹)</TableHead>
+                                                        <TableHead className="text-right">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {patientTransactions.map(trans => (
+                                                        <TableRow key={trans.id} className="text-xs">
+                                                            <TableCell className="font-medium">
+                                                                {trans.paymentDate ? format(new Date(trans.paymentDate), 'dd/MM/yyyy') : 'N/A'}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge variant="outline" className="text-3xs">{trans.paymentMethod || 'Other'}</Badge>
+                                                            </TableCell>
+                                                            <TableCell className="text-muted-foreground">
+                                                                {trans.description ? (
+                                                                    <span>{trans.description} <span className="text-3xs text-muted-foreground/70">({trans.category})</span></span>
+                                                                ) : (
+                                                                    trans.category
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-semibold text-green-600">
+                                                                ₹{trans.amount.toLocaleString()}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="icon" 
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                        title="Edit Payment"
+                                                                        onClick={(e) => { e.stopPropagation(); handleOpenEditTransaction(trans); }}
+                                                                    >
+                                                                        <Pencil className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="icon" 
+                                                                        className="h-7 w-7 text-destructive hover:text-destructive/90"
+                                                                        title="Delete Payment"
+                                                                        onClick={(e) => { e.stopPropagation(); setTransactionToDelete(trans); }}
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="text-center text-xs text-muted-foreground py-3 border rounded-md bg-muted/10">
+                                        No payment transactions recorded for this patient yet.
+                                    </p>
+                                )}
+                            </div>
                         </CardContent>
                      </Card>
                 </TabsContent>
@@ -2378,6 +2637,243 @@ export default function PatientsPage() {
               onClick={confirmDeletePatientSubProcedure}
             >
               Delete Subprocedure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Payment Transaction Dialog */}
+      <Dialog open={isEditTransactionOpen} onOpenChange={(open) => { if (!open) { setIsEditTransactionOpen(false); setTransactionToEdit(null); } }}>
+        <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-primary" />
+              Edit Payment Transaction
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Modify the payment amount, date, method, or notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5 py-3 text-xs sm:text-sm">
+            <div className="space-y-1">
+              <Label htmlFor="edit-trans-amount" className="text-xs font-medium">Amount (₹) *</Label>
+              <Input
+                id="edit-trans-amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="e.g. 500"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-trans-date" className="text-xs font-medium">Payment Date *</Label>
+              <Input
+                id="edit-trans-date"
+                type="date"
+                value={editPaymentDate}
+                onChange={(e) => setEditPaymentDate(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-trans-method" className="text-xs font-medium">Payment Method</Label>
+              <Select
+                value={editPaymentMethod}
+                onValueChange={(val: PaymentMethod) => setEditPaymentMethod(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="edit-trans-method" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethodsList.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-trans-category" className="text-xs font-medium">Category</Label>
+              <Select
+                value={editCategory}
+                onValueChange={(val: TransactionCategory) => setEditCategory(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="edit-trans-category" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentCategoriesList.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-trans-desc" className="text-xs font-medium">Description / Notes (Optional)</Label>
+              <Input
+                id="edit-trans-desc"
+                placeholder="e.g. Tooth 14 filling payment"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={() => { setIsEditTransactionOpen(false); setTransactionToEdit(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={handleSaveEditTransaction}
+            >
+              {isSubmittingTransaction && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Dialog */}
+      <Dialog open={isRecordPaymentOpen} onOpenChange={(open) => { if (!open) { setIsRecordPaymentOpen(false); setRecordPaymentPatient(null); } }}>
+        <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <PlusCircle className="h-4 w-4 text-primary" />
+              Record Payment
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Record a payment transaction for {recordPaymentPatient?.firstName} {recordPaymentPatient?.lastName}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5 py-3 text-xs sm:text-sm">
+            <div className="space-y-1">
+              <Label htmlFor="record-trans-amount" className="text-xs font-medium">Amount (₹) *</Label>
+              <Input
+                id="record-trans-amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="e.g. 500"
+                value={recordAmount}
+                onChange={(e) => setRecordAmount(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="record-trans-date" className="text-xs font-medium">Payment Date *</Label>
+              <Input
+                id="record-trans-date"
+                type="date"
+                value={recordPaymentDate}
+                onChange={(e) => setRecordPaymentDate(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="record-trans-method" className="text-xs font-medium">Payment Method</Label>
+              <Select
+                value={recordPaymentMethod}
+                onValueChange={(val: PaymentMethod) => setRecordPaymentMethod(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="record-trans-method" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethodsList.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="record-trans-category" className="text-xs font-medium">Category</Label>
+              <Select
+                value={recordCategory}
+                onValueChange={(val: TransactionCategory) => setRecordCategory(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="record-trans-category" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentCategoriesList.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="record-trans-desc" className="text-xs font-medium">Description / Notes (Optional)</Label>
+              <Input
+                id="record-trans-desc"
+                placeholder="e.g. Partial payment for filling"
+                value={recordDescription}
+                onChange={(e) => setRecordDescription(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={() => { setIsRecordPaymentOpen(false); setRecordPaymentPatient(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={handleSaveRecordPayment}
+            >
+              {isSubmittingTransaction && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Record Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog to Delete Payment Transaction */}
+      <AlertDialog open={!!transactionToDelete} onOpenChange={(open) => { if (!open) setTransactionToDelete(null); }}>
+        <AlertDialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base sm:text-lg">Delete Payment Transaction?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground">
+              Are you sure you want to delete this payment of <span className="font-semibold text-foreground">₹{transactionToDelete?.amount?.toLocaleString()}</span> recorded on {transactionToDelete?.paymentDate ? format(new Date(transactionToDelete.paymentDate), 'dd/MM/yyyy') : 'this date'}? This will update the patient's paid amount and balance due.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-2">
+            <AlertDialogCancel disabled={isSubmittingTransaction} onClick={() => setTransactionToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSubmittingTransaction}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDeleteTransaction}
+            >
+              {isSubmittingTransaction && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Delete Payment
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

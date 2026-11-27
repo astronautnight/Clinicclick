@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Transaction, TransactionType, TransactionCategory, Patient, Procedure, LinkedProcedure, PaymentMethod, UserProfile, Invoice, Doctor } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { DollarSign, TrendingUp, TrendingDown, PlusCircle, Trash2, MapPin, Users, Edit, Save, CreditCard, Landmark, CircleDollarSign, History, Printer, Copy, FileText, View, Search, MoreVertical } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, PlusCircle, Trash2, MapPin, Users, Edit, Save, CreditCard, Landmark, CircleDollarSign, History, Printer, Copy, FileText, View, Search, MoreVertical, Loader2, Pencil } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter as AlertDialogFooterCustom, AlertDialogHeader as AlertDialogHeaderCustom, AlertDialogTitle as AlertDialogTitleCustom, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { ClinicSetupAlert } from "@/components/ClinicSetupAlert";
 import { collection, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { updatePatient } from '@/services/patient-service';
+import { updateTransaction } from '@/services/transaction-service';
 import { getUserProfile } from '@/services/auth-service';
 import { addInvoice, deleteInvoice } from '@/services/invoice-service';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -90,6 +91,14 @@ export default function FinancialsPage() {
   const [newTransaction, setNewTransaction] = useState(initialTransactionData);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+  const [isEditTransactionOpen, setIsEditTransactionOpen] = useState(false);
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editPaymentDate, setEditPaymentDate] = useState<string>('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [editCategory, setEditCategory] = useState<TransactionCategory>('Procedure Payment');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
   const { toast } = useToast();
 
   const [clinicProfile, setClinicProfile] = useState<UserProfile | null>(null);
@@ -290,6 +299,48 @@ export default function FinancialsPage() {
             toast({ title: "Error", description: "Could not delete transaction.", variant: "destructive" });
           }
       })
+    }
+  };
+
+  const handleOpenEditTransaction = (trans: Transaction) => {
+    setTransactionToEdit(trans);
+    setEditAmount(String(trans.amount || ''));
+    setEditPaymentDate(trans.paymentDate || trans.date || new Date().toISOString().split('T')[0]);
+    setEditPaymentMethod(trans.paymentMethod || 'Cash');
+    setEditCategory(trans.category || 'Procedure Payment');
+    setEditDescription(trans.description || '');
+    setIsEditTransactionOpen(true);
+  };
+
+  const handleSaveEditTransaction = async () => {
+    if (!user || !clinicId || !transactionToEdit) return;
+    const numAmount = parseFloat(editAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast({ title: "Invalid Amount", description: "Please enter a valid payment amount.", variant: "destructive" });
+      return;
+    }
+    if (!editPaymentDate) {
+      toast({ title: "Date Required", description: "Please select a payment date.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmittingTransaction(true);
+    const success = await updateTransaction(clinicId, transactionToEdit.id, {
+      amount: numAmount,
+      paymentDate: editPaymentDate,
+      date: editPaymentDate,
+      paymentMethod: editPaymentMethod,
+      category: editCategory,
+      description: editDescription.trim(),
+    });
+    setIsSubmittingTransaction(false);
+
+    if (success) {
+      toast({ title: "Payment Updated", description: `Updated payment of ₹${numAmount.toLocaleString()}.` });
+      setIsEditTransactionOpen(false);
+      setTransactionToEdit(null);
+    } else {
+      toast({ title: "Update Failed", description: "Could not update the payment transaction.", variant: "destructive" });
     }
   };
   
@@ -770,6 +821,7 @@ export default function FinancialsPage() {
                                                                 <TableHead>Method</TableHead>
                                                                 <TableHead>Description</TableHead>
                                                                 <TableHead className="text-right">Amount (₹)</TableHead>
+                                                                <TableHead className="text-right">Actions</TableHead>
                                                             </TableRow>
                                                         </TableHeader>
                                                         <TableBody>
@@ -779,6 +831,28 @@ export default function FinancialsPage() {
                                                                     <TableCell><Badge variant="outline">{trans.paymentMethod || 'Other'}</Badge></TableCell>
                                                                     <TableCell className="text-muted-foreground">{trans.description || trans.category}</TableCell>
                                                                     <TableCell className="text-right font-medium">₹{trans.amount.toLocaleString()}</TableCell>
+                                                                    <TableCell className="text-right">
+                                                                        <div className="flex items-center justify-end gap-1">
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                                title="Edit Payment"
+                                                                                onClick={() => handleOpenEditTransaction(trans)}
+                                                                            >
+                                                                                <Pencil className="h-3.5 w-3.5" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-7 w-7 text-destructive hover:text-destructive/90"
+                                                                                title="Delete Payment"
+                                                                                onClick={() => setTransactionToDelete(trans)}
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </TableCell>
                                                                 </TableRow>
                                                             ))}
                                                         </TableBody>
@@ -1049,6 +1123,134 @@ export default function FinancialsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Payment Transaction Dialog */}
+      <Dialog open={isEditTransactionOpen} onOpenChange={(open) => { if (!open) { setIsEditTransactionOpen(false); setTransactionToEdit(null); } }}>
+        <DialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-primary" />
+              Edit Payment Transaction
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Modify the payment amount, date, method, or notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5 py-3 text-xs sm:text-sm">
+            <div className="space-y-1">
+              <Label htmlFor="fin-edit-amount" className="text-xs font-medium">Amount (₹) *</Label>
+              <Input
+                id="fin-edit-amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="e.g. 500"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fin-edit-date" className="text-xs font-medium">Payment Date *</Label>
+              <Input
+                id="fin-edit-date"
+                type="date"
+                value={editPaymentDate}
+                onChange={(e) => setEditPaymentDate(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fin-edit-method" className="text-xs font-medium">Payment Method</Label>
+              <Select
+                value={editPaymentMethod}
+                onValueChange={(val: PaymentMethod) => setEditPaymentMethod(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="fin-edit-method" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fin-edit-category" className="text-xs font-medium">Category</Label>
+              <Select
+                value={editCategory}
+                onValueChange={(val: TransactionCategory) => setEditCategory(val)}
+                disabled={isSubmittingTransaction}
+              >
+                <SelectTrigger id="fin-edit-category" className="h-9 text-xs sm:text-sm">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {earningCategories.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fin-edit-desc" className="text-xs font-medium">Description / Notes (Optional)</Label>
+              <Input
+                id="fin-edit-desc"
+                placeholder="e.g. Tooth 14 filling payment"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                disabled={isSubmittingTransaction}
+                className="h-9 text-xs sm:text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={() => { setIsEditTransactionOpen(false); setTransactionToEdit(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmittingTransaction}
+              onClick={handleSaveEditTransaction}
+            >
+              {isSubmittingTransaction && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog to Delete Payment Transaction */}
+      <AlertDialog open={!!transactionToDelete} onOpenChange={(open) => { if (!open) setTransactionToDelete(null); }}>
+        <AlertDialogContent className="w-[calc(100%-1.25rem)] max-w-[calc(100%-1.25rem)] sm:max-w-md rounded-2xl sm:rounded-xl p-4 sm:p-6 shadow-2xl">
+          <AlertDialogHeaderCustom>
+            <AlertDialogTitleCustom>Delete Payment Transaction?</AlertDialogTitleCustom>
+            <AlertDialogDescription>
+              Are you sure you want to delete this payment of <span className="font-semibold text-foreground">₹{transactionToDelete?.amount?.toLocaleString()}</span> recorded on {transactionToDelete?.paymentDate ? format(new Date(transactionToDelete.paymentDate), 'dd/MM/yyyy') : 'this date'}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeaderCustom>
+          <AlertDialogFooterCustom className="pt-2">
+            <AlertDialogCancel onClick={() => setTransactionToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteTransaction}
+            >
+              Delete Payment
+            </AlertDialogAction>
+          </AlertDialogFooterCustom>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
